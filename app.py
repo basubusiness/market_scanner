@@ -153,6 +153,31 @@ if st.button("🔄 Run Market Scan", type="primary"):
         df = df.sort_values("Score", ascending=False).reset_index(drop=True)
         df["Rank"] = df.index + 1
 
+        # ---------------- ALLOCATION LOGIC (FROM OLD APP) ----------------
+        def allocation_decision(row):
+            score = 0
+        
+            # Sentiment
+            if fg_index < 35:
+                score += 40
+        
+            # RSI
+            if row["RSI"] < 40:
+                score += 30
+        
+            # Trend (below MA = good entry)
+            if row["Dist%"] < 0:
+                score += 30
+        
+            if score >= 70:
+                return f"🔥 {baseline * 2:,.0f}"
+            elif score >= 35:
+                return f"⚖️ {baseline:,.0f}"
+            else:
+                return f"⚠️ {baseline * 0.5:,.0f}"
+        
+        df["Suggested €"] = df.apply(allocation_decision, axis=1)
+
         # ---------------- TODAY SIGNALS ----------------
         top = df.iloc[0]
         worst = df.iloc[-1]
@@ -196,6 +221,7 @@ Distance: {worst['Dist%']}%
             column_config={
                 "Rank": st.column_config.NumberColumn("🏆 Rank"),
                 "RSI": st.column_config.ProgressColumn(min_value=0, max_value=100),
+                "Suggested €": st.column_config.TextColumn("💰 Action"),
                 "Yahoo": st.column_config.LinkColumn("Yahoo", display_text="Chart"),
                 "ETF": st.column_config.LinkColumn("ETF", display_text="Stats"),
                 "JustETF": st.column_config.LinkColumn("EU ETF", display_text="Check")
