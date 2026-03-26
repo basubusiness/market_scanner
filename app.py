@@ -25,8 +25,28 @@ def calculate_rsi(prices, window=14):
     rs = gain / loss.replace(0, 0.001)
     return 100 - (100 / (1 + rs))
 
+# ---------------- ALLOCATION FUNCTION (FIXED) ----------------
+def allocation_decision(row, baseline, fg_index):
+    score = 0
+
+    if fg_index < 35:
+        score += 40
+
+    if row["RSI"] < 40:
+        score += 30
+
+    if row["Dist%"] < 0:
+        score += 30
+
+    if score >= 70:
+        return f"🔥 {baseline * 2:,.0f}"
+    elif score >= 35:
+        return f"⚖️ {baseline:,.0f}"
+    else:
+        return f"⚠️ {baseline * 0.5:,.0f}"
+
 # ---------------- HEADER ----------------
-st.title("🏹 Market Decision Engine v5.2")
+st.title("🏹 Market Decision Engine v5.3")
 
 col_vix, col_fg = st.columns(2)
 
@@ -39,13 +59,16 @@ with col_fg:
     fg_index = st.slider("🧠 Fear & Greed", 0, 100, 50)
     st.markdown("🔗 https://edition.cnn.com/markets/fear-and-greed")
 
+# ---------------- BASELINE INPUT (FIX) ----------------
+baseline = st.sidebar.number_input("💰 Monthly Investment", value=1000)
+
 # ---------------- RISK CONTEXT ----------------
 risk_multiplier = 1.0 + ((live_vix / 20) * ((100 - fg_index) / 50))
 
 st.sidebar.subheader("🛡️ Market Context")
 
 if risk_multiplier > 2:
-    st.sidebar.error(f"🔥 High Fear ({risk_multiplier:.2f}x) → Volatile opportunities")
+    st.sidebar.error(f"🔥 High Fear ({risk_multiplier:.2f}x)")
 elif risk_multiplier < 1.2:
     st.sidebar.info(f"😌 Calm Market ({risk_multiplier:.2f}x)")
 else:
@@ -69,24 +92,18 @@ def analyze_ticker(ticker):
         rsi = float(calculate_rsi(close).iloc[-1])
         dist_ma = ((price - ma200) / ma200) * 100
 
-        # Volatility
         vol = close.pct_change().rolling(20).std().iloc[-1] * 100
-
-        # Trend
         trend_down = close.iloc[-1] < close.iloc[-5]
 
-        # Falling Knife
         knife_threshold = -15 * (1 / risk_multiplier)
         knife = (dist_ma < knife_threshold) and (rsi < 35) and trend_down
 
-        # Confidence
         confidence = (
             min(abs(dist_ma) / 20, 1) * 0.5 +
             min(abs(50 - rsi) / 50, 1) * 0.5
         )
         confidence *= (1 - min(vol / 5, 0.5))
 
-        # Action
         if dist_ma < -10 and rsi < 35:
             action = "BUY"
         elif dist_ma > 10 and rsi > 70:
@@ -94,7 +111,6 @@ def analyze_ticker(ticker):
         else:
             action = "WAIT"
 
-        # Strength
         if confidence > 0.7:
             strength = "🔥 Strong"
         elif confidence > 0.4:
@@ -143,7 +159,7 @@ if st.button("🔄 Run Market Scan", type="primary"):
 
         df = pd.DataFrame(results)
 
-        # ---------------- SCORING ----------------
+        # SCORING
         df["Score"] = (
             (-df["Dist%"] / 20) * 0.5 +
             ((50 - df["RSI"]) / 50) * 0.3 +
@@ -153,32 +169,13 @@ if st.button("🔄 Run Market Scan", type="primary"):
         df = df.sort_values("Score", ascending=False).reset_index(drop=True)
         df["Rank"] = df.index + 1
 
-        # ---------------- ALLOCATION LOGIC (FROM OLD APP) ----------------
-        def allocation_decision(row):
-            score = 0
-        
-            # Sentiment
-            if fg_index < 35:
-                score += 40
-        
-            # RSI
-            if row["RSI"] < 40:
-                score += 30
-        
-            # Trend (below MA = good entry)
-            if row["Dist%"] < 0:
-                score += 30
-        
-            if score >= 70:
-                return f"🔥 {baseline * 2:,.0f}"
-            elif score >= 35:
-                return f"⚖️ {baseline:,.0f}"
-            else:
-                return f"⚠️ {baseline * 0.5:,.0f}"
-        
-        df["Suggested €"] = df.apply(allocation_decision, axis=1)
+        # APPLY ALLOCATION (FIXED)
+        df["Suggested €"] = df.apply(
+            lambda row: allocation_decision(row, baseline, fg_index),
+            axis=1
+        )
 
-        # ---------------- TODAY SIGNALS ----------------
+        # TOP SIGNALS
         top = df.iloc[0]
         worst = df.iloc[-1]
 
@@ -206,14 +203,12 @@ Confidence: {worst['Confidence']}
 Distance: {worst['Dist%']}%
 """)
 
-        # ---------------- TOP / BOTTOM ----------------
         st.subheader("🏆 Top Opportunities")
         st.dataframe(df.head(5), use_container_width=True, hide_index=True)
 
         st.subheader("⚠️ Risk / Avoid")
         st.dataframe(df.tail(5), use_container_width=True, hide_index=True)
 
-        # ---------------- FULL TABLE ----------------
         st.subheader("📊 Full Market Scan")
 
         st.dataframe(
@@ -233,22 +228,11 @@ Distance: {worst['Dist%']}%
 # ---------------- EXPLANATION ----------------
 with st.expander("🔍 How this works"):
     st.write("""
-This system combines:
-
-• Distance from long-term trend (200MA)  
+• Trend (200MA)  
 • Momentum (RSI)  
-• Volatility (risk adjustment)  
+• Volatility (risk)  
 • Sentiment (VIX + Fear & Greed)  
 
-Score:
-Ranks opportunities across entire market  
-
-Confidence:
-Higher when signal is strong and stable  
-
-Falling Knife:
-Deep drop + still falling → high risk  
-
-Goal:
-Find best opportunities RELATIVE to market
+Score → ranks opportunities  
+Allocation → suggests how much to invest  
 """)
