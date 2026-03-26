@@ -6,126 +6,112 @@ import numpy as np
 # Page Configuration
 st.set_page_config(page_title="Market Decision Engine 2026", layout="wide")
 
-# --- CUSTOM CSS FOR ACTION STATUSES ---
-st.markdown("""
-    <style>
-    .buy-signal { color: #2ecc71; font-weight: bold; }
-    .sell-signal { color: #e74c3c; font-weight: bold; }
-    .watch-signal { color: #f1c40f; font-weight: bold; }
-    </style>
-""", unsafe_allow_html=True)
+# --- DATA FETCHING (VIX) ---
+def get_live_vix():
+    try:
+        vix_df = yf.download("^VIX", period="1d", progress=False)
+        if not vix_df.empty:
+            # Flatten MultiIndex if necessary and get the last close
+            val = vix_df['Close'].iloc[-1]
+            return float(val)
+    except:
+        return 20.0 # Standard baseline if fetch fails
 
-# --- SIDEBAR & MASTER INPUTS ---
-with st.sidebar:
-    st.header("⚙️ Master Parameters")
-    vix_value = st.number_input("📊 Current VIX (Fear Index)", min_value=1.0, max_value=100.0, value=20.0, step=0.1)
-    
-    st.divider()
-    st.subheader("Threshold Sensitivity")
-    # Higher VIX allows for more aggressive "Knife" catching
-    risk_adj = 1.0 + (vix_value / 50) 
-    st.write(f"VIX Risk Multiplier: **{risk_adj:.2f}x**")
-    
-    st.divider()
-    st.info("🎯 **Entry Logic:** RSI < 30 & Price < 200MA\n\n⚠️ **Exit Logic:** RSI > 70 & Price > 200MA")
+# --- HEADER & SENTIMENT INPUTS ---
+st.title("🏹 Market Decision Engine v4.0")
+col_vix, col_fg = st.columns(2)
 
-# --- DATA MAPPING ---
-ISIN_DATABASE = {
-    "QQQ": "US46090E1038", "NVDA": "US67066G1040", "TSLA": "US88160R1014", "AMD": "US0079031078",
-    "SCHD": "US8085247976", "VTV": "US9229087440", "VYM": "US9219464065", "KO": "US1912161007",
-    "VEA": "US9219378182", "EWJ": "US4642867710", "VWO": "US9220428588", "INDA": "US46429B5984",
-    "GLD": "US78463V1035", "TLT": "US4642874329", "VDC": "US9220427424", "XLP": "US81369Y3080"
-}
+with col_vix:
+    live_vix = get_live_vix()
+    st.metric("📊 Live VIX (^VIX)", f"{live_vix:.2f}")
+    st.caption("Pulled directly from Yahoo Finance")
 
-# --- FUNCTIONS ---
+with col_fg:
+    # Manual Input for CNN Fear & Greed
+    fg_index = st.slider("🧠 CNN Fear & Greed Index", 0, 100, 50, help="0=Extreme Fear, 100=Extreme Greed")
+    st.markdown("[Check CNN Fear & Greed Index](https://edition.cnn.com/markets/fear-and-greed)")
+
+# Calculated Risk Multiplier (Concept Robustness)
+# High VIX + Low F&G = Higher conviction for 'Knife' catching
+risk_multiplier = 1.0 + ((live_vix / 20) * ( (100 - fg_index) / 50))
+st.sidebar.write(f"🛡️ Current Risk Multiplier: **{risk_multiplier:.2f}x**")
+
+# --- INDICATOR ENGINE ---
+def calculate_rsi(prices, window=14):
+    delta = prices.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
 @st.cache_data(ttl=3600)
-def get_analysis(ticker, risk_multiplier):
+def analyze_ticker(ticker, isin):
     try:
         df = yf.download(ticker, period="1y", interval="1d", progress=False)
         if df.empty: return None
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
-            
-        # Indicators
-        df['200MA'] = df['Close'].rolling(200).mean()
-        
-        # RSI Calculation
-        delta = df['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-        rs = gain / loss
-        df['RSI'] = 100 - (100 / (1 + rs))
-        
-        curr = df.iloc[-1]
-        close = float(curr['Close'])
-        ma200 = float(curr['200MA'])
-        rsi = float(curr['RSI'])
+
+        # Technical Metrics
+        close = float(df['Close'].iloc[-1])
+        ma200 = float(df['Close'].rolling(200).mean().iloc[-1])
+        rsi = float(calculate_rsi(df['Close']).iloc[-1])
         dist_ma = ((close - ma200) / ma200) * 100
-        
-        # --- DECISION LOGIC ---
-        # Baseline threshold -15%, adjusted by VIX
-        knife_limit = -15 * risk_multiplier 
-        
-        status = "🟡 Neutral"
-        if dist_ma < knife_limit: status = "🔪 Falling Knife"
-        elif abs(dist_ma) < 5: status = "🟢 Stabilizing"
-        
-        decision = "⚖️ HOLD / WAIT"
-        if dist_ma < -5 and rsi < 30: decision = "🎯 PREPARE BUY"
-        elif dist_ma > 10 and rsi > 70: decision = "⚠️ PREPARE EXIT"
+
+        # ROBUSTNESS LOGIC (The "Original" metrics)
+        # Entry: Price < MA200 AND RSI < 30
+        # Exit: Price > MA200 AND RSI > 70
+        action = "WAIT"
+        if dist_ma < -10 and rsi < 30: action = "🎯 BUY / ENTRY"
+        elif dist_ma > 10 and rsi > 70: action = "⚠️ SELL / EXIT"
+
+        # Status Logic (Adjusted by VIX/F&G Multiplier)
+        knife_threshold = -15 * (1/risk_multiplier) # Tighter threshold when market is greedy
+        status = "Neutral"
+        if dist_ma < knife_threshold: status = "🔪 Falling Knife"
+        elif -5 < dist_ma < 5: status = "🟢 Value Zone"
 
         return {
+            "Ticker": ticker,
+            "ISIN": isin,
             "Price": round(close, 2),
-            "Dist_MA": round(dist_ma, 1),
+            "Dist. 200MA": f"{dist_ma:.1f}%",
             "RSI": round(rsi, 1),
             "Status": status,
-            "Decision": decision
+            "Action": action,
+            "Yahoo": f"https://finance.yahoo.com/quote/{ticker}",
+            "ETF.com": f"https://www.etf.com/{ticker}",
+            "JustETF": f"https://www.justetf.com/en/search.html?query={isin}"
         }
     except: return None
 
-# --- MAIN DASHBOARD ---
-st.title("🏹 Global Market Scanner v3.5")
+# --- TICKER DATABASE ---
+watchlist = {
+    "QQQ": "US46090E1038", "NVDA": "US67066G1040", "TSLA": "US88160R1014",
+    "SCHD": "US8085247976", "VEA": "US9219378182", "VWO": "US9220428588",
+    "GLD": "US78463V1035", "TLT": "US4642874329"
+}
 
-if st.button("Execute Global Scan", type="primary"):
+# --- EXECUTION ---
+if st.button("🔄 Refresh Analysis", type="primary"):
     results = []
-    with st.spinner("Analyzing Global Markets..."):
-        all_tickers = [t for sub in [["QQQ", "NVDA", "TSLA", "AMD"], ["SCHD", "VTV", "VYM", "KO"], ["VEA", "EWJ", "VWO", "INDA"], ["GLD", "TLT", "VDC", "XLP"]] for t in sub]
-        
-        for t in all_tickers:
-            data = get_analysis(t, risk_adj)
-            if not data: continue
-            
-            isin = ISIN_DATABASE.get(t, "N/A")
-            results.append({
-                "Ticker": t,
-                "ISIN": isin,
-                "Decision": data["Decision"],
-                "Status": data["Status"],
-                "RSI": data["RSI"],
-                "Dist. 200MA": f"{data['Dist_MA']}%",
-                "Price": data["Price"],
-                "YF": f"https://finance.yahoo.com/quote/{t}",
-                "ETF": f"https://www.etf.com/{t}",
-                "JustETF": f"https://www.justetf.com/en/search.html?query={isin}"
-            })
-
+    for t, isin in watchlist.items():
+        data = analyze_ticker(t, isin)
+        if data: results.append(data)
+    
     if results:
-        df = pd.DataFrame(results)
+        df_display = pd.DataFrame(results)
         st.data_editor(
-            df,
+            df_display,
             column_config={
-                "RSI": st.column_config.ProgressColumn("RSI momentum", min_value=0, max_value=100, format="%.0f"),
-                "YF": st.column_config.LinkColumn("Yahoo", display_text="Chart"),
-                "ETF": st.column_config.LinkColumn("ETF.com", display_text="Stats"),
-                "JustETF": st.column_config.LinkColumn("JustETF", display_text="EU Filter"),
-                "Price": st.column_config.NumberColumn(format="$%.2f"),
-                "Decision": st.column_config.TextColumn("🎯 Trading Signal")
+                "RSI": st.column_config.ProgressColumn(min_value=0, max_value=100),
+                "Yahoo": st.column_config.LinkColumn(display_text="Chart"),
+                "ETF.com": st.column_config.LinkColumn(display_text="Holdings"),
+                "JustETF": st.column_config.LinkColumn(display_text="EU Version"),
             },
             hide_index=True,
             use_container_width=True
         )
-    else:
-        st.error("Data fetch failed. Check connection.")
 
 st.divider()
-st.caption("Strategy Note: Decision signals combine RSI momentum and 200-day Moving Average distance, weighted by current VIX volatility levels.")
+st.info("💡 **Logic:** When VIX is high and F&G is low, the 'Falling Knife' threshold becomes more lenient (easier to trigger).")
