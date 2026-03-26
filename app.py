@@ -1,5 +1,5 @@
 import streamlit as st
-st.set_page_config(page_title="Market Decision Engine 2026", layout="wide")  # ✅ FIX (moved up)
+st.set_page_config(page_title="Market Decision Engine 2026", layout="wide")
 
 import yfinance as yf
 import pandas as pd
@@ -26,6 +26,10 @@ universe = load_universe()
 universe = universe.dropna(subset=["ticker"])
 universe = universe[universe["ticker"].str.len() <= 5]
 
+# ✅ FIX: handle missing metadata safely
+universe["country"] = universe.get("country", "Unknown")
+universe["sector"] = universe.get("sector", "Unknown")
+
 # ---------------- FILTER UI ----------------
 st.sidebar.subheader("🌍 Market Filters")
 
@@ -37,22 +41,30 @@ asset_type = st.sidebar.multiselect(
 
 country = st.sidebar.multiselect(
     "Country",
-    universe["country"].dropna().unique(),
+    sorted(universe["country"].dropna().unique()),
     default=["United States"]
 )
 
 sector = st.sidebar.multiselect(
     "Sector",
-    universe["sector"].dropna().unique()
+    sorted(universe["sector"].dropna().unique())
 )
 
-filtered = universe[
-    universe["type"].isin(asset_type) &
-    universe["country"].isin(country)
-]
+# ✅ FIX: apply filters safely
+filtered = universe[universe["type"].isin(asset_type)]
+
+if country:
+    filtered = filtered[filtered["country"].isin(country)]
 
 if sector:
     filtered = filtered[filtered["sector"].isin(sector)]
+
+# ✅ Optional UX hint (non-breaking)
+if "ETF" in asset_type and sector:
+    st.sidebar.info("ℹ️ Sector filter may not work well for ETFs")
+
+# ✅ DEBUG (safe, lightweight)
+st.sidebar.caption(f"Universe: {len(universe)} | Filtered: {len(filtered)}")
 
 tickers = filtered["ticker"].tolist()
 
