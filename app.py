@@ -203,11 +203,28 @@ Confidence: {worst['Confidence']}
 Distance: {worst['Dist%']}%
 """)
 
+        column_config_links = {
+            "Yahoo": st.column_config.LinkColumn("Yahoo", display_text="Chart"),
+            "ETF": st.column_config.LinkColumn("ETF", display_text="Stats"),
+            "JustETF": st.column_config.LinkColumn("EU ETF", display_text="Check")
+        }
+        
         st.subheader("🏆 Top Opportunities")
-        st.dataframe(df.head(5), use_container_width=True, hide_index=True)
-
+        st.dataframe(
+            df.head(5),
+            use_container_width=True,
+            hide_index=True,
+            column_config=column_config_links
+        )
+        
         st.subheader("⚠️ Risk / Avoid")
-        st.dataframe(df.tail(5), use_container_width=True, hide_index=True)
+        st.dataframe(
+            df.tail(5),
+            use_container_width=True,
+            hide_index=True,
+            column_config=column_config_links
+        )
+
 
         st.subheader("📊 Full Market Scan")
 
