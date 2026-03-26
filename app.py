@@ -9,14 +9,15 @@ import financedatabase as fd
 
 @st.cache_data(show_spinner="Loading market universe...")
 def load_universe():
-    etfs = fd.ETFs()
-    equities = fd.Equities()
-
+    etfs = fd.ETFs().select()
+    equities = fd.Equities().select()
+    
     etfs["type"] = "ETF"
     equities["type"] = "Stock"
 
     df = pd.concat([etfs, equities], axis=0)
-    df = df.reset_index().rename(columns={"index": "ticker"})
+    df = df.reset_index()
+    df.rename(columns={df.columns[0]: "ticker"}, inplace=True)
 
     return df
 
