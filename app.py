@@ -1,395 +1,237 @@
 import streamlit as st
+st.set_page_config(page_title="Market Scanner v6", layout="wide")
 
-st.set_page_config(page_title="Market Decision Engine 2026", layout="wide")
+APP_VERSION = "v6.0"
 
 import yfinance as yf
 import pandas as pd
 import numpy as np
 import financedatabase as fd
 
-# ─────────────────────────────────────────────
-# UNIVERSE LOADER
-# ─────────────────────────────────────────────
-
 @st.cache_data(show_spinner="Loading market universe...")
 def load_universe():
-    etfs = fd.ETFs().select()
-    equities = fd.Equities().select()
-
-    etfs = etfs.copy()
-    equities = equities.copy()
-
+    etfs = fd.ETFs().select().copy()
+    equities = fd.Equities().select().copy()
     etfs["type"] = "ETF"
     equities["type"] = "Stock"
-
-    df = pd.concat([etfs, equities], axis=0)
-    df = df.reset_index()
-
-    # Rename first column to 'ticker' regardless of its name
+    df = pd.concat([etfs, equities], axis=0).reset_index()
     df.rename(columns={df.columns[0]: "ticker"}, inplace=True)
-
-    # Normalise column presence
     for col in ["country", "sector", "name"]:
         if col not in df.columns:
-            df[col] = "Unknown"
-
-    df["country"] = df["country"].fillna("Unknown")
-    df["sector"] = df["sector"].fillna("Unknown")
-
-    # Drop tickers that are empty / too long
-    df = df.dropna(subset=["ticker"])
-    df = df[df["ticker"].str.strip().str.len() <= 5]
-    df = df[df["ticker"].str.strip() != ""]
-
+            df[col] = ""
+    df["country"] = df["country"].fillna("").astype(str).str.strip()
+    df["sector"]  = df["sector"].fillna("").astype(str).str.strip()
+    df["ticker"]  = df["ticker"].fillna("").astype(str).str.strip()
+    df = df[df["ticker"].str.len().between(1, 5)]
     return df
-
 
 universe = load_universe()
 
-# ─────────────────────────────────────────────
-# SIDEBAR — FILTERS
-# ─────────────────────────────────────────────
+st.sidebar.title(f"Config {APP_VERSION}")
+st.sidebar.subheader("Filters")
 
-st.sidebar.title("⚙️ Configuration")
-st.sidebar.subheader("🌍 Market Filters")
-
-asset_type = st.sidebar.multiselect(
-    "Asset Type",
-    ["ETF", "Stock"],
-    default=["ETF"],
-)
-
-# ETFs in financedatabase have no reliable country/sector metadata.
-# Only show country+sector filters when Stocks are selected.
+asset_type = st.sidebar.multiselect("Asset Type", ["ETF", "Stock"], default=["ETF"])
 stocks_selected = "Stock" in asset_type
+etfs_selected   = "ETF"   in asset_type
+
 country = []
-sector = []
+sector  = []
 
 if stocks_selected:
-    stock_universe = universe[universe["type"] == "Stock"]
-    all_countries = sorted(stock_universe["country"].dropna().unique())
+    su = universe[universe["type"] == "Stock"]
+    ctries = sorted([c for c in su["country"].unique() if c])
     country = st.sidebar.multiselect(
-        "Country (Stocks — leave empty = all)",
-        all_countries,
-        default=["United States"] if "United States" in all_countries else [],
+        "Country (Stocks only)",
+        ctries,
+        default=["United States"] if "United States" in ctries else [],
     )
-    all_sectors = sorted(stock_universe["sector"].dropna().unique())
-    sector = st.sidebar.multiselect("Sector (Stocks only)", all_sectors)
+    sects = sorted([s for s in su["sector"].unique() if s])
+    sector = st.sidebar.multiselect("Sector (Stocks only)", sects)
 else:
-    st.sidebar.info("ℹ️ Country/Sector filters apply to Stocks only. ETFs have no geo metadata in this database.")
+    st.sidebar.info("ETFs: no country/sector metadata - all ETFs included")
 
-# Apply filters
-filtered = universe[universe["type"].isin(asset_type)].copy()
-
-if stocks_selected and (country or sector):
-    etf_rows = filtered[filtered["type"] == "ETF"]
-    stock_rows = filtered[filtered["type"] == "Stock"]
+parts = []
+if etfs_selected:
+    parts.append(universe[universe["type"] == "ETF"])
+if stocks_selected:
+    s = universe[universe["type"] == "Stock"]
     if country:
-        stock_rows = stock_rows[stock_rows["country"].isin(country)]
+        s = s[s["country"].isin(country)]
     if sector:
-        stock_rows = stock_rows[stock_rows["sector"].isin(sector)]
-    filtered = pd.concat([etf_rows, stock_rows])
+        s = s[s["sector"].isin(sector)]
+    parts.append(s)
 
-tickers = list(dict.fromkeys(filtered["ticker"].str.strip().tolist()))
+filtered = pd.concat(parts) if parts else pd.DataFrame()
+tickers  = list(dict.fromkeys(filtered["ticker"].tolist()))
 
 MAX_TICKERS = 50
-st.sidebar.caption(f"Universe: {len(universe):,} | Filtered: {len(filtered):,} | Scanning: {min(len(tickers), MAX_TICKERS)}")
-
+st.sidebar.caption(f"Universe: {len(universe):,} | Filtered: {len(filtered):,} | Scan: {min(len(tickers), MAX_TICKERS)}")
 if len(tickers) > MAX_TICKERS:
-    st.sidebar.warning(f"⚠️ Capped at {MAX_TICKERS} assets for performance")
     tickers = tickers[:MAX_TICKERS]
 
-baseline = st.sidebar.number_input("💰 Monthly Investment (€)", value=1000, min_value=100, step=100)
+baseline = st.sidebar.number_input("Monthly Investment (EUR)", value=1000, min_value=100, step=100)
 
-# ─────────────────────────────────────────────
-# HELPERS
-# ─────────────────────────────────────────────
+with st.sidebar.expander("Debug - raw data"):
+    st.write("ETF country values:")
+    st.write(universe[universe["type"]=="ETF"]["country"].value_counts().head(10))
+    st.write("Stock country values:")
+    st.write(universe[universe["type"]=="Stock"]["country"].value_counts().head(10))
+    st.write("Queued tickers:", tickers[:10])
 
-def flatten_columns(df):
-    """Flatten MultiIndex columns if present."""
+def flatten_df(df):
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     return df
 
-
+@st.cache_data(ttl=300)
 def get_live_vix():
     try:
-        vix_df = yf.download("^VIX", period="2d", progress=False, auto_adjust=True)
-        vix_df = flatten_columns(vix_df)
-        if not vix_df.empty and "Close" in vix_df.columns:
-            return float(vix_df["Close"].dropna().iloc[-1])
+        d = flatten_df(yf.download("^VIX", period="2d", progress=False, auto_adjust=True))
+        if not d.empty and "Close" in d.columns:
+            return float(d["Close"].dropna().iloc[-1])
     except Exception:
         pass
     return 20.0
 
-
 def calculate_rsi(prices, window=14):
     delta = prices.diff()
-    gain = delta.where(delta > 0, 0.0).rolling(window).mean()
-    loss = (-delta.where(delta < 0, 0.0)).rolling(window).mean()
-    rs = gain / loss.replace(0, 0.001)
+    gain  = delta.where(delta > 0, 0.0).rolling(window).mean()
+    loss  = (-delta.where(delta < 0, 0.0)).rolling(window).mean()
+    rs    = gain / loss.replace(0, 0.001)
     return 100 - (100 / (1 + rs))
 
+def allocation_label(row, base, fg):
+    score = (40 if fg < 35 else 0) + (30 if row["RSI"] < 40 else 0) + (30 if row["Dist%"] < 0 else 0)
+    if score >= 70: return f"EUR {base*2:,.0f} (Strong Buy)"
+    if score >= 35: return f"EUR {base:,.0f} (Normal)"
+    return f"EUR {base*0.5:,.0f} (Cautious)"
 
-def allocation_label(row, baseline, fg_index):
-    score = 0
-    if fg_index < 35:
-        score += 40
-    if row["RSI"] < 40:
-        score += 30
-    if row["Dist%"] < 0:
-        score += 30
-
-    if score >= 70:
-        return f"🔥 €{baseline * 2:,.0f}"
-    elif score >= 35:
-        return f"⚖️ €{baseline:,.0f}"
-    else:
-        return f"⚠️ €{baseline * 0.5:,.0f}"
-
-
-# ─────────────────────────────────────────────
-# HEADER
-# ─────────────────────────────────────────────
-
-st.title("🏹 Market Decision Engine 2026")
-
-col_vix, col_fg = st.columns(2)
-
-with col_vix:
-    live_vix = get_live_vix()
-    st.metric("📊 Live VIX", f"{live_vix:.2f}")
-    st.caption("Source: [Yahoo Finance](https://finance.yahoo.com/quote/%5EVIX/)")
-
-with col_fg:
-    fg_index = st.slider("🧠 Fear & Greed Index (manual input)", 0, 100, 50)
-    st.caption("Source: [CNN Fear & Greed](https://edition.cnn.com/markets/fear-and-greed)")
-
-# Risk multiplier
-risk_multiplier = 1.0 + ((live_vix / 20) * ((100 - fg_index) / 50))
-
-st.sidebar.subheader("🛡️ Market Context")
-if risk_multiplier > 2:
-    st.sidebar.error(f"🔥 High Fear — Risk Multiplier: {risk_multiplier:.2f}x")
-elif risk_multiplier < 1.2:
-    st.sidebar.info(f"😌 Calm Market — Risk Multiplier: {risk_multiplier:.2f}x")
-else:
-    st.sidebar.warning(f"⚖️ Normal Risk — Risk Multiplier: {risk_multiplier:.2f}x")
-
-# ─────────────────────────────────────────────
-# TICKER ANALYSER
-# ─────────────────────────────────────────────
-
-# NOTE: risk_multiplier is intentionally NOT in cache key —
-# we cache per ticker and apply risk_multiplier logic outside.
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_ticker_data(ticker: str):
-    """Download and compute raw metrics for a ticker. Cached 1 h."""
+def fetch_ticker_data(ticker):
     try:
-        df = yf.download(ticker, period="1y", progress=False, auto_adjust=True)
-        if df is None or df.empty:
+        df = flatten_df(yf.download(ticker, period="1y", progress=False, auto_adjust=True))
+        if df.empty or "Close" not in df.columns:
             return None
-
-        df = flatten_columns(df)
-
-        if "Close" not in df.columns:
-            return None
-
         close = df["Close"].dropna()
         if len(close) < 30:
             return None
-
-        price = float(close.iloc[-1])
-        ma200 = float(close.rolling(200).mean().iloc[-1])
-        rsi = float(calculate_rsi(close).iloc[-1])
+        price   = float(close.iloc[-1])
+        ma200   = float(close.rolling(200).mean().iloc[-1])
+        rsi     = float(calculate_rsi(close).iloc[-1])
         dist_ma = ((price - ma200) / ma200) * 100
-        vol = float(close.pct_change().rolling(20).std().iloc[-1] * 100)
-        trend_down = bool(close.iloc[-1] < close.iloc[-5])
-
-        confidence = (
-            min(abs(dist_ma) / 20, 1) * 0.5 +
-            min(abs(50 - rsi) / 50, 1) * 0.5
-        )
-        confidence *= 1 - min(vol / 5, 0.5)
-
-        return {
-            "price": price,
-            "ma200": ma200,
-            "rsi": rsi,
-            "dist_ma": dist_ma,
-            "vol": vol,
-            "trend_down": trend_down,
-            "confidence": confidence,
-        }
+        vol     = float(close.pct_change().rolling(20).std().iloc[-1] * 100)
+        conf    = min(abs(dist_ma)/20,1)*0.5 + min(abs(50-rsi)/50,1)*0.5
+        conf   *= 1 - min(vol/5, 0.5)
+        return dict(price=price, ma200=ma200, rsi=rsi, dist_ma=dist_ma,
+                    vol=vol, trend_down=bool(close.iloc[-1] < close.iloc[-5]), confidence=conf)
     except Exception:
         return None
 
-
-def analyse_ticker(ticker: str, risk_multiplier: float):
+def analyse_ticker(ticker, risk_mult):
     raw = fetch_ticker_data(ticker)
     if raw is None:
         return None
-
-    dist_ma = raw["dist_ma"]
-    rsi = raw["rsi"]
-    vol = raw["vol"]
-    confidence = raw["confidence"]
-    trend_down = raw["trend_down"]
-
-    knife_threshold = -15 * (1 / risk_multiplier)
-    knife = (dist_ma < knife_threshold) and (rsi < 35) and trend_down
-
-    if dist_ma < -10 and rsi < 35:
-        action = "BUY"
-    elif dist_ma > 10 and rsi > 70:
-        action = "SELL"
-    else:
-        action = "WAIT"
-
-    strength = "🔥 Strong" if confidence > 0.7 else "⚖️ Medium" if confidence > 0.4 else "🔍 Weak"
-    signal = f"{action} ({strength})"
-
+    dm, rsi, conf = raw["dist_ma"], raw["rsi"], raw["confidence"]
+    knife  = (dm < -15*(1/risk_mult)) and (rsi < 35) and raw["trend_down"]
+    action = "BUY" if (dm < -10 and rsi < 35) else "SELL" if (dm > 10 and rsi > 70) else "WAIT"
+    strength = "Strong" if conf > 0.7 else "Medium" if conf > 0.4 else "Weak"
     return {
-        "Ticker": ticker,
-        "Price": round(raw["price"], 2),
-        "MA200": round(raw["ma200"], 2),
-        "Dist%": round(dist_ma, 1),
-        "RSI": round(rsi, 1),
-        "Vol%": round(vol, 2),
-        "Confidence": round(confidence, 2),
-        "Signal": signal,
-        "Action": action,
-        "Knife": "🔴 Falling Knife" if knife else "✅",
-        "Yahoo": f"https://finance.yahoo.com/quote/{ticker}",
+        "Ticker": ticker, "Price": round(raw["price"],2), "MA200": round(raw["ma200"],2),
+        "Dist%": round(dm,1), "RSI": round(rsi,1), "Vol%": round(raw["vol"],2),
+        "Confidence": round(conf,2), "Signal": f"{action} ({strength})", "Action": action,
+        "Knife": "Falling Knife" if knife else "OK",
+        "Yahoo":   f"https://finance.yahoo.com/quote/{ticker}",
         "etf.com": f"https://www.etf.com/{ticker}",
         "justETF": f"https://www.justetf.com/en/search.html?query={ticker}",
     }
 
+st.title(f"Market Decision Engine {APP_VERSION}")
 
-# ─────────────────────────────────────────────
-# SCAN BUTTON & RESULTS
-# ─────────────────────────────────────────────
+col_vix, col_fg = st.columns(2)
+with col_vix:
+    live_vix = get_live_vix()
+    st.metric("Live VIX", f"{live_vix:.2f}")
+with col_fg:
+    fg_index = st.slider("Fear & Greed (manual)", 0, 100, 50)
+
+risk_mult = 1.0 + ((live_vix / 20) * ((100 - fg_index) / 50))
+st.sidebar.subheader("Market Context")
+if   risk_mult > 2:   st.sidebar.error(f"High Fear ({risk_mult:.2f}x)")
+elif risk_mult < 1.2: st.sidebar.info(f"Calm ({risk_mult:.2f}x)")
+else:                 st.sidebar.warning(f"Normal ({risk_mult:.2f}x)")
 
 if len(tickers) == 0:
-    st.warning("⚠️ No assets match the current filters. Adjust the sidebar and try again.")
+    st.error("No tickers found. Open the Debug panel in the sidebar.")
     st.stop()
 
-col_btn, col_clear = st.columns([3, 1])
-with col_btn:
-    run = st.button("🔄 Run Market Scan", type="primary", use_container_width=True)
-with col_clear:
-    if st.button("🗑️ Clear Results", use_container_width=True):
+c1, c2 = st.columns([4, 1])
+with c1:
+    run = st.button("Run Market Scan", type="primary", use_container_width=True)
+with c2:
+    if st.button("Clear", use_container_width=True):
         st.session_state.pop("scan_results", None)
-        st.session_state.pop("scan_meta", None)
         st.rerun()
 
-# ── Run scan and store in session_state
 if run:
     results = []
-    progress = st.progress(0, text="Scanning…")
-
+    prog = st.progress(0, text="Starting...")
     for i, t in enumerate(tickers):
-        res = analyse_ticker(t, risk_multiplier)
-        if res:
-            results.append(res)
-        progress.progress((i + 1) / len(tickers), text=f"Scanning {t}…")
-
-    progress.empty()
+        r = analyse_ticker(t, risk_mult)
+        if r:
+            results.append(r)
+        prog.progress((i+1)/len(tickers), text=f"Scanning {t}...")
+    prog.empty()
 
     if not results:
-        st.error("❌ No data returned for any ticker. Try different filters or check your internet connection.")
+        st.error("No data returned. Check internet connection.")
     else:
-        df_results = pd.DataFrame(results)
-        df_results["Score"] = (
-            (-df_results["Dist%"] / 20) * 0.5 +
-            ((50 - df_results["RSI"]) / 50) * 0.3 +
-            df_results["Confidence"] * 0.2
-        )
-        df_results = df_results.sort_values("Score", ascending=False).reset_index(drop=True)
-        df_results["Rank"] = df_results.index + 1
-        df_results["Suggested €"] = df_results.apply(
-            lambda row: allocation_label(row, baseline, fg_index), axis=1
-        )
-        # Persist to session state
-        st.session_state["scan_results"] = df_results
-        st.session_state["scan_meta"] = {
-            "baseline": baseline,
-            "fg_index": fg_index,
-            "tickers_scanned": len(tickers),
-        }
+        df = pd.DataFrame(results)
+        df["Score"] = (-df["Dist%"]/20)*0.5 + ((50-df["RSI"])/50)*0.3 + df["Confidence"]*0.2
+        df = df.sort_values("Score", ascending=False).reset_index(drop=True)
+        df["Rank"] = df.index + 1
+        df["Suggested"] = df.apply(lambda r: allocation_label(r, baseline, fg_index), axis=1)
+        st.session_state["scan_results"] = df
 
-# ── Display results from session_state (survives widget rerenders)
 if "scan_results" in st.session_state:
     df = st.session_state["scan_results"]
-    meta = st.session_state["scan_meta"]
-
-    display_cols = ["Rank", "Ticker", "Price", "MA200", "Dist%", "RSI", "Vol%",
-                    "Confidence", "Signal", "Knife", "Suggested €"]
+    COLS = ["Rank","Ticker","Price","MA200","Dist%","RSI","Vol%","Confidence","Signal","Knife","Suggested"]
 
     st.markdown("---")
-    st.subheader("📊 Scan Results")
+    st.subheader("Scan Results")
+    k1,k2,k3,k4 = st.columns(4)
+    k1.metric("Scanned",  len(df))
+    k2.metric("BUY",  int((df["Action"]=="BUY").sum()))
+    k3.metric("SELL", int((df["Action"]=="SELL").sum()))
+    k4.metric("WAIT", int((df["Action"]=="WAIT").sum()))
 
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Total Scanned", len(df))
-    k2.metric("🟢 BUY", int((df["Action"] == "BUY").sum()))
-    k3.metric("🔴 SELL", int((df["Action"] == "SELL").sum()))
-    k4.metric("🟡 WAIT", int((df["Action"] == "WAIT").sum()))
+    t_all, t_buy, t_sell, t_wait = st.tabs(["All","BUY","SELL","WAIT"])
 
-    tab_all, tab_buy, tab_sell, tab_wait = st.tabs(["All", "🟢 BUY", "🔴 SELL", "🟡 WAIT"])
+    def colour(val):
+        if "BUY"  in str(val): return "color:#00c853;font-weight:bold"
+        if "SELL" in str(val): return "color:#ff1744;font-weight:bold"
+        return "color:#ffd600"
 
-    def colour_action(val):
-        if "BUY" in str(val):
-            return "color: #00c853; font-weight:bold"
-        if "SELL" in str(val):
-            return "color: #ff1744; font-weight:bold"
-        return "color: #ffd600"
-
-    def render_table(data):
+    def show_table(data):
         if data.empty:
-            st.info("No results in this category.")
+            st.info("No results.")
             return
-
-        show = data[display_cols].copy()
         styled = (
-            show.style
-            .applymap(colour_action, subset=["Signal"])
-            .format({
-                "Price": "{:.2f}",
-                "MA200": "{:.2f}",
-                "Dist%": "{:+.1f}%",
-                "RSI": "{:.1f}",
-                "Vol%": "{:.2f}%",
-                "Confidence": "{:.2f}",
-            })
+            data[COLS].style
+            .applymap(colour, subset=["Signal"])
+            .format({"Price":"{:.2f}","MA200":"{:.2f}","Dist%":"{:+.1f}%",
+                     "RSI":"{:.1f}","Vol%":"{:.2f}%","Confidence":"{:.2f}"})
             .background_gradient(subset=["Dist%"], cmap="RdYlGn")
-            .background_gradient(subset=["RSI"], cmap="RdYlGn_r")
+            .background_gradient(subset=["RSI"],   cmap="RdYlGn_r")
         )
-        st.dataframe(styled, use_container_width=True, height=500)
-
-        st.markdown("#### 🔗 Quick Links (Top 10)")
+        st.dataframe(styled, use_container_width=True, height=480)
         for _, row in data.head(10).iterrows():
-            st.markdown(
-                f"**{row['Ticker']}** — "
-                f"[Yahoo]({row['Yahoo']}) | "
-                f"[ETF.com]({row['etf.com']}) | "
-                f"[justETF]({row['justETF']})"
-            )
+            st.markdown(f"**{row['Ticker']}** - [Yahoo]({row['Yahoo']}) | [ETF.com]({row['etf.com']}) | [justETF]({row['justETF']})")
 
-    with tab_all:
-        render_table(df)
-    with tab_buy:
-        render_table(df[df["Action"] == "BUY"].reset_index(drop=True))
-    with tab_sell:
-        render_table(df[df["Action"] == "SELL"].reset_index(drop=True))
-    with tab_wait:
-        render_table(df[df["Action"] == "WAIT"].reset_index(drop=True))
+    with t_all:  show_table(df)
+    with t_buy:  show_table(df[df["Action"]=="BUY"].reset_index(drop=True))
+    with t_sell: show_table(df[df["Action"]=="SELL"].reset_index(drop=True))
+    with t_wait: show_table(df[df["Action"]=="WAIT"].reset_index(drop=True))
 
-    st.markdown("---")
-    csv = df[display_cols + ["Yahoo", "etf.com", "justETF"]].to_csv(index=False).encode("utf-8")
-    st.download_button(
-        "⬇️ Download Full Results as CSV",
-        data=csv,
-        file_name="market_scan_results.csv",
-        mime="text/csv",
-        use_container_width=True,
-    )
+    csv = df[COLS+["Yahoo","etf.com","justETF"]].to_csv(index=False).encode("utf-8")
+    st.download_button("Download CSV", data=csv, file_name="scan_results.csv",
+                       mime="text/csv", use_container_width=True)
