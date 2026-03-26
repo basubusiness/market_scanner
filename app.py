@@ -25,23 +25,33 @@ def calculate_rsi(prices, window=14):
     rs = gain / loss.replace(0, 0.001)
     return 100 - (100 / (1 + rs))
 
-# ---------------- UI ----------------
-st.title("🏹 Market Decision Engine v5.0")
+# ---------------- HEADER ----------------
+st.title("🏹 Market Decision Engine v5.1")
 
 col_vix, col_fg = st.columns(2)
 
 with col_vix:
     live_vix = get_live_vix()
     st.metric("📊 Live VIX", f"{live_vix:.2f}")
+    st.markdown("🔗 https://finance.yahoo.com/quote/%5EVIX/")
 
 with col_fg:
     fg_index = st.slider("🧠 Fear & Greed", 0, 100, 50)
+    st.markdown("🔗 https://edition.cnn.com/markets/fear-and-greed")
 
-# ---------------- Risk Multiplier ----------------
+# ---------------- RISK ----------------
 risk_multiplier = 1.0 + ((live_vix / 20) * ((100 - fg_index) / 50))
-st.sidebar.write(f"Risk Multiplier: {risk_multiplier:.2f}x")
 
-# ---------------- Core Engine ----------------
+st.sidebar.subheader("🛡️ Market Context")
+
+if risk_multiplier > 2:
+    st.sidebar.error(f"🔥 High Fear ({risk_multiplier:.2f}x) → Volatile opportunities")
+elif risk_multiplier < 1.2:
+    st.sidebar.info(f"😌 Calm Market ({risk_multiplier:.2f}x)")
+else:
+    st.sidebar.warning(f"⚖️ Normal Risk ({risk_multiplier:.2f}x)")
+
+# ---------------- ENGINE ----------------
 @st.cache_data(ttl=3600)
 def analyze_ticker(ticker):
     try:
@@ -57,43 +67,42 @@ def analyze_ticker(ticker):
 
         ma200 = float(close.rolling(200).mean().iloc[-1])
         rsi = float(calculate_rsi(close).iloc[-1])
-
         dist_ma = ((price - ma200) / ma200) * 100
 
-        # ---------------- Volatility ----------------
+        # Volatility
         vol = close.pct_change().rolling(20).std().iloc[-1] * 100
 
-        # ---------------- Trend ----------------
+        # Trend
         trend_down = close.iloc[-1] < close.iloc[-5]
 
-        # ---------------- Falling Knife ----------------
+        # Falling Knife
         knife_threshold = -15 * (1 / risk_multiplier)
         knife = (dist_ma < knife_threshold) and (rsi < 35) and trend_down
 
-        # ---------------- Confidence ----------------
+        # Confidence
         confidence = (
             min(abs(dist_ma) / 20, 1) * 0.5 +
             min(abs(50 - rsi) / 50, 1) * 0.5
         )
+        confidence *= (1 - min(vol / 5, 0.5))
 
-        # Adjust confidence by volatility
-        confidence = confidence * (1 - min(vol / 5, 0.5))
-
-        # ---------------- Action ----------------
+        # Action
         if dist_ma < -10 and rsi < 35:
-            action = "🟢 BUY"
+            action = "BUY"
         elif dist_ma > 10 and rsi > 70:
-            action = "🔴 SELL"
+            action = "SELL"
         else:
-            action = "🔵 WATCH"
+            action = "WAIT"
 
-        # Strength labeling
+        # Strength
         if confidence > 0.7:
             strength = "🔥 Strong"
         elif confidence > 0.4:
             strength = "⚖️ Medium"
         else:
             strength = "🔍 Weak"
+
+        signal = f"{action} ({strength})"
 
         return {
             "Ticker": ticker,
@@ -102,23 +111,25 @@ def analyze_ticker(ticker):
             "RSI": round(rsi, 1),
             "Vol": round(vol, 2),
             "Confidence": round(confidence, 2),
-            "Signal": f"{strength} {action}",
-            "Knife": "🔪 Yes" if knife else "",
-            "Link": f"https://finance.yahoo.com/quote/{ticker}"
+            "Signal": signal,
+            "Knife": "🔴 Falling Knife" if knife else "",
+            "Yahoo": f"https://finance.yahoo.com/quote/{ticker}",
+            "ETF": f"https://www.etf.com/{ticker}",
+            "JustETF": f"https://www.justetf.com/en/search.html?query={ticker}"
         }
 
     except:
         return None
 
-# ---------------- Universe ----------------
+# ---------------- UNIVERSE ----------------
 watchlist = [
     "QQQ","SPY","VTI","GLD","TLT",
     "NVDA","MSFT","AAPL","AMZN","TSLA",
     "AMD","META","GOOGL","XLF","XLE","XLV"
 ]
 
-# ---------------- Execution ----------------
-if st.button("🔄 Run Full Market Scan"):
+# ---------------- RUN ----------------
+if st.button("🔄 Run Market Scan", type="primary"):
 
     results = []
 
@@ -131,45 +142,65 @@ if st.button("🔄 Run Full Market Scan"):
     if results:
 
         df = pd.DataFrame(results)
-
-        # ---------------- Ranking ----------------
-        df["Rank"] = df["Dist%"].rank()
         df = df.sort_values("Dist%", ascending=True)
 
-        # ---------------- Display ----------------
-        st.subheader("🏆 Top Buy Opportunities")
-        st.dataframe(df.head(5), use_container_width=True)
+        # ---------------- TOP SIGNALS ----------------
+        top = df.iloc[0]
+        worst = df.iloc[-1]
 
-        st.subheader("⚠️ Risk / Sell Zone")
-        st.dataframe(df.tail(5), use_container_width=True)
+        st.subheader("🎯 Today’s Signals")
 
-        st.subheader("📊 Full Market View")
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.success(f"""
+🔥 BEST OPPORTUNITY  
+**{top['Ticker']}**
+
+Signal: {top['Signal']}  
+Confidence: {top['Confidence']}  
+Distance: {top['Dist%']}%
+""")
+
+        with c2:
+            st.error(f"""
+⚠️ RISK / AVOID  
+**{worst['Ticker']}**
+
+Signal: {worst['Signal']}  
+Confidence: {worst['Confidence']}  
+Distance: {worst['Dist%']}%
+""")
+
+        # ---------------- TABLE ----------------
+        st.subheader("📊 Market Scan")
+
         st.dataframe(
             df,
             column_config={
                 "RSI": st.column_config.ProgressColumn(min_value=0, max_value=100),
-                "Link": st.column_config.LinkColumn("Chart")
+                "Yahoo": st.column_config.LinkColumn("Yahoo", display_text="Chart"),
+                "ETF": st.column_config.LinkColumn("ETF", display_text="Stats"),
+                "JustETF": st.column_config.LinkColumn("EU ETF", display_text="Check")
             },
-            use_container_width=True
+            use_container_width=True,
+            hide_index=True
         )
 
-# ---------------- Explanation ----------------
+# ---------------- EXPLANATION ----------------
 with st.expander("🔍 How this works"):
     st.write("""
-This system combines:
-
-• Distance from long-term trend (200MA)  
+• Trend (200-day average)  
 • Momentum (RSI)  
 • Volatility (risk adjustment)  
 • Sentiment (VIX + Fear & Greed)  
 
-Confidence Score:
-- Higher when strong deviation + momentum  
-- Lower when volatility is high  
+Confidence:
+Stronger when signal is clear and volatility is low  
 
 Falling Knife:
-- Deep drop + weak momentum + still falling  
+Deep drop + still falling → avoid early entry  
 
 Goal:
-Find best opportunities RELATIVE to entire market
+Find best opportunities relative to market
 """)
