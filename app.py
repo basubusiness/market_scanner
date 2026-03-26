@@ -4,13 +4,21 @@ import pandas as pd
 import numpy as np
 
 # Page Configuration
-st.set_page_config(page_title="Global Knife Scanner", layout="wide")
+st.set_page_config(page_title="Global Knife Scanner 2026", layout="wide")
 
-st.title("🏹 Global Market Scanner v2.0")
-st.caption("2026 Strategy: Focused on ETFs, ISIN Tracking, and Research Links")
+# --- UI HEADER & MASTER INPUTS ---
+st.title("🏹 Global Market Scanner v3.0")
+col_a, col_b = st.columns([2, 1])
 
-# 1. DATA MAPPING (ISINs & Links)
-# Since yfinance doesn't consistently provide ISINs, we map the majors here.
+with col_a:
+    st.caption("Deep Technical Analysis: Falling Knives, RSI, and Entry/Exit Signals")
+
+with col_b:
+    # Master Fear Index Input (Simulating Sentiment Filter)
+    fear_index = st.slider("📊 Market Fear Index (VIX/Sentiment)", 0, 100, 50, help="0=Greed, 100=Extreme Fear. Use this to gauge your entry aggression.")
+    fear_multiplier = 1.0 + (fear_index / 200) # Higher fear allows for deeper 'Knife' threshold
+
+# --- DATA & MAPPING ---
 ISIN_DATABASE = {
     "QQQ": "US46090E1038", "NVDA": "US67066G1040", "TSLA": "US88160R1014", "AMD": "US0079031078",
     "SCHD": "US8085247976", "VTV": "US9229087440", "VYM": "US9219464065", "KO": "US1912161007",
@@ -18,88 +26,99 @@ ISIN_DATABASE = {
     "GLD": "US78463V1035", "TLT": "US4642874329", "VDC": "US9220427424", "XLP": "US81369Y3080"
 }
 
-# 2. TICKER GROUPS
 tickers = {
     "Equity ETFs": ["QQQ", "SCHD", "VTV", "VYM"],
     "International ETFs": ["VEA", "EWJ", "VWO", "INDA"],
-    "Bond/Commodity ETFs": ["GLD", "TLT", "VDC", "XLP"],
-    "Individual Stocks": ["NVDA", "TSLA", "AMD", "KO"]
+    "Commodity/Bond": ["GLD", "TLT", "VDC", "XLP"],
+    "Growth Stocks": ["NVDA", "TSLA", "AMD", "KO"]
 }
 
+# --- TECHNICAL ENGINE ---
+def calculate_rsi(data, window=14):
+    delta = data.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
 @st.cache_data(ttl=3600)
-def get_market_data(ticker):
+def get_full_analysis(ticker):
     try:
-        data = yf.download(ticker, period="1y", interval="1d", progress=False)
-        if data.empty: return None
-        # Clean MultiIndex columns if they exist
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = data.columns.get_level_values(0)
-        return data
+        df = yf.download(ticker, period="1y", interval="1d", progress=False)
+        if df.empty: return None
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+            
+        # Calc Indicators
+        df['MA200'] = df['Close'].rolling(200).mean()
+        df['RSI'] = calculate_rsi(df['Close'])
+        
+        last = df.iloc[-1]
+        dist_ma = ((last['Close'] - last['MA200']) / last['MA200']) * 100
+        rsi_val = last['RSI']
+        
+        # Entry/Exit Logic
+        # BUY: Price < MA200 AND RSI < 35 (Oversold)
+        # SELL: Price > MA200 AND RSI > 70 (Overbought)
+        action = "Hold"
+        if dist_ma < -10 and rsi_val < 35: action = "🎯 BUY / ENTRY"
+        elif dist_ma > 10 and rsi_val > 65: action = "⚠️ SELL / EXIT"
+        
+        # Falling Knife Logic (Modified by Master Fear Index)
+        knife_threshold = -15 * fear_multiplier
+        status = "Neutral"
+        if dist_ma < knife_threshold: status = "🔪 Falling Knife"
+        elif abs(dist_ma) < 5: status = "🟢 Stabilized"
+        
+        return {
+            "Price": round(float(last['Close']), 2),
+            "Dist_MA": round(dist_ma, 1),
+            "RSI": round(rsi_val, 1),
+            "Action": action,
+            "Status": status
+        }
     except:
         return None
 
-# 3. SCANNER EXECUTION
-if st.button("Execute Global Scan", type="primary"):
+# --- MAIN EXECUTION ---
+if st.button("🚀 Execute Global Scan", type="primary"):
     results = []
-    
-    with st.spinner("Analyzing Global ETFs and Stocks..."):
+    with st.spinner("Crunching RSI and Moving Averages..."):
         for cat, list_t in tickers.items():
             for t in list_t:
-                df = get_market_data(t)
-                if df is None: continue
-
-                # Technical Math
-                close = float(df['Close'].iloc[-1])
-                ma200 = float(df['Close'].rolling(200).mean().iloc[-1])
-                dist_ma = ((close - ma200) / ma200) * 100
-                vol = float(df['Close'].pct_change().std() * np.sqrt(252) * 100)
-
-                # Logic for Status
-                if dist_ma < -15:
-                    status = "🔪 Falling Knife"
-                elif -5 < dist_ma < 5:
-                    status = "🟢 Buy Zone"
-                else:
-                    status = "🟡 Neutral"
-
-                # Generate Dynamic Link (ETF.com for ETFs, Yahoo for Stocks)
-                link = f"https://www.etf.com/{t}" if cat != "Individual Stocks" else f"https://finance.yahoo.com/quote/{t}"
-
+                analysis = get_full_analysis(t)
+                if not analysis: continue
+                
+                isin = ISIN_DATABASE.get(t, "N/A")
                 results.append({
                     "Ticker": t,
-                    "ISIN": ISIN_DATABASE.get(t, "Contact Admin"),
-                    "Category": cat,
-                    "Price": round(close, 2),
-                    "Dist. 200MA": f"{dist_ma:.1f}%",
-                    "Volatility": f"{vol:.1f}%",
-                    "Status": status,
-                    "Research Link": link
+                    "ISIN": isin,
+                    "Status": analysis["Status"],
+                    "Action": analysis["Action"],
+                    "Price": analysis["Price"],
+                    "Dist. 200MA": f"{analysis['Dist_MA']}%",
+                    "RSI": analysis["RSI"],
+                    "YF": f"https://finance.yahoo.com/quote/{t}",
+                    "ETF.com": f"https://www.etf.com/{t}",
+                    "JustETF": f"https://www.justetf.com/en/search.html?search=ETFS&query={isin}"
                 })
 
     if results:
-        df_display = pd.DataFrame(results)
-
-        # 4. DISPLAY ENHANCEMENTS (Link Columns & Formatting)
+        df = pd.DataFrame(results)
         st.data_editor(
-            df_display,
+            df,
             column_config={
-                "Research Link": st.column_config.LinkColumn(
-                    "Deep Research",
-                    help="Click to open external analysis",
-                    validate="^https://.*",
-                    display_text="Open Chart ↗️"
-                ),
+                "YF": st.column_config.LinkColumn("Yahoo", display_text="View"),
+                "ETF.com": st.column_config.LinkColumn("ETF.com", display_text="Analysis"),
+                "JustETF": st.column_config.LinkColumn("JustETF", display_text="Europe"),
+                "RSI": st.column_config.ProgressColumn("RSI", min_value=0, max_value=100, format="%.0f"),
                 "Price": st.column_config.NumberColumn(format="$%.2f"),
-                "Ticker": st.column_config.TextColumn(help="Security Ticker Symbol"),
-                "ISIN": st.column_config.TextColumn(help="International Securities Identification Number"),
             },
             hide_index=True,
-            use_container_width=True,
-            disabled=df_display.columns # Makes it read-only
+            use_container_width=True
         )
     else:
-        st.error("Connection error or no data returned.")
+        st.error("No data found.")
 
 st.divider()
-st.sidebar.header("Scanner Settings")
-st.sidebar.info("Criteria: Falling Knife is defined as Price < 15% below the 200-day Moving Average.")
+st.info("💡 Strategy: A 'Buy' signal is triggered when the asset is significantly below its 200MA and RSI is oversold (<35).")
