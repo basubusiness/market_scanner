@@ -60,7 +60,11 @@ asset_type = st.sidebar.multiselect(
 )
 
 all_countries = sorted(universe[universe["type"].isin(asset_type)]["country"].dropna().unique())
-country = st.sidebar.multiselect("Country", all_countries, default=["United States"] if "United States" in all_countries else [])
+country = st.sidebar.multiselect(
+    "Country (leave empty = all countries)",
+    all_countries,
+    default=["United States"] if "United States" in all_countries else [],
+)
 
 all_sectors = sorted(universe[universe["type"].isin(asset_type)]["sector"].dropna().unique())
 sector = st.sidebar.multiselect("Sector", all_sectors)
@@ -261,8 +265,16 @@ if len(tickers) == 0:
     st.warning("⚠️ No assets match the current filters. Adjust the sidebar and try again.")
     st.stop()
 
-run = st.button("🔄 Run Market Scan", type="primary", use_container_width=True)
+col_btn, col_clear = st.columns([3, 1])
+with col_btn:
+    run = st.button("🔄 Run Market Scan", type="primary", use_container_width=True)
+with col_clear:
+    if st.button("🗑️ Clear Results", use_container_width=True):
+        st.session_state.pop("scan_results", None)
+        st.session_state.pop("scan_meta", None)
+        st.rerun()
 
+# ── Run scan and store in session_state
 if run:
     results = []
     progress = st.progress(0, text="Scanning…")
@@ -277,36 +289,44 @@ if run:
 
     if not results:
         st.error("❌ No data returned for any ticker. Try different filters or check your internet connection.")
-        st.stop()
+    else:
+        df_results = pd.DataFrame(results)
+        df_results["Score"] = (
+            (-df_results["Dist%"] / 20) * 0.5 +
+            ((50 - df_results["RSI"]) / 50) * 0.3 +
+            df_results["Confidence"] * 0.2
+        )
+        df_results = df_results.sort_values("Score", ascending=False).reset_index(drop=True)
+        df_results["Rank"] = df_results.index + 1
+        df_results["Suggested €"] = df_results.apply(
+            lambda row: allocation_label(row, baseline, fg_index), axis=1
+        )
+        # Persist to session state
+        st.session_state["scan_results"] = df_results
+        st.session_state["scan_meta"] = {
+            "baseline": baseline,
+            "fg_index": fg_index,
+            "tickers_scanned": len(tickers),
+        }
 
-    df = pd.DataFrame(results)
+# ── Display results from session_state (survives widget rerenders)
+if "scan_results" in st.session_state:
+    df = st.session_state["scan_results"]
+    meta = st.session_state["scan_meta"]
 
-    # Composite score (lower dist% + lower RSI = better buying opportunity)
-    df["Score"] = (
-        (-df["Dist%"] / 20) * 0.5 +
-        ((50 - df["RSI"]) / 50) * 0.3 +
-        df["Confidence"] * 0.2
-    )
-    df = df.sort_values("Score", ascending=False).reset_index(drop=True)
-    df["Rank"] = df.index + 1
+    display_cols = ["Rank", "Ticker", "Price", "MA200", "Dist%", "RSI", "Vol%",
+                    "Confidence", "Signal", "Knife", "Suggested €"]
 
-    df["Suggested €"] = df.apply(lambda row: allocation_label(row, baseline, fg_index), axis=1)
-
-    # ── Summary KPIs
     st.markdown("---")
     st.subheader("📊 Scan Results")
 
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Total Scanned", len(df))
-    k2.metric("BUY Signals", int((df["Action"] == "BUY").sum()))
-    k3.metric("SELL Signals", int((df["Action"] == "SELL").sum()))
-    k4.metric("WAIT Signals", int((df["Action"] == "WAIT").sum()))
+    k2.metric("🟢 BUY", int((df["Action"] == "BUY").sum()))
+    k3.metric("🔴 SELL", int((df["Action"] == "SELL").sum()))
+    k4.metric("🟡 WAIT", int((df["Action"] == "WAIT").sum()))
 
-    # ── Action filter tabs
     tab_all, tab_buy, tab_sell, tab_wait = st.tabs(["All", "🟢 BUY", "🔴 SELL", "🟡 WAIT"])
-
-    display_cols = ["Rank", "Ticker", "Price", "MA200", "Dist%", "RSI", "Vol%",
-                    "Confidence", "Signal", "Knife", "Suggested €"]
 
     def colour_action(val):
         if "BUY" in str(val):
@@ -320,9 +340,9 @@ if run:
             st.info("No results in this category.")
             return
 
+        show = data[display_cols].copy()
         styled = (
-            data[display_cols]
-            .style
+            show.style
             .applymap(colour_action, subset=["Signal"])
             .format({
                 "Price": "{:.2f}",
@@ -337,10 +357,8 @@ if run:
         )
         st.dataframe(styled, use_container_width=True, height=500)
 
-        # Links for top 10
         st.markdown("#### 🔗 Quick Links (Top 10)")
-        top = data.head(10)
-        for _, row in top.iterrows():
+        for _, row in data.head(10).iterrows():
             st.markdown(
                 f"**{row['Ticker']}** — "
                 f"[Yahoo]({row['Yahoo']}) | "
@@ -350,17 +368,13 @@ if run:
 
     with tab_all:
         render_table(df)
-
     with tab_buy:
         render_table(df[df["Action"] == "BUY"].reset_index(drop=True))
-
     with tab_sell:
         render_table(df[df["Action"] == "SELL"].reset_index(drop=True))
-
     with tab_wait:
         render_table(df[df["Action"] == "WAIT"].reset_index(drop=True))
 
-    # ── CSV download
     st.markdown("---")
     csv = df[display_cols + ["Yahoo", "etf.com", "justETF"]].to_csv(index=False).encode("utf-8")
     st.download_button(
