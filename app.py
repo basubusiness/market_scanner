@@ -26,7 +26,7 @@ def calculate_rsi(prices, window=14):
     return 100 - (100 / (1 + rs))
 
 # ---------------- HEADER ----------------
-st.title("🏹 Market Decision Engine v5.1")
+st.title("🏹 Market Decision Engine v5.2")
 
 col_vix, col_fg = st.columns(2)
 
@@ -39,7 +39,7 @@ with col_fg:
     fg_index = st.slider("🧠 Fear & Greed", 0, 100, 50)
     st.markdown("🔗 https://edition.cnn.com/markets/fear-and-greed")
 
-# ---------------- RISK ----------------
+# ---------------- RISK CONTEXT ----------------
 risk_multiplier = 1.0 + ((live_vix / 20) * ((100 - fg_index) / 50))
 
 st.sidebar.subheader("🛡️ Market Context")
@@ -142,9 +142,18 @@ if st.button("🔄 Run Market Scan", type="primary"):
     if results:
 
         df = pd.DataFrame(results)
-        df = df.sort_values("Dist%", ascending=True)
 
-        # ---------------- TOP SIGNALS ----------------
+        # ---------------- SCORING ----------------
+        df["Score"] = (
+            (-df["Dist%"] / 20) * 0.5 +
+            ((50 - df["RSI"]) / 50) * 0.3 +
+            (df["Confidence"]) * 0.2
+        )
+
+        df = df.sort_values("Score", ascending=False).reset_index(drop=True)
+        df["Rank"] = df.index + 1
+
+        # ---------------- TODAY SIGNALS ----------------
         top = df.iloc[0]
         worst = df.iloc[-1]
 
@@ -172,12 +181,20 @@ Confidence: {worst['Confidence']}
 Distance: {worst['Dist%']}%
 """)
 
-        # ---------------- TABLE ----------------
-        st.subheader("📊 Market Scan")
+        # ---------------- TOP / BOTTOM ----------------
+        st.subheader("🏆 Top Opportunities")
+        st.dataframe(df.head(5), use_container_width=True, hide_index=True)
+
+        st.subheader("⚠️ Risk / Avoid")
+        st.dataframe(df.tail(5), use_container_width=True, hide_index=True)
+
+        # ---------------- FULL TABLE ----------------
+        st.subheader("📊 Full Market Scan")
 
         st.dataframe(
             df,
             column_config={
+                "Rank": st.column_config.NumberColumn("🏆 Rank"),
                 "RSI": st.column_config.ProgressColumn(min_value=0, max_value=100),
                 "Yahoo": st.column_config.LinkColumn("Yahoo", display_text="Chart"),
                 "ETF": st.column_config.LinkColumn("ETF", display_text="Stats"),
@@ -190,17 +207,22 @@ Distance: {worst['Dist%']}%
 # ---------------- EXPLANATION ----------------
 with st.expander("🔍 How this works"):
     st.write("""
-• Trend (200-day average)  
+This system combines:
+
+• Distance from long-term trend (200MA)  
 • Momentum (RSI)  
 • Volatility (risk adjustment)  
 • Sentiment (VIX + Fear & Greed)  
 
+Score:
+Ranks opportunities across entire market  
+
 Confidence:
-Stronger when signal is clear and volatility is low  
+Higher when signal is strong and stable  
 
 Falling Knife:
-Deep drop + still falling → avoid early entry  
+Deep drop + still falling → high risk  
 
 Goal:
-Find best opportunities relative to market
+Find best opportunities RELATIVE to market
 """)
