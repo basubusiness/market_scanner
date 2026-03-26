@@ -59,27 +59,36 @@ asset_type = st.sidebar.multiselect(
     default=["ETF"],
 )
 
-all_countries = sorted(universe[universe["type"].isin(asset_type)]["country"].dropna().unique())
-country = st.sidebar.multiselect(
-    "Country (leave empty = all countries)",
-    all_countries,
-    default=["United States"] if "United States" in all_countries else [],
-)
+# ETFs in financedatabase have no reliable country/sector metadata.
+# Only show country+sector filters when Stocks are selected.
+stocks_selected = "Stock" in asset_type
+country = []
+sector = []
 
-all_sectors = sorted(universe[universe["type"].isin(asset_type)]["sector"].dropna().unique())
-sector = st.sidebar.multiselect("Sector", all_sectors)
-
-if "ETF" in asset_type and sector:
-    st.sidebar.info("ℹ️ Sector filter may not apply to ETFs")
+if stocks_selected:
+    stock_universe = universe[universe["type"] == "Stock"]
+    all_countries = sorted(stock_universe["country"].dropna().unique())
+    country = st.sidebar.multiselect(
+        "Country (Stocks — leave empty = all)",
+        all_countries,
+        default=["United States"] if "United States" in all_countries else [],
+    )
+    all_sectors = sorted(stock_universe["sector"].dropna().unique())
+    sector = st.sidebar.multiselect("Sector (Stocks only)", all_sectors)
+else:
+    st.sidebar.info("ℹ️ Country/Sector filters apply to Stocks only. ETFs have no geo metadata in this database.")
 
 # Apply filters
 filtered = universe[universe["type"].isin(asset_type)].copy()
 
-if country:
-    filtered = filtered[filtered["country"].isin(country)]
-
-if sector:
-    filtered = filtered[filtered["sector"].isin(sector)]
+if stocks_selected and (country or sector):
+    etf_rows = filtered[filtered["type"] == "ETF"]
+    stock_rows = filtered[filtered["type"] == "Stock"]
+    if country:
+        stock_rows = stock_rows[stock_rows["country"].isin(country)]
+    if sector:
+        stock_rows = stock_rows[stock_rows["sector"].isin(sector)]
+    filtered = pd.concat([etf_rows, stock_rows])
 
 tickers = list(dict.fromkeys(filtered["ticker"].str.strip().tolist()))
 
