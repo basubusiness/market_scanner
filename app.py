@@ -39,22 +39,42 @@ etfs_selected   = "ETF"   in asset_type
 country = []
 sector  = []
 
+# ── ETF filters (category/exchange based)
+etf_category = []
+etf_exchange = []
+if etfs_selected:
+    eu = universe[universe["type"] == "ETF"]
+    if "category_group" in eu.columns:
+        cats = sorted([c for c in eu["category_group"].dropna().unique() if c])
+        if cats:
+            etf_category = st.sidebar.multiselect("ETF Category (empty = all)", cats)
+    if "exchange" in eu.columns:
+        exchs = sorted([c for c in eu["exchange"].dropna().unique() if c])
+        if exchs:
+            etf_exchange = st.sidebar.multiselect("ETF Exchange (empty = all)", exchs)
+
+# ── Stock filters (country/sector based)
+country = []
+sector = []
 if stocks_selected:
     su = universe[universe["type"] == "Stock"]
-    ctries = sorted([c for c in su["country"].unique() if c])
+    ctries = sorted([c for c in su["country"].dropna().unique() if c])
     country = st.sidebar.multiselect(
-        "Country (Stocks only)",
+        "Stock Country (empty = all)",
         ctries,
         default=["United States"] if "United States" in ctries else [],
     )
-    sects = sorted([s for s in su["sector"].unique() if s])
-    sector = st.sidebar.multiselect("Sector (Stocks only)", sects)
-else:
-    st.sidebar.info("ETFs: no country/sector metadata - all ETFs included")
+    sects = sorted([s for s in su["sector"].dropna().unique() if s])
+    sector = st.sidebar.multiselect("Stock Sector (empty = all)", sects)
 
 parts = []
 if etfs_selected:
-    parts.append(universe[universe["type"] == "ETF"])
+    e = universe[universe["type"] == "ETF"]
+    if etf_category and "category_group" in e.columns:
+        e = e[e["category_group"].isin(etf_category)]
+    if etf_exchange and "exchange" in e.columns:
+        e = e[e["exchange"].isin(etf_exchange)]
+    parts.append(e)
 if stocks_selected:
     s = universe[universe["type"] == "Stock"]
     if country:
