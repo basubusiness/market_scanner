@@ -158,7 +158,7 @@ if len(tickers) > MAX_TICKERS:
 
 baseline = st.sidebar.number_input("Monthly Investment (EUR)", value=1000, min_value=100, step=100)
 
-with st.sidebar.expander("Debug - raw data"):
+with st.sidebar.expander("🔬 Debug (advanced)"):
     st.write("ETF country values:")
     st.write(universe[universe["type"]=="ETF"]["country"].value_counts().head(10))
     st.write("Stock country values:")
@@ -202,9 +202,19 @@ def fetch_ticker_data(ticker):
         close = df["Close"].dropna()
         if len(close) < 30:
             return None
-        price   = float(close.iloc[-1])
+        price = float(close.iloc[-1])
+        # Filter out illiquid/dead tickers
+        if price < 0.50:
+            return None
+        # Check average volume if available
+        if "Volume" in df.columns:
+            avg_vol = df["Volume"].dropna().tail(20).mean()
+            if avg_vol < 1000:
+                return None
         ma200   = float(close.rolling(200).mean().iloc[-1])
         rsi     = float(calculate_rsi(close).iloc[-1])
+        if rsi < 1 or rsi > 99:   # RSI=0 or 100 means bad data
+            return None
         dist_ma = ((price - ma200) / ma200) * 100
         vol     = float(close.pct_change().rolling(20).std().iloc[-1] * 100)
         conf    = min(abs(dist_ma)/20,1)*0.5 + min(abs(50-rsi)/50,1)*0.5
@@ -264,9 +274,11 @@ with c2:
 
 if run:
     results = []
+    attempted = 0
     prog = st.progress(0, text="Starting...")
     for i, t in enumerate(tickers):
         r = analyse_ticker(t, risk_mult)
+        attempted += 1
         if r:
             results.append(r)
         prog.progress((i+1)/len(tickers), text=f"Scanning {t}...")
@@ -281,6 +293,7 @@ if run:
         df["Rank"] = df.index + 1
         df["Suggested"] = df.apply(lambda r: allocation_label(r, baseline, fg_index), axis=1)
         st.session_state["scan_results"] = df
+        st.session_state["scan_attempted"] = attempted
 
 if "scan_results" in st.session_state:
     df = st.session_state["scan_results"]
@@ -288,11 +301,13 @@ if "scan_results" in st.session_state:
 
     st.markdown("---")
     st.subheader("Scan Results")
-    k1,k2,k3,k4 = st.columns(4)
-    k1.metric("Scanned",  len(df))
-    k2.metric("BUY",  int((df["Action"]=="BUY").sum()))
-    k3.metric("SELL", int((df["Action"]=="SELL").sum()))
-    k4.metric("WAIT", int((df["Action"]=="WAIT").sum()))
+    attempted = st.session_state.get("scan_attempted", len(df))
+    k1,k2,k3,k4,k5 = st.columns(5)
+    k1.metric("Attempted", attempted)
+    k2.metric("Valid Data", len(df), delta=f"{len(df)-attempted} filtered out", delta_color="off")
+    k3.metric("BUY",  int((df["Action"]=="BUY").sum()))
+    k4.metric("SELL", int((df["Action"]=="SELL").sum()))
+    k5.metric("WAIT", int((df["Action"]=="WAIT").sum()))
 
     t_all, t_buy, t_sell, t_wait = st.tabs(["All","BUY","SELL","WAIT"])
 
