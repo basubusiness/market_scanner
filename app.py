@@ -66,9 +66,10 @@ if stocks_selected:
 filtered = pd.concat(parts) if parts else pd.DataFrame()
 tickers  = list(dict.fromkeys(filtered["ticker"].tolist()))
 
-MAX_TICKERS = 50
+MAX_TICKERS = 500
 st.sidebar.caption(f"Universe: {len(universe):,} | Filtered: {len(filtered):,} | Scan: {min(len(tickers), MAX_TICKERS)}")
 if len(tickers) > MAX_TICKERS:
+    st.sidebar.warning(f"Capped at {MAX_TICKERS} — expect a longer scan")
     tickers = tickers[:MAX_TICKERS]
 
 baseline = st.sidebar.number_input("Monthly Investment (EUR)", value=1000, min_value=100, step=100)
@@ -145,6 +146,7 @@ def analyse_ticker(ticker, risk_mult):
         "Yahoo":   f"https://finance.yahoo.com/quote/{ticker}",
         "etf.com": f"https://www.etf.com/{ticker}",
         "justETF": f"https://www.justetf.com/en/search.html?query={ticker}",
+
     }
 
 st.title(f"Market Decision Engine {APP_VERSION}")
@@ -196,7 +198,7 @@ if run:
 
 if "scan_results" in st.session_state:
     df = st.session_state["scan_results"]
-    COLS = ["Rank","Ticker","Price","MA200","Dist%","RSI","Vol%","Confidence","Signal","Knife","Suggested"]
+    COLS = ["Rank","Ticker","Price","MA200","Dist%","RSI","Vol%","Confidence","Signal","Knife","Suggested","Yahoo","etf.com","justETF"]
 
     st.markdown("---")
     st.subheader("Scan Results")
@@ -217,23 +219,31 @@ if "scan_results" in st.session_state:
         if data.empty:
             st.info("No results.")
             return
+        display_cols = [c for c in COLS if c not in ("Links",)]
         styled = (
-            data[COLS].style
+            data[display_cols].style
             .applymap(colour, subset=["Signal"])
             .format({"Price":"{:.2f}","MA200":"{:.2f}","Dist%":"{:+.1f}%",
                      "RSI":"{:.1f}","Vol%":"{:.2f}%","Confidence":"{:.2f}"})
             .background_gradient(subset=["Dist%"], cmap="RdYlGn")
             .background_gradient(subset=["RSI"],   cmap="RdYlGn_r")
         )
-        st.dataframe(styled, use_container_width=True, height=480)
-        for _, row in data.head(10).iterrows():
-            st.markdown(f"**{row['Ticker']}** - [Yahoo]({row['Yahoo']}) | [ETF.com]({row['etf.com']}) | [justETF]({row['justETF']})")
+        st.dataframe(
+            styled,
+            use_container_width=True,
+            height=480,
+            column_config={
+                "Yahoo":   st.column_config.LinkColumn("Yahoo",   display_text="📈 YF"),
+                "etf.com": st.column_config.LinkColumn("ETF.com", display_text="📊 ETF"),
+                "justETF": st.column_config.LinkColumn("justETF", display_text="🔍 jETF"),
+            }
+        )
 
     with t_all:  show_table(df)
     with t_buy:  show_table(df[df["Action"]=="BUY"].reset_index(drop=True))
     with t_sell: show_table(df[df["Action"]=="SELL"].reset_index(drop=True))
     with t_wait: show_table(df[df["Action"]=="WAIT"].reset_index(drop=True))
 
-    csv = df[COLS+["Yahoo","etf.com","justETF"]].to_csv(index=False).encode("utf-8")
+    csv = df[COLS].to_csv(index=False).encode("utf-8")
     st.download_button("Download CSV", data=csv, file_name="scan_results.csv",
                        mime="text/csv", use_container_width=True)
