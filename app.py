@@ -23,6 +23,8 @@ def load_universe():
     df["sector"]  = df["sector"].fillna("").astype(str).str.strip()
     df["ticker"]  = df["ticker"].fillna("").astype(str).str.strip()
     df = df[df["ticker"].str.len().between(1, 5)]
+    df = df[~df["ticker"].str.startswith("^")]
+    df = df[df["ticker"].str.match(r"^[A-Z]{1,5}$")]
     return df
 
 universe = load_universe()
