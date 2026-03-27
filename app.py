@@ -39,48 +39,112 @@ etfs_selected   = "ETF"   in asset_type
 country = []
 sector  = []
 
-# ── ETF filters (category/exchange based)
-etf_category = []
-etf_exchange = []
+def col_options(df, col):
+    """Safe sorted unique non-empty values for a column."""
+    if col not in df.columns:
+        return []
+    return sorted([v for v in df[col].dropna().unique() if str(v).strip()])
+
+# ── ETF filters
+etf_category_group = []
+etf_category       = []
+etf_currency       = []
+etf_exchange       = []
+etf_family         = []
+
 if etfs_selected:
     eu = universe[universe["type"] == "ETF"]
-    if "category_group" in eu.columns:
-        cats = sorted([c for c in eu["category_group"].dropna().unique() if c])
-        if cats:
-            etf_category = st.sidebar.multiselect("ETF Category (empty = all)", cats)
-    if "exchange" in eu.columns:
-        exchs = sorted([c for c in eu["exchange"].dropna().unique() if c])
-        if exchs:
-            etf_exchange = st.sidebar.multiselect("ETF Exchange (empty = all)", exchs)
+    st.sidebar.markdown("**📦 ETF Filters**")
 
-# ── Stock filters (country/sector based)
+    opts = col_options(eu, "category_group")
+    if opts:
+        etf_category_group = st.sidebar.multiselect(
+            "ETF Asset Class (empty = all)",
+            opts,
+            help="e.g. Equities, Fixed Income, Commodities"
+        )
+
+    opts = col_options(eu, "category")
+    if opts:
+        etf_category = st.sidebar.multiselect(
+            "ETF Category (empty = all)",
+            opts,
+            help="e.g. Large Cap, Emerging Markets, Government Bonds"
+        )
+
+    opts = col_options(eu, "currency")
+    if opts:
+        etf_currency = st.sidebar.multiselect(
+            "ETF Currency / Domicile proxy (empty = all)",
+            opts,
+            help="EUR ≈ UCITS/EU domiciled · USD ≈ US domiciled"
+        )
+
+    opts = col_options(eu, "exchange")
+    if opts:
+        etf_exchange = st.sidebar.multiselect(
+            "ETF Exchange (empty = all)",
+            opts,
+            help="e.g. NYSE Arca, NASDAQ, LSE"
+        )
+
+    opts = col_options(eu, "family")
+    if opts:
+        etf_family = st.sidebar.multiselect(
+            "ETF Family (empty = all)",
+            opts,
+            help="e.g. iShares, Vanguard, Invesco"
+        )
+
+# ── Stock filters
 country = []
-sector = []
+sector  = []
+industry = []
+
 if stocks_selected:
     su = universe[universe["type"] == "Stock"]
-    ctries = sorted([c for c in su["country"].dropna().unique() if c])
-    country = st.sidebar.multiselect(
-        "Stock Country (empty = all)",
-        ctries,
-        default=["United States"] if "United States" in ctries else [],
-    )
-    sects = sorted([s for s in su["sector"].dropna().unique() if s])
-    sector = st.sidebar.multiselect("Stock Sector (empty = all)", sects)
+    st.sidebar.markdown("**📈 Stock Filters**")
 
+    opts = col_options(su, "country")
+    if opts:
+        country = st.sidebar.multiselect(
+            "Country (empty = all)",
+            opts,
+            default=["United States"] if "United States" in opts else [],
+        )
+
+    opts = col_options(su, "sector")
+    if opts:
+        sector = st.sidebar.multiselect("Sector (empty = all)", opts)
+
+    opts = col_options(su, "industry_group")
+    if opts:
+        industry = st.sidebar.multiselect("Industry Group (empty = all)", opts)
+
+# ── Build filtered universe
 parts = []
 if etfs_selected:
-    e = universe[universe["type"] == "ETF"]
-    if etf_category and "category_group" in e.columns:
-        e = e[e["category_group"].isin(etf_category)]
+    e = universe[universe["type"] == "ETF"].copy()
+    if etf_category_group and "category_group" in e.columns:
+        e = e[e["category_group"].isin(etf_category_group)]
+    if etf_category and "category" in e.columns:
+        e = e[e["category"].isin(etf_category)]
+    if etf_currency and "currency" in e.columns:
+        e = e[e["currency"].isin(etf_currency)]
     if etf_exchange and "exchange" in e.columns:
         e = e[e["exchange"].isin(etf_exchange)]
+    if etf_family and "family" in e.columns:
+        e = e[e["family"].isin(etf_family)]
     parts.append(e)
+
 if stocks_selected:
-    s = universe[universe["type"] == "Stock"]
-    if country:
+    s = universe[universe["type"] == "Stock"].copy()
+    if country and "country" in s.columns:
         s = s[s["country"].isin(country)]
-    if sector:
+    if sector and "sector" in s.columns:
         s = s[s["sector"].isin(sector)]
+    if industry and "industry_group" in s.columns:
+        s = s[s["industry_group"].isin(industry)]
     parts.append(s)
 
 filtered = pd.concat(parts) if parts else pd.DataFrame()
@@ -175,8 +239,10 @@ col_vix, col_fg = st.columns(2)
 with col_vix:
     live_vix = get_live_vix()
     st.metric("Live VIX", f"{live_vix:.2f}")
+    st.caption("[📈 Yahoo Finance VIX](https://finance.yahoo.com/quote/%5EVIX/)")
 with col_fg:
     fg_index = st.slider("Fear & Greed (manual)", 0, 100, 50)
+    st.caption("[🧠 CNN Fear & Greed Index](https://edition.cnn.com/markets/fear-and-greed)")
 
 risk_mult = 1.0 + ((live_vix / 20) * ((100 - fg_index) / 50))
 st.sidebar.subheader("Market Context")
