@@ -1,13 +1,14 @@
 import streamlit as st
-st.set_page_config(page_title="Market Scanner v7", layout="wide")
+st.set_page_config(page_title="Market Scanner v8", layout="wide")
 
-APP_VERSION = "v7.0"
+APP_VERSION = "v8.0"
 
 import yfinance as yf
 import pandas as pd
 import numpy as np
 import financedatabase as fd
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ─────────────────────────────────────────────
 # UNIVERSE
@@ -21,7 +22,8 @@ def load_universe():
     equities["type"] = "Stock"
     df = pd.concat([etfs, equities], axis=0).reset_index()
     df.rename(columns={df.columns[0]: "ticker"}, inplace=True)
-    for col in ["country","sector","name","category_group","category","currency","exchange","family","industry_group"]:
+    for col in ["country","sector","name","category_group","category",
+                "currency","exchange","family","industry_group"]:
         if col not in df.columns:
             df[col] = ""
     for col in df.columns:
@@ -50,28 +52,38 @@ def calculate_rsi(prices, window=14):
     delta = prices.diff()
     gain  = delta.where(delta > 0, 0.0).rolling(window).mean()
     loss  = (-delta.where(delta < 0, 0.0)).rolling(window).mean()
-    rs    = gain / loss.replace(0, 0.001)
+    # Fix: avoid artificial inflation when loss=0
+    rs = gain / loss
+    rs[loss == 0] = np.inf
     return 100 - (100 / (1 + rs))
 
 def calculate_macd(prices):
-    ema12 = prices.ewm(span=12, adjust=False).mean()
-    ema26 = prices.ewm(span=26, adjust=False).mean()
-    macd  = ema12 - ema26
+    ema12  = prices.ewm(span=12, adjust=False).mean()
+    ema26  = prices.ewm(span=26, adjust=False).mean()
+    macd   = ema12 - ema26
     signal = macd.ewm(span=9, adjust=False).mean()
-    return float(macd.iloc[-1]), float(signal.iloc[-1])
+    hist   = macd - signal
+    return float(macd.iloc[-1]), float(signal.iloc[-1]), float(hist.iloc[-1])
+
+def linear_slope(series, window=10):
+    """Normalised linear regression slope — better trend proxy than price comparison."""
+    y = series.tail(window).values
+    if len(y) < window:
+        return 0.0
+    x = np.arange(len(y))
+    slope = np.polyfit(x, y, 1)[0]
+    return float(slope / (y.mean() + 1e-9))   # normalise by mean price
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def get_fg_index():
-    """Try to fetch Fear & Greed from CNN via their internal API."""
     try:
         url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(url, headers=headers, timeout=5)
+        r   = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
         if r.status_code == 200:
-            data = r.json()
-            score = data["fear_and_greed"]["score"]
-            rating = data["fear_and_greed"]["rating"]
-            return round(float(score)), str(rating).replace("_", " ").title()
+            d      = r.json()["fear_and_greed"]
+            score  = round(float(d["score"]))
+            rating = str(d["rating"]).replace("_", " ").title()
+            return score, rating
     except Exception:
         pass
     return None, None
@@ -86,16 +98,34 @@ def get_live_vix():
         pass
     return 20.0
 
-def allocation_label(row, base, fg):
-    score = (40 if fg < 35 else 0) + (30 if row["RSI"] < 40 else 0) + (30 if row["Dist%"] < 0 else 0)
+def allocation_label(row, base, fg, risk_mult):
+    """Smarter sizing: scale by confidence AND volatility, not just signal score."""
     if row["Action"] == "AVOID":
-        return f"⛔ Hold — Knife risk"
-    if score >= 70: return f"EUR {base*2:,.0f} (Strong Buy)"
-    if score >= 35: return f"EUR {base:,.0f} (Normal)"
-    return f"EUR {base*0.5:,.0f} (Cautious)"
+        return "⛔ Do not enter"
+    if row["Action"] == "WATCH":
+        return f"👀 Wait — EUR {base*0.25:,.0f} max starter"
+
+    # Base score from market context
+    ctx_score = (40 if fg < 35 else 20 if fg < 50 else 0)
+
+    # Signal score
+    sig_score  = (30 if row["RSI"] < 40 else 15 if row["RSI"] < 50 else 0)
+    sig_score += (30 if row["Dist%"] < -10 else 15 if row["Dist%"] < 0 else 0)
+
+    total = ctx_score + sig_score
+
+    # Scale by confidence and volatility
+    conf_mult = 0.5 + row["Confidence"]          # 0.5–1.5x
+    vol_mult  = max(0.5, 1 - row["Vol%"] / 20)   # reduce for high vol
+
+    amount = base * (total / 100) * 2 * conf_mult * vol_mult * risk_mult
+    amount = max(base * 0.25, min(amount, base * 3))  # clamp 0.25x–3x
+
+    tier = "🔥 Strong" if total >= 60 else "⚖️ Normal" if total >= 30 else "🔍 Light"
+    return f"{tier} — EUR {amount:,.0f}"
 
 # ─────────────────────────────────────────────
-# TICKER ANALYSIS
+# TICKER ANALYSIS — parallel batch
 # ─────────────────────────────────────────────
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -114,64 +144,80 @@ def fetch_ticker_data(ticker):
             avg_vol = df["Volume"].dropna().tail(20).mean()
             if avg_vol < 1000:
                 return None
-        ma50  = float(close.rolling(50).mean().iloc[-1])
-        ma200 = float(close.rolling(200).mean().iloc[-1])
-        rsi   = float(calculate_rsi(close).iloc[-1])
-        if rsi < 1 or rsi > 99:
+
+        ma50   = float(close.rolling(50).mean().iloc[-1])
+        ma200  = float(close.rolling(200).mean().iloc[-1])
+        rsi    = float(calculate_rsi(close).iloc[-1])
+        if not (1 < rsi < 99):
             return None
-        macd_val, macd_sig = calculate_macd(close)
+
+        macd_val, macd_sig, macd_hist = calculate_macd(close)
+
+        # RSI momentum — is RSI rising or falling?
+        rsi_series = calculate_rsi(close)
+        rsi_slope  = linear_slope(rsi_series.dropna(), window=5)
+
         dist_ma  = ((price - ma200) / ma200) * 100
         week52h  = float(close.tail(252).max())
         week52l  = float(close.tail(252).min())
         dist_52h = ((price - week52h) / week52h) * 100
         vol_pct  = float(close.pct_change().rolling(20).std().iloc[-1] * 100)
-        trend_down = bool(close.iloc[-1] < close.iloc[-5])
-        trend_down_strong = bool(close.iloc[-1] < close.iloc[-10] < close.iloc[-20])
-        conf = min(abs(dist_ma)/20,1)*0.5 + min(abs(50-rsi)/50,1)*0.5
-        conf *= 1 - min(vol_pct/5, 0.5)
+
+        # Better trend: linear regression slope, not raw price comparison
+        price_slope = linear_slope(close, window=10)
+        trend_down_strong = price_slope < -0.003   # normalised threshold
+
+        # Confidence: deviation strength + RSI extremity, dampened by volatility
+        conf  = min(abs(dist_ma) / 20, 1) * 0.5 + min(abs(50 - rsi) / 50, 1) * 0.5
+        conf *= 1 - min(vol_pct / 5, 0.5)
+
         return dict(
-            price=price, ma50=ma50, ma200=ma200, rsi=rsi,
-            macd=macd_val, macd_signal=macd_sig,
+            price=price, ma50=ma50, ma200=ma200,
+            rsi=rsi, rsi_slope=rsi_slope,
+            macd=macd_val, macd_signal=macd_sig, macd_hist=macd_hist,
             dist_ma=dist_ma, week52h=week52h, week52l=week52l, dist_52h=dist_52h,
-            vol=vol_pct, trend_down=trend_down, trend_down_strong=trend_down_strong,
-            confidence=conf
+            vol=vol_pct, price_slope=price_slope,
+            trend_down_strong=trend_down_strong, confidence=conf,
         )
     except Exception:
         return None
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_pe_ratio(ticker):
-    """Fetch PE ratio from yfinance info — slow, cached 24h."""
     try:
         info = yf.Ticker(ticker).info
-        pe = info.get("trailingPE") or info.get("forwardPE")
-        return round(float(pe), 1) if pe and pe > 0 else None
+        pe   = info.get("trailingPE") or info.get("forwardPE")
+        mcap = info.get("marketCap")
+        return (
+            round(float(pe), 1) if pe and 0 < pe < 1000 else None,
+            mcap,
+        )
     except Exception:
-        return None
+        return None, None
 
 def analyse_ticker(ticker, risk_mult, fetch_pe=False):
     raw = fetch_ticker_data(ticker)
     if raw is None:
         return None
 
-    dm   = raw["dist_ma"]
-    rsi  = raw["rsi"]
-    conf = raw["confidence"]
+    dm        = raw["dist_ma"]
+    rsi       = raw["rsi"]
+    conf      = raw["confidence"]
     macd_bull = raw["macd"] > raw["macd_signal"]
-    knife_threshold = -15 * (1 / risk_mult)
+    macd_accel= raw["macd_hist"] > 0  # histogram positive = acceleration
+    rsi_rising= raw["rsi_slope"] > 0
 
-    # Falling knife: deeply oversold AND still falling strongly — AVOID
-    is_knife = (dm < knife_threshold) and (rsi < 35) and raw["trend_down_strong"]
-
-    # Reversal confirmation: was falling knife but MACD crossed bullish
-    reversal_confirmed = is_knife and macd_bull
+    knife_threshold   = -15 * (1 / risk_mult)
+    is_knife          = (dm < knife_threshold) and (rsi < 35) and raw["trend_down_strong"]
+    # Reversal: knife + MACD turned bull + RSI starting to rise
+    reversal_confirmed = is_knife and macd_bull and rsi_rising
 
     if is_knife and not reversal_confirmed:
         action = "AVOID"
-    elif dm < -10 and rsi < 40 and (macd_bull or reversal_confirmed):
-        action = "BUY"
-    elif dm < -10 and rsi < 40:
-        action = "WATCH"   # oversold but no MACD confirmation yet
+    elif dm < -10 and rsi < 40 and macd_bull and macd_accel:
+        action = "BUY"           # full confirmation
+    elif dm < -10 and rsi < 40 and (macd_bull or rsi_rising):
+        action = "WATCH"         # oversold, partial confirmation
     elif dm > 10 and rsi > 70:
         action = "SELL"
     else:
@@ -179,36 +225,88 @@ def analyse_ticker(ticker, risk_mult, fetch_pe=False):
 
     strength = "Strong" if conf > 0.7 else "Medium" if conf > 0.4 else "Weak"
 
-    pe = fetch_pe(ticker) if fetch_pe else None
+    pe, mcap = (fetch_pe_ratio(ticker) if fetch_pe else (None, None))
+
+    # Market cap bucket
+    if mcap:
+        if   mcap > 200e9: cap_label = "Mega"
+        elif mcap > 10e9:  cap_label = "Large"
+        elif mcap > 2e9:   cap_label = "Mid"
+        elif mcap > 300e6: cap_label = "Small"
+        else:              cap_label = "Micro"
+    else:
+        cap_label = "—"
 
     return {
-        "Ticker":   ticker,
-        "Price":    round(raw["price"], 2),
-        "MA50":     round(raw["ma50"], 2),
-        "MA200":    round(raw["ma200"], 2),
-        "Dist%":    round(dm, 1),
-        "52W High": round(raw["dist_52h"], 1),
-        "RSI":      round(rsi, 1),
-        "MACD":     "📈 Bull" if macd_bull else "📉 Bear",
-        "Vol%":     round(raw["vol"], 2),
+        "Ticker":     ticker,
+        "Price":      round(raw["price"], 2),
+        "MA50":       round(raw["ma50"], 2),
+        "MA200":      round(raw["ma200"], 2),
+        "Dist%":      round(dm, 1),
+        "52W%":       round(raw["dist_52h"], 1),
+        "RSI":        round(rsi, 1),
+        "RSI↗":       "↗" if rsi_rising else "↘",
+        "MACD":       "▲ Bull" if macd_bull else "▼ Bear",
+        "MACD Accel": "⚡" if macd_accel else "—",
+        "Vol%":       round(raw["vol"], 2),
         "Confidence": round(conf, 2),
-        "PE":       pe if pe else "—",
-        "Signal":   f"{action} ({strength})",
-        "Action":   action,
-        "Knife":    "⚠️ Knife" if (is_knife and not reversal_confirmed) else ("✅ Confirmed" if reversal_confirmed else "OK"),
-        "Yahoo":    f"https://finance.yahoo.com/quote/{ticker}",
-        "etf.com":  f"https://www.etf.com/{ticker}",
-        "justETF":  f"https://www.justetf.com/en/search.html?query={ticker}",
+        "PE":         pe if pe else "—",
+        "Cap":        cap_label,
+        "Signal":     f"{action} ({strength})",
+        "Action":     action,
+        "Knife":      "⚠️ Knife" if (is_knife and not reversal_confirmed)
+                      else ("✅ Reversal" if reversal_confirmed else "—"),
+        "Yahoo":      f"https://finance.yahoo.com/quote/{ticker}",
+        "etf.com":    f"https://www.etf.com/{ticker}",
+        "justETF":    f"https://www.justetf.com/en/search.html?query={ticker}",
     }
 
+def parallel_scan(tickers, risk_mult, fetch_pe, max_workers=12):
+    """Run analyse_ticker in parallel threads — 5-10x faster than sequential."""
+    results = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = {ex.submit(analyse_ticker, t, risk_mult, fetch_pe): t for t in tickers}
+        for fut in as_completed(futures):
+            ticker = futures[fut]
+            try:
+                r = fut.result()
+                results[ticker] = r
+            except Exception:
+                results[ticker] = None
+    # Return in original order
+    return [results[t] for t in tickers if results.get(t) is not None]
+
 # ─────────────────────────────────────────────
-# SIDEBAR — FILTERS (cascading)
+# SCORING (improved — includes MACD)
+# ─────────────────────────────────────────────
+
+def compute_scores(df):
+    # Normalise each component to [0,1] range
+    dist_score  = (-df["Dist%"] / 30).clip(0, 1)           # deeper below MA200 = better
+    rsi_score   = ((50 - df["RSI"]) / 50).clip(0, 1)       # lower RSI = better
+    macd_score  = (df["MACD"] == "▲ Bull").astype(float)   # bull = 1, bear = 0
+    accel_score = (df["MACD Accel"] == "⚡").astype(float)
+    conf_score  = df["Confidence"]
+
+    score = (
+        dist_score  * 0.30 +
+        rsi_score   * 0.25 +
+        macd_score  * 0.20 +
+        accel_score * 0.10 +
+        conf_score  * 0.15
+    )
+    # Hard penalty for AVOID
+    score -= (df["Action"] == "AVOID").astype(float) * 2
+    return score
+
+# ─────────────────────────────────────────────
+# SIDEBAR — CASCADING FILTERS
 # ─────────────────────────────────────────────
 
 st.sidebar.title(f"Config {APP_VERSION}")
 st.sidebar.subheader("Filters")
 
-asset_type     = st.sidebar.multiselect("Asset Type", ["ETF", "Stock"], default=["ETF"])
+asset_type      = st.sidebar.multiselect("Asset Type", ["ETF","Stock"], default=["ETF"])
 stocks_selected = "Stock" in asset_type
 etfs_selected   = "ETF"   in asset_type
 
@@ -219,41 +317,45 @@ etf_exchange       = []
 etf_family         = []
 
 if etfs_selected:
-    # Start with all ETFs, cascade each filter into the next
     eu = universe[universe["type"] == "ETF"].copy()
     st.sidebar.markdown("**📦 ETF Filters**")
 
     opts = col_options(eu, "category_group")
     if opts:
-        etf_category_group = st.sidebar.multiselect("Asset Class (empty=all)", opts,
+        etf_category_group = st.sidebar.multiselect(
+            "Asset Class (empty=all)", opts,
             help="e.g. Equities, Fixed Income, Commodities")
     if etf_category_group:
         eu = eu[eu["category_group"].isin(etf_category_group)]
 
     opts = col_options(eu, "category")
     if opts:
-        etf_category = st.sidebar.multiselect("Category (empty=all)", opts,
+        etf_category = st.sidebar.multiselect(
+            "Category (empty=all)", opts,
             help="e.g. Large Cap, Emerging Markets")
     if etf_category:
         eu = eu[eu["category"].isin(etf_category)]
 
     opts = col_options(eu, "currency")
     if opts:
-        etf_currency = st.sidebar.multiselect("Currency / Domicile (empty=all)", opts,
+        etf_currency = st.sidebar.multiselect(
+            "Currency / Domicile (empty=all)", opts,
             help="EUR ≈ UCITS/EU · USD ≈ US domiciled")
     if etf_currency:
         eu = eu[eu["currency"].isin(etf_currency)]
 
     opts = col_options(eu, "exchange")
     if opts:
-        etf_exchange = st.sidebar.multiselect("Exchange (empty=all)", opts,
-            help="e.g. NYSE Arca, NASDAQ, LSE, Euronext")
+        etf_exchange = st.sidebar.multiselect(
+            "Exchange (empty=all)", opts,
+            help="e.g. NYSE Arca, NASDAQ, LSE")
     if etf_exchange:
         eu = eu[eu["exchange"].isin(etf_exchange)]
 
     opts = col_options(eu, "family")
     if opts:
-        etf_family = st.sidebar.multiselect("Fund Family (empty=all)", opts,
+        etf_family = st.sidebar.multiselect(
+            "Fund Family (empty=all)", opts,
             help="e.g. iShares, Vanguard, Invesco")
 
 country  = []
@@ -261,13 +363,13 @@ sector   = []
 industry = []
 
 if stocks_selected:
-    # Cascade stock filters too
     su = universe[universe["type"] == "Stock"].copy()
     st.sidebar.markdown("**📈 Stock Filters**")
 
     opts = col_options(su, "country")
     if opts:
-        country = st.sidebar.multiselect("Country (empty=all)", opts,
+        country = st.sidebar.multiselect(
+            "Country (empty=all)", opts,
             default=["United States"] if "United States" in opts else [])
     if country:
         su = su[su["country"].isin(country)]
@@ -304,79 +406,101 @@ filtered = pd.concat(parts) if parts else pd.DataFrame()
 tickers  = list(dict.fromkeys(filtered["ticker"].tolist()))
 
 MAX_TICKERS = 1000
-st.sidebar.caption(f"Universe: {len(universe):,} | Filtered: {len(filtered):,} | Will scan: {min(len(tickers), MAX_TICKERS):,}")
+st.sidebar.caption(
+    f"Universe: {len(universe):,} | Filtered: {len(filtered):,} | "
+    f"Will scan: {min(len(tickers), MAX_TICKERS):,}"
+)
 if len(tickers) > MAX_TICKERS:
     st.sidebar.warning(f"Capped at {MAX_TICKERS:,} tickers")
     tickers = tickers[:MAX_TICKERS]
 
-baseline = st.sidebar.number_input("Monthly Investment (EUR)", value=1000, min_value=100, step=100)
-fetch_pe = st.sidebar.checkbox("Fetch PE Ratios (slower scan)", value=False,
-    help="Adds P/E ratio to results. Each ticker needs an extra API call — adds ~2s per ticker.")
+baseline  = st.sidebar.number_input("Monthly Investment (EUR)", value=1000, min_value=100, step=100)
+fetch_pe  = st.sidebar.checkbox("Fetch PE + Market Cap (slower)", value=False,
+    help="Adds P/E and market cap. ~2s extra per ticker. Cached 24h.")
+n_workers = st.sidebar.slider("Parallel workers", 4, 24, 12,
+    help="More workers = faster scan. Reduce if you hit rate limits.")
 
 with st.sidebar.expander("🔬 Debug (advanced)"):
-    st.write("ETF columns:", [c for c in universe.columns if universe[universe["type"]=="ETF"][c].astype(str).str.strip().replace("","<NA>").dropna().shape[0] > 100])
     st.write("Queued tickers (first 10):", tickers[:10])
+    st.write("ETF columns with data:",
+        [c for c in ["category_group","category","currency","exchange","family"]
+         if c in universe.columns and universe[universe["type"]=="ETF"][c].str.strip().replace("","<NA>").dropna().shape[0] > 10])
 
 # ─────────────────────────────────────────────
-# MAIN HEADER
+# MAIN
 # ─────────────────────────────────────────────
 
 st.title(f"Market Decision Engine {APP_VERSION}")
 
-# Auto-fetch F&G
 fg_auto, fg_rating = get_fg_index()
 
 col_vix, col_fg = st.columns(2)
 with col_vix:
     live_vix = get_live_vix()
-    st.metric("Live VIX", f"{live_vix:.2f}")
+    st.metric("Live VIX", f"{live_vix:.2f}",
+        delta="High fear" if live_vix > 30 else ("Calm" if live_vix < 15 else "Normal"),
+        delta_color="inverse")
     st.caption("[📈 Yahoo Finance VIX](https://finance.yahoo.com/quote/%5EVIX/)")
 
 with col_fg:
     if fg_auto is not None:
-        st.metric("Fear & Greed (CNN live)", f"{fg_auto} — {fg_rating}")
+        st.metric("Fear & Greed (CNN live)", f"{fg_auto}",
+            delta=fg_rating, delta_color="off")
         fg_index = fg_auto
-        st.caption("[🧠 CNN Fear & Greed Index](https://edition.cnn.com/markets/fear-and-greed)")
+        st.caption("[🧠 CNN Fear & Greed](https://edition.cnn.com/markets/fear-and-greed)")
     else:
-        fg_index = st.slider("Fear & Greed (manual — CNN unavailable)", 0, 100, 50)
-        st.caption("[🧠 CNN Fear & Greed Index](https://edition.cnn.com/markets/fear-and-greed)")
+        fg_index = st.slider("Fear & Greed (manual)", 0, 100, 50)
+        st.caption("[🧠 CNN Fear & Greed](https://edition.cnn.com/markets/fear-and-greed) — auto-fetch unavailable")
 
 risk_mult = 1.0 + ((live_vix / 20) * ((100 - fg_index) / 50))
+
 st.sidebar.subheader("Market Context")
-if   risk_mult > 2:   st.sidebar.error(f"🔥 High Fear ({risk_mult:.2f}x)")
+if   risk_mult > 2.5: st.sidebar.error(f"🔥 Extreme Fear ({risk_mult:.2f}x)")
+elif risk_mult > 2.0: st.sidebar.error(f"😰 High Fear ({risk_mult:.2f}x)")
 elif risk_mult < 1.2: st.sidebar.info(f"😌 Calm ({risk_mult:.2f}x)")
 else:                 st.sidebar.warning(f"⚖️ Normal ({risk_mult:.2f}x)")
 
+# VIX regime override hint
+if live_vix > 40:
+    st.warning("⚡ VIX > 40 — Extreme regime. MACD confirmation relaxed for reversals. "
+               "Violent bounces possible. Size positions conservatively.")
+
 # ─────────────────────────────────────────────
-# SIGNAL LEGEND
+# SIGNAL GUIDE
 # ─────────────────────────────────────────────
 
 with st.expander("📖 Signal Guide & Financial Principles"):
     st.markdown("""
-| Signal | Meaning | When to act |
-|--------|---------|-------------|
-| **BUY** | Price >10% below MA200, RSI<40, MACD bullish crossover confirmed | Consider buying — oversold with momentum turning |
-| **WATCH** | Oversold (like BUY) but MACD not yet confirmed bullish | Wait for MACD confirmation before entering |
-| **AVOID** | Falling knife — deeply below MA200, RSI<35, price still trending down strongly | Do NOT buy. Wait for trend reversal confirmation |
-| **WAIT** | No clear signal in either direction | Hold cash or existing position |
-| **SELL** | Price >10% above MA200, RSI>70 | Overbought — consider trimming or taking profit |
+| Signal | Meaning | Suggested action |
+|--------|---------|-----------------|
+| **BUY** | >10% below MA200 · RSI<40 · MACD bullish · MACD accelerating | Full position — all conditions met |
+| **WATCH** | Oversold but only partial MACD/RSI confirmation | Small starter — wait for BUY confirmation |
+| **AVOID** | Falling knife — deeply below MA200 · RSI<35 · price slope still negative | Do not enter. Wait for reversal |
+| **WAIT** | No clear signal | Hold cash or existing position |
+| **SELL** | >10% above MA200 · RSI>70 | Overbought — trim or take profit |
 
-**Why MACD matters for BUY signals:**
-RSI alone tells you something is oversold, but not *when* it will recover. MACD crossing above its signal line is a momentum confirmation that selling pressure is easing. Without it, you may catch a falling knife.
+**Why both MACD and RSI?**
+RSI tells you *how oversold*. MACD tells you *if momentum is turning*. Together they filter out stocks that are cheap for a reason (still falling) vs genuinely recovering.
 
-**Falling Knife risk:**
-A stock down 30-50% from its MA200 with RSI<35 and still falling is one of the most dangerous setups. It *looks* cheap but may have fundamental reasons (earnings collapse, fraud, sector disruption). Always check the news before acting on any AVOID signal.
+**RSI↗ arrow:** Rising RSI on an oversold stock is an early reversal signal even before MACD confirms.
 
-**P/E Ratio context (enable in sidebar):**
-- A stock with RSI 30 but P/E of 80 is still expensive relative to earnings.
-- P/E < 15: potentially undervalued · P/E 15–25: fair · P/E > 30: growth premium, higher risk
-- ETFs typically show N/A for P/E — use RSI/MA200 signals instead.
+**MACD Accel (⚡):** MACD histogram turning positive means the bullish momentum is *accelerating* — strongest buy confirmation.
 
-**VIX interpretation:**
-- VIX < 15: complacency — markets may be overextended
-- VIX 15–25: normal volatility
-- VIX > 30: high fear — historically good long-term entry points but short-term pain likely
-- VIX > 40: extreme fear / crisis — maximum opportunity AND maximum risk
+**Falling Knife:**
+Anything >15% below MA200 with RSI<35 and a negative price slope is dangerous. It looks cheap. It may not be. Always check news before acting.
+
+**P/E context (enable in sidebar):**
+- <15: potentially undervalued · 15–25: fair · >30: growth premium
+- A stock with RSI 30 but P/E 80 is still expensive on earnings
+
+**VIX levels:**
+- <15: complacency — markets may be stretched  
+- 15–25: normal  
+- >30: fear — historically good long-term entries, short-term pain likely  
+- >40: crisis — maximum opportunity AND maximum risk. MACD confirmation less reliable.
+
+**Position sizing:**
+Allocation is scaled by confidence score and volatility — not just signal strength. High-volatility names get smaller allocations automatically.
     """)
 
 # ─────────────────────────────────────────────
@@ -384,7 +508,7 @@ A stock down 30-50% from its MA200 with RSI<35 and still falling is one of the m
 # ─────────────────────────────────────────────
 
 if len(tickers) == 0:
-    st.error("No tickers found. Adjust filters.")
+    st.error("No tickers match current filters.")
     st.stop()
 
 c1, c2 = st.columns([4, 1])
@@ -392,98 +516,100 @@ with c1:
     run = st.button("🔄 Run Market Scan", type="primary", use_container_width=True)
 with c2:
     if st.button("🗑️ Clear", use_container_width=True):
-        st.session_state.pop("scan_results", None)
-        st.session_state.pop("scan_attempted", None)
+        for k in ["scan_results","scan_attempted","scan_valid"]:
+            st.session_state.pop(k, None)
         st.rerun()
 
 if run:
-    results  = []
-    valid    = 0
-    target   = min(len(tickers), MAX_TICKERS)
-    prog     = st.progress(0, text="Starting...")
-    status   = st.empty()
+    n = min(len(tickers), MAX_TICKERS)
+    scan_tickers = tickers[:n]
 
-    for i, t in enumerate(tickers):
-        r = analyse_ticker(t, risk_mult, fetch_pe=fetch_pe)
-        if r:
-            results.append(r)
-            valid += 1
-        pct = (i + 1) / target
-        prog.progress(min(pct, 1.0), text=f"Scanning {t}… ({valid} valid so far)")
-        if (i + 1) % 50 == 0:
-            status.caption(f"✅ {valid} valid | ❌ {i+1-valid} skipped | 📋 {i+1}/{target} attempted")
+    prog   = st.progress(0, text=f"Launching {n_workers} parallel workers…")
+    status = st.empty()
+
+    # Run parallel scan — progress is approximate since threads complete out of order
+    with st.spinner(f"Scanning {n:,} tickers with {n_workers} workers…"):
+        results = parallel_scan(scan_tickers, risk_mult, fetch_pe, max_workers=n_workers)
 
     prog.empty()
-    status.empty()
 
     if not results:
-        st.error("No valid data returned.")
+        st.error("No valid data returned. Check internet connection.")
     else:
         df = pd.DataFrame(results)
-        df["Score"] = (-df["Dist%"]/20)*0.5 + ((50-df["RSI"])/50)*0.3 + df["Confidence"]*0.2
-        # Penalise AVOID in scoring
-        df.loc[df["Action"] == "AVOID", "Score"] -= 2
-        df = df.sort_values("Score", ascending=False).reset_index(drop=True)
-        df["Rank"] = df.index + 1
-        df["Suggested"] = df.apply(lambda r: allocation_label(r, baseline, fg_index), axis=1)
+        df["Score"]     = compute_scores(df)
+        df              = df.sort_values("Score", ascending=False).reset_index(drop=True)
+        df["Rank"]      = df.index + 1
+        df["Suggested"] = df.apply(
+            lambda r: allocation_label(r, baseline, fg_index, risk_mult), axis=1)
+
         st.session_state["scan_results"]  = df
-        st.session_state["scan_attempted"] = len(tickers)
+        st.session_state["scan_attempted"] = n
+        st.session_state["scan_valid"]     = len(df)
+        status.empty()
+        st.success(f"✅ Scan complete — {len(df)} valid results from {n} attempted")
 
 # ─────────────────────────────────────────────
 # RESULTS
 # ─────────────────────────────────────────────
 
 if "scan_results" in st.session_state:
-    df       = st.session_state["scan_results"]
+    df        = st.session_state["scan_results"]
     attempted = st.session_state.get("scan_attempted", len(df))
+    valid     = st.session_state.get("scan_valid", len(df))
 
-    COLS = ["Rank","Ticker","Price","MA50","MA200","Dist%","52W High","RSI","MACD",
-            "Vol%","Confidence","PE","Signal","Knife","Suggested","Yahoo","etf.com","justETF"]
-    # Only keep cols that exist
+    COLS = ["Rank","Ticker","Price","MA50","MA200","Dist%","52W%","RSI","RSI↗",
+            "MACD","MACD Accel","Vol%","Confidence","PE","Cap",
+            "Signal","Knife","Suggested","Yahoo","etf.com","justETF"]
     COLS = [c for c in COLS if c in df.columns]
 
     st.markdown("---")
     st.subheader("📊 Scan Results")
 
-    k1,k2,k3,k4,k5,k6 = st.columns(6)
+    k1,k2,k3,k4,k5,k6,k7 = st.columns(7)
     k1.metric("Attempted",  attempted)
-    k2.metric("Valid",      len(df))
+    k2.metric("Valid",      valid, delta=f"-{attempted-valid} filtered", delta_color="off")
     k3.metric("🟢 BUY",    int((df["Action"]=="BUY").sum()))
     k4.metric("👀 WATCH",  int((df["Action"]=="WATCH").sum()))
     k5.metric("⛔ AVOID",  int((df["Action"]=="AVOID").sum()))
     k6.metric("🔴 SELL",   int((df["Action"]=="SELL").sum()))
+    k7.metric("🟡 WAIT",   int((df["Action"]=="WAIT").sum()))
 
-    t_all, t_buy, t_watch, t_avoid, t_sell, t_wait = st.tabs([
-        "All","🟢 BUY","👀 WATCH","⛔ AVOID","🔴 SELL","🟡 WAIT"])
+    tabs = st.tabs(["All","🟢 BUY","👀 WATCH","⛔ AVOID","🔴 SELL","🟡 WAIT"])
+    filters = [None, "BUY", "WATCH", "AVOID", "SELL", "WAIT"]
 
     def colour(val):
         v = str(val)
-        if "BUY"   in v: return "color:#00c853;font-weight:bold"
-        if "WATCH" in v: return "color:#00bcd4;font-weight:bold"
-        if "AVOID" in v: return "color:#ff6d00;font-weight:bold"
-        if "SELL"  in v: return "color:#ff1744;font-weight:bold"
-        return "color:#ffd600"
+        if "BUY"    in v: return "color:#00c853;font-weight:bold"
+        if "WATCH"  in v: return "color:#00bcd4;font-weight:bold"
+        if "AVOID"  in v: return "color:#ff6d00;font-weight:bold"
+        if "SELL"   in v: return "color:#ff1744;font-weight:bold"
+        if "WAIT"   in v: return "color:#ffd600"
+        return ""
 
     def show_table(data):
         if data.empty:
             st.info("No results in this category.")
             return
         show_cols = [c for c in COLS if c in data.columns]
-        fmt = {"Price":"{:.2f}","MA50":"{:.2f}","MA200":"{:.2f}",
-               "Dist%":"{:+.1f}%","52W High":"{:+.1f}%",
-               "RSI":"{:.1f}","Vol%":"{:.2f}%","Confidence":"{:.2f}"}
-        fmt = {k:v for k,v in fmt.items() if k in show_cols}
+        fmt = {
+            "Price":"{:.2f}", "MA50":"{:.2f}", "MA200":"{:.2f}",
+            "Dist%":"{:+.1f}%", "52W%":"{:+.1f}%",
+            "RSI":"{:.1f}", "Vol%":"{:.2f}%", "Confidence":"{:.2f}",
+        }
+        fmt = {k: v for k, v in fmt.items() if k in show_cols}
         styled = (
             data[show_cols].style
             .applymap(colour, subset=["Signal"])
             .format(fmt)
-            .background_gradient(subset=["Dist%"], cmap="RdYlGn")
-            .background_gradient(subset=["RSI"],   cmap="RdYlGn_r")
+            .background_gradient(subset=["Dist%"],      cmap="RdYlGn")
+            .background_gradient(subset=["RSI"],        cmap="RdYlGn_r")
+            .background_gradient(subset=["Confidence"], cmap="Blues")
         )
         st.dataframe(
             styled,
             use_container_width=True,
-            height=500,
+            height=520,
             column_config={
                 "Yahoo":   st.column_config.LinkColumn("Yahoo",   display_text="📈 YF"),
                 "etf.com": st.column_config.LinkColumn("ETF.com", display_text="📊 ETF"),
@@ -491,14 +617,11 @@ if "scan_results" in st.session_state:
             }
         )
 
-    with t_all:   show_table(df)
-    with t_buy:   show_table(df[df["Action"]=="BUY"].reset_index(drop=True))
-    with t_watch: show_table(df[df["Action"]=="WATCH"].reset_index(drop=True))
-    with t_avoid: show_table(df[df["Action"]=="AVOID"].reset_index(drop=True))
-    with t_sell:  show_table(df[df["Action"]=="SELL"].reset_index(drop=True))
-    with t_wait:  show_table(df[df["Action"]=="WAIT"].reset_index(drop=True))
+    for tab, action in zip(tabs, filters):
+        with tab:
+            show_table(df if action is None else df[df["Action"]==action].reset_index(drop=True))
 
     st.markdown("---")
     csv = df[COLS].to_csv(index=False).encode("utf-8")
-    st.download_button("⬇️ Download CSV", data=csv, file_name="scan_results.csv",
-                       mime="text/csv", use_container_width=True)
+    st.download_button("⬇️ Download CSV", data=csv,
+        file_name="scan_results.csv", mime="text/csv", use_container_width=True)
