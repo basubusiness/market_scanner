@@ -73,6 +73,30 @@ def load_base_universe():
     cached = cache_get("universe")
     if cached is not None:
         return cached
+
+    # Try pre-built universe.csv first (instant, pre-resolved symbols)
+    import os
+    csv_path = os.path.join(os.path.dirname(__file__), "universe.csv")
+    if os.path.exists(csv_path):
+        try:
+            df = pd.read_csv(csv_path)
+            print(f"[universe] Loaded from universe.csv: {len(df):,} rows", flush=True)
+            for col in ["country","sector","name","category_group","category",
+                        "currency","yf_symbol","yf_suffix","isin"]:
+                if col not in df.columns:
+                    df[col] = ""
+            for col in df.columns:
+                if df[col].dtype == object:
+                    df[col] = df[col].fillna("").astype(str).str.strip()
+            df = df[df["ticker"].str.match(r"^[A-Z0-9]{2,6}$")]
+            df = df.drop_duplicates(subset=["ticker","type"], keep="first")
+            cache_set("universe", df)
+            return df
+        except Exception as e:
+            print(f"[universe] CSV load failed: {e}, falling back to live", flush=True)
+
+    # Fall back to live loading
+    print("[universe] Loading from financedatabase (slow)...", flush=True)
     etfs     = fd.ETFs().select().copy()
     equities = fd.Equities().select().copy()
     etfs["type"]     = "ETF"
@@ -80,16 +104,17 @@ def load_base_universe():
     df = pd.concat([etfs, equities], axis=0).reset_index()
     df.rename(columns={df.columns[0]: "ticker"}, inplace=True)
     for col in ["country","sector","name","category_group","category",
-                "currency","exchange","family","industry_group"]:
+                "currency","exchange","family","industry_group",
+                "yf_symbol","yf_suffix","isin"]:
         if col not in df.columns:
             df[col] = ""
     for col in df.columns:
         if df[col].dtype == object:
             df[col] = df[col].fillna("").astype(str).str.strip()
-    df = df[df["ticker"].str.match(r"^[A-Z]{2,5}$")]  # min 2 chars, letters only
-    df = df[~df["ticker"].str.startswith("$")]  # remove dollar-sign tickers
+    df = df[df["ticker"].str.match(r"^[A-Z]{2,5}$")]
+    df = df[~df["ticker"].str.startswith("$")]
     df = df.drop_duplicates(subset=["ticker","type"], keep="first")
-    cache_set("universe", df)  # permanent cache
+    cache_set("universe", df)
     return df
 
 def load_justetf():
@@ -282,6 +307,17 @@ def fetch_ticker_data(ticker, isin=None):
     if cached is not None:
         return None if cached == "FAILED" else cached
     try:
+        # Check universe.csv pre-resolved symbol first
+        known_sfx = cache_get(f"sfx_{ticker}")
+        if known_sfx is None and not universe.empty and "yf_symbol" in universe.columns:
+            rows = universe[universe["ticker"] == ticker]
+            if not rows.empty:
+                yf_sym = str(rows.iloc[0].get("yf_symbol","")).strip()
+                yf_sfx = str(rows.iloc[0].get("yf_suffix","")).strip()
+                if yf_sym and yf_sym not in ("","nan","None"):
+                    known_sfx = "" if yf_sfx in ("","nan","None") else yf_sfx
+                    cache_set(f"sfx_{ticker}", known_sfx, ttl=86400*7)
+
         # Check if we already know the working suffix
         known_sfx = cache_get(f"sfx_{ticker}")
         def _fetch_history(sym):
