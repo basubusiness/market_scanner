@@ -558,15 +558,33 @@ _DD_STYLE = {"option":{"backgroundColor":"#1e1e2e","color":"#fff"},
              "multiValue":{"backgroundColor":"#333"},
              "multiValueLabel":{"color":"#fff"}}
 
+def _get_jcol_opts(col):
+    """Get options from justETF df — with hard fallbacks."""
+    if not jetf_df.empty and col in jetf_df.columns:
+        vals = sorted([v for v in jetf_df[col].astype(str).str.strip().unique()
+                       if v and v not in ("","nan","None")])
+        if vals:
+            return [{"label":v,"value":v} for v in vals]
+    # Hard fallbacks per column
+    fallbacks = {
+        "domicile":    ["Ireland","Luxembourg","Germany","France","Netherlands","United States"],
+        "dist_policy": ["Accumulating","Distributing"],
+        "replication": ["Physical (Full)","Physical (Sampling)","Swap-based"],
+        "strategy":    ["Long-only","Short & Leveraged","Active"],
+    }
+    return [{"label":v,"value":v} for v in fallbacks.get(col, [])]
+
 def sidebar():
-    def_jcol = lambda col: (sorted([v for v in jetf_df[col].dropna().unique() if str(v).strip()])
-                             if not jetf_df.empty and col in jetf_df.columns else [])
+    def_jcol = _get_jcol_opts  # use module-level function
     country_opts = sorted([c for c in universe[universe["type"]=="Stock"]["country"].astype(str).str.strip().unique()
                           if c and c not in ("","nan","None")]) if not universe.empty else []
     sector_opts  = sorted([s for s in universe[universe["type"]=="Stock"]["sector"].astype(str).str.strip().unique()
                           if s and s not in ("","nan","None")]) if not universe.empty else []
     cat_opts     = sorted([c for c in universe[universe["type"]=="ETF"]["category_group"].astype(str).str.strip().unique()
                           if c and c not in ("","nan","None")]) if not universe.empty else []
+    if not cat_opts:
+        cat_opts = ["Equities","Fixed Income","Commodities","Real Estate",
+                    "Alternatives","Cash","Currencies","Derivatives"]
 
     return html.Div([
         html.Div([
@@ -624,16 +642,16 @@ def sidebar():
                 html.Div([
                     html.Label("📦 ETF Filters", className="text-info small fw-bold mt-2"),
                     html.Label("Domicile", className="text-white small"),
-                    dcc.Dropdown(id="filter-domicile", options=[{"label":v,"value":v} for v in def_jcol("domicile")],
+                    dcc.Dropdown(id="filter-domicile", options=def_jcol("domicile"),
                         multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
                     html.Label("Distribution", className="text-white small"),
-                    dcc.Dropdown(id="filter-dist", options=[{"label":v,"value":v} for v in def_jcol("dist_policy")],
+                    dcc.Dropdown(id="filter-dist", options=def_jcol("dist_policy"),
                         multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
                     html.Label("Replication", className="text-white small"),
-                    dcc.Dropdown(id="filter-replication", options=[{"label":v,"value":v} for v in def_jcol("replication")],
+                    dcc.Dropdown(id="filter-replication", options=def_jcol("replication"),
                         multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
                     html.Label("Strategy", className="text-white small"),
-                    dcc.Dropdown(id="filter-strategy", options=[{"label":v,"value":v} for v in def_jcol("strategy")],
+                    dcc.Dropdown(id="filter-strategy", options=def_jcol("strategy"),
                         multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
                     html.Label("Asset Class", className="text-white small"),
                     dcc.Dropdown(id="filter-category", options=[{"label":v,"value":v} for v in cat_opts],
@@ -852,20 +870,12 @@ def update_live(_):
     Output("types-row","style"),
     Output("etf-filters-row","style"),
     Output("stock-filters-row","style"),
-    # Dynamically update filter options based on preset + current selections
-    Output("filter-domicile","options"),
-    Output("filter-dist","options"),
-    Output("filter-replication","options"),
-    Output("filter-strategy","options"),
-    Output("filter-category","options"),
-    Output("filter-country","options"),
-    Output("filter-sector","options"),
+    Output("filter-sector","options"),   # only sector cascades dynamically
     Input("preset-dd","value"),
     Input("filter-types","value"),
-    Input("filter-country","value"),  # cascade: country narrows sector
-    Input("live-interval","n_intervals"),  # ensures fire on first page load
+    Input("filter-country","value"),
 )
-def update_filter_sections(preset, types, selected_country, _):
+def update_filter_sections(preset, types, selected_country):
     ptype   = PRESETS.get(preset,{}).get("type","ETF")
     custom  = ptype == "custom"
     etfs_on   = (custom and "ETF"   in (types or [])) or ptype == "ETF"
@@ -923,9 +933,7 @@ def update_filter_sections(preset, types, selected_country, _):
     ctry_opts = uopts("country", "Stock")
     sect_opts = uopts("sector", "Stock", selected_country)
 
-    return (types_style, etf_style, stock_style,
-            dom_opts, dist_opts, repl_opts, strat_opts, cat_opts,
-            ctry_opts, sect_opts)
+    return types_style, etf_style, stock_style, sect_opts
 
 @app.callback(
     Output("scope-label","children"),
