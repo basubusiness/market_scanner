@@ -518,9 +518,12 @@ _DD_STYLE = {"option":{"backgroundColor":"#1e1e2e","color":"#fff"},
 def sidebar():
     def_jcol = lambda col: (sorted([v for v in jetf_df[col].dropna().unique() if str(v).strip()])
                              if not jetf_df.empty and col in jetf_df.columns else [])
-    country_opts = sorted([c for c in universe[universe["type"]=="Stock"]["country"].unique() if c]) if not universe.empty else []
-    sector_opts  = sorted([s for s in universe[universe["type"]=="Stock"]["sector"].unique()  if s]) if not universe.empty else []
-    cat_opts     = sorted([c for c in universe[universe["type"]=="ETF"]["category_group"].unique() if c]) if not universe.empty else []
+    country_opts = sorted([c for c in universe[universe["type"]=="Stock"]["country"].astype(str).str.strip().unique()
+                          if c and c not in ("","nan","None")]) if not universe.empty else []
+    sector_opts  = sorted([s for s in universe[universe["type"]=="Stock"]["sector"].astype(str).str.strip().unique()
+                          if s and s not in ("","nan","None")]) if not universe.empty else []
+    cat_opts     = sorted([c for c in universe[universe["type"]=="ETF"]["category_group"].astype(str).str.strip().unique()
+                          if c and c not in ("","nan","None")]) if not universe.empty else []
 
     return html.Div([
         html.H5("📡 Market Decision Engine", className="text-white mb-3"),
@@ -602,7 +605,7 @@ def sidebar():
                 ], id="stock-filters-row"),
 
             ], title="🔧 Optional Filters"),
-        ], start_collapsed=True, className="mb-3"),
+        ], start_collapsed=False, className="mb-3"),
 
         # ── Settings
         html.Label("💰 Monthly Budget (EUR)", className="text-white small"),
