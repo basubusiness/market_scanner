@@ -539,8 +539,10 @@ elif len(tickers) > MAX_TICKERS:
 baseline  = st.sidebar.number_input("Monthly Investment (EUR)", value=1000, min_value=100, step=100)
 fetch_pe  = st.sidebar.checkbox("Fetch PE + Market Cap (slower)", value=False,
     help="Adds P/E, Beta, Dividend Yield, Margin, Revenue Growth. ~2s extra per ticker. Cached 24h. Check this BEFORE running scan.")
-n_workers = st.sidebar.slider("Parallel workers", 4, 24, 12,
-    help="More workers = faster scan. Reduce if you hit rate limits.")
+n_workers = st.sidebar.slider("Parallel workers", 2, 16, 6,
+    help="More workers = faster scan but increases yfinance data collision risk. "
+         "Keep at 6 unless scanning ETFs (which are more stable). "
+         "Reduce to 2-3 if you see many identical rows in results.")
 
 with st.sidebar.expander("🔬 Debug (advanced)"):
     st.write("Queued tickers (first 10):", tickers[:10])
@@ -955,10 +957,27 @@ with _tab_scanner:
             st.error("No valid data returned. Check internet connection.")
         else:
             df = pd.DataFrame(results)
-            df["Score"]     = compute_scores(df)
-            df              = df.sort_values("Score", ascending=False)
+
+            # ── Data collision filter ──────────────────────────────────────
+            # yfinance sometimes returns identical price data for multiple
+            # different tickers (parallel thread collision / wrong cache hit).
+            # Flag: if >3 tickers share the exact same Price+RSI+Dist%,
+            # it's almost certainly bad data — drop the whole group.
+            collision_key = df["Price"].astype(str) + "|" + df["RSI"].astype(str) + "|" + df["Dist%"].astype(str)
+            collision_counts = collision_key.map(collision_key.value_counts())
+            before = len(df)
+            df = df[collision_counts <= 3].copy()
+            collisions_dropped = before - len(df)
+            if collisions_dropped > 0:
+                st.warning(f"⚠️ Dropped {collisions_dropped} rows with suspected data collisions "
+                           f"(identical Price+RSI+Dist% across multiple tickers). "
+                           f"This is a yfinance parallel-fetch issue — re-running may resolve it.")
+
             # Drop duplicate tickers (same symbol on multiple exchanges)
-            df              = df.drop_duplicates(subset=["Ticker"], keep="first").reset_index(drop=True)
+            df              = df.drop_duplicates(subset=["Ticker"], keep="first")
+
+            df["Score"]     = compute_scores(df)
+            df              = df.sort_values("Score", ascending=False).reset_index(drop=True)
             df["Rank"]      = df.index + 1
             df["Suggested"] = df.apply(
                 lambda r: allocation_label(r, baseline, fg_index, risk_mult), axis=1)
