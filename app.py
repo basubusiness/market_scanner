@@ -309,17 +309,24 @@ def fetch_ticker_data(ticker, isin=None):
     try:
         # Check universe.csv pre-resolved symbol first
         known_sfx = cache_get(f"sfx_{ticker}")
-        if known_sfx is None and not universe.empty and "yf_symbol" in universe.columns:
+        resolved_sym = cache_get(f"resolved_{ticker}")
+        if known_sfx is None and resolved_sym is None and not universe.empty and "yf_symbol" in universe.columns:
             rows = universe[universe["ticker"] == ticker]
             if not rows.empty:
                 yf_sym = str(rows.iloc[0].get("yf_symbol","")).strip()
                 yf_sfx = str(rows.iloc[0].get("yf_suffix","")).strip()
                 if yf_sym and yf_sym not in ("","nan","None"):
-                    known_sfx = "" if yf_sfx in ("","nan","None") else yf_sfx
-                    cache_set(f"sfx_{ticker}", known_sfx, ttl=86400*7)
+                    if yf_sfx.startswith("→"):
+                        # Full symbol replacement (ISIN-resolved to different ticker)
+                        resolved_sym = yf_sym
+                        cache_set(f"resolved_{ticker}", yf_sym, ttl=86400*7)
+                    else:
+                        known_sfx = "" if yf_sfx in ("","nan","None") else yf_sfx
+                        cache_set(f"sfx_{ticker}", known_sfx, ttl=86400*7)
 
         # Check if we already know the working suffix
         known_sfx = cache_get(f"sfx_{ticker}")
+        resolved_sym = resolved_sym or cache_get(f"resolved_{ticker}")
         def _fetch_history(sym):
             """Fetch 1y history with timeout protection."""
             try:
@@ -332,7 +339,9 @@ def fetch_ticker_data(ticker, isin=None):
             return (not df.empty and "Close" in df.columns
                     and len(df["Close"].dropna()) >= 30)
 
-        if known_sfx is not None:
+        if resolved_sym:
+            df = _fetch_history(resolved_sym)
+        elif known_sfx is not None:
             df = _fetch_history(ticker + known_sfx)
         else:
             df = _fetch_history(ticker)
