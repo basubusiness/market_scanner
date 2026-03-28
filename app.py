@@ -76,22 +76,87 @@ def linear_slope(series, window=10):
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def get_fg_index():
+    """
+    4-layer F&G fetch:
+    1. CNN dataviz API (no date suffix)
+    2. CNN dataviz API (with today's date suffix — different endpoint behaviour)
+    3. HTML scrape of money.cnn.com — parse "Greed Now:" text pattern
+    4. alternative.me free API — independent source, same 0-100 scale
+    """
+    import re, datetime
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/html, */*",
+        "Referer": "https://www.cnn.com/",
+    }
+
+    def rating_from_score(score):
+        if score <= 25:  return "Extreme Fear"
+        if score <= 44:  return "Fear"
+        if score <= 55:  return "Neutral"
+        if score <= 75:  return "Greed"
+        return "Extreme Greed"
+
+    # Layer 1 & 2: CNN dataviz API variants
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    for url in [
+        "https://production.dataviz.cnn.io/index/fearandgreed/graphdata",
+        f"https://production.dataviz.cnn.io/index/fearandgreed/graphdata/{today}",
+        "https://production.dataviz.cnn.io/index/feargreed/graphdata",
+    ]:
+        try:
+            r = requests.get(url, headers=headers, timeout=6)
+            if r.status_code == 200:
+                data = r.json()
+                fg   = data.get("fear_and_greed") or {}
+                if fg and "score" in fg:
+                    score  = round(float(fg["score"]))
+                    rating = str(fg.get("rating", "")).replace("_", " ").title() or rating_from_score(score)
+                    return score, f"{rating} (CNN API)"
+                # Also try historical endpoint structure
+                hist = data.get("fear_and_greed_historical", {}).get("data", [])
+                if hist:
+                    latest = sorted(hist, key=lambda x: x.get("x", 0))[-1]
+                    score  = round(float(latest.get("y", 50)))
+                    return score, f"{rating_from_score(score)} (CNN historical)"
+        except Exception:
+            continue
+
+    # Layer 3: HTML scrape of money.cnn.com
     try:
-        for url in [
-            "https://production.dataviz.cnn.io/index/fearandgreed/graphdata",
-            "https://production.dataviz.cnn.io/index/feargreed/graphdata",
-        ]:
-            try:
-                r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
-                if r.status_code == 200:
-                    data = r.json()
-                    fg   = data.get("fear_and_greed") or data.get("fng_value") or {}
-                    if fg and "score" in fg:
-                        return round(float(fg["score"])), str(fg.get("rating","")).replace("_"," ").title()
-            except Exception:
-                continue
+        r = requests.get("https://money.cnn.com/data/fear-and-greed/",
+                         headers=headers, timeout=8)
+        if r.status_code == 200:
+            html = r.text
+            # Pattern: "Greed Now: 42" in page source
+            m = re.search(r"Greed Now:\s*(\d+(?:\.\d+)?)", html)
+            if m:
+                score = round(float(m.group(1)))
+                return score, f"{rating_from_score(score)} (CNN page)"
+            # Also try JSON embedded in page script tags
+            m = re.search(r'"score"\s*:\s*(\d+(?:\.\d+)?)', html)
+            if m:
+                score = round(float(m.group(1)))
+                return score, f"{rating_from_score(score)} (CNN embedded)"
     except Exception:
         pass
+
+    # Layer 4: alternative.me — free, independent, same 0-100 scale
+    try:
+        r = requests.get("https://api.alternative.me/fng/?limit=1",
+                         headers=headers, timeout=6)
+        if r.status_code == 200:
+            data  = r.json()
+            entry = data.get("data", [{}])[0]
+            score = round(float(entry.get("value", 50)))
+            label = entry.get("value_classification", "").replace("_", " ").title()
+            return score, f"{label or rating_from_score(score)} (alternative.me)"
+    except Exception:
+        pass
+
     return None, None
 
 @st.cache_data(ttl=300)
@@ -737,13 +802,19 @@ with _tab_scanner:
 
     with col_fg:
         if fg_auto is not None:
-            st.metric("Fear & Greed (CNN live)", f"{fg_auto}",
+            if   fg_auto <= 25: gauge = "🔴"
+            elif fg_auto <= 44: gauge = "🟠"
+            elif fg_auto <= 55: gauge = "🟡"
+            elif fg_auto <= 75: gauge = "🟢"
+            else:               gauge = "💚"
+            st.metric(f"{gauge} Fear & Greed", f"{fg_auto} / 100",
                 delta=fg_rating, delta_color="off")
             fg_index = fg_auto
             st.caption("[🧠 CNN Fear & Greed](https://edition.cnn.com/markets/fear-and-greed)")
         else:
-            fg_index = st.slider("Fear & Greed (manual)", 0, 100, 50)
-            st.caption("[🧠 CNN Fear & Greed](https://edition.cnn.com/markets/fear-and-greed) — auto-fetch unavailable")
+            fg_index = st.slider("Fear & Greed (manual — all sources failed)", 0, 100, 50)
+            st.warning("All F&G auto-sources failed. Enter manually above. "
+                       "Check [CNN](https://edition.cnn.com/markets/fear-and-greed).")
 
     risk_mult = 1.0 + ((live_vix / 20) * ((100 - fg_index) / 50))
 
