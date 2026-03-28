@@ -817,6 +817,11 @@ def update_filter_sections(preset, types, selected_country, _):
     repl_opts = jcol_opts("replication")
     strat_opts= jcol_opts("strategy")
     cat_opts  = uopts("category_group", "ETF")
+    # Fallback: if financedatabase has no category data, use known values
+    if not cat_opts:
+        cat_opts = [{"label":v,"value":v} for v in [
+            "Equities","Fixed Income","Commodities","Real Estate",
+            "Alternatives","Cash","Currencies","Derivatives"]]
     ctry_opts = uopts("country", "Stock")
     sect_opts = uopts("sector", "Stock", selected_country)
 
@@ -1452,6 +1457,38 @@ def download_csv(n, store_data):
     return dcc.send_data_frame(df.to_csv, "scan_results.csv", index=False)
 
 import os
+
+@server.route("/debug")
+def debug_info():
+    """Quick health check — shows what data is loaded."""
+    import json
+    u_size  = len(universe) if not universe.empty else 0
+    j_size  = len(jetf_df)  if not jetf_df.empty  else 0
+    etf_u   = universe[universe["type"]=="ETF"]  if not universe.empty else pd.DataFrame()
+    stk_u   = universe[universe["type"]=="Stock"] if not universe.empty else pd.DataFrame()
+
+    cat_vals = []
+    if not etf_u.empty and "category_group" in etf_u.columns:
+        cat_vals = [v for v in etf_u["category_group"].astype(str).str.strip().unique()
+                    if v and v not in ("","nan","None")][:20]
+
+    ctry_vals = []
+    if not stk_u.empty and "country" in stk_u.columns:
+        ctry_vals = [v for v in stk_u["country"].astype(str).str.strip().unique()
+                     if v and v not in ("","nan","None")][:10]
+
+    info = {
+        "universe_rows":     u_size,
+        "etf_rows":          len(etf_u),
+        "stock_rows":        len(stk_u),
+        "justetf_rows":      j_size,
+        "justetf_available": JUSTETF_AVAILABLE,
+        "etf_category_group_sample": cat_vals,
+        "stock_country_sample":      ctry_vals,
+        "name_lookup_size":  len(_name_lookup),
+        "cache_keys":        list(_cache.keys())[:20],
+    }
+    return f"<pre>{json.dumps(info, indent=2)}</pre>"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
