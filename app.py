@@ -303,7 +303,9 @@ PRESETS = {
 }
 
 def build_ticker_list(preset_key, adv_type, adv_sector, adv_country,
-                      adv_domicile, adv_dist, adv_min_size):
+                      adv_domicile, adv_dist, adv_min_size,
+                      adv_repl=None, adv_strategy=None,
+                      adv_category=None, adv_min_ter=0.0, adv_max_ter=2.0):
     preset = PRESETS[preset_key]
     ptype  = preset.get("type")
 
@@ -312,15 +314,27 @@ def build_ticker_list(preset_key, adv_type, adv_sector, adv_country,
         parts = []
         if "ETF" in atype:
             e = universe[universe["type"] == "ETF"].copy()
+            if adv_category:
+                e = e[e["category_group"].isin(adv_category)]
             if not jetf_df.empty:
-                e = e.merge(jetf_df[["ticker","domicile","dist_policy","fund_size_eur"]],
-                            on="ticker", how="left")
-                if adv_domicile:
+                jcols = [c for c in ["ticker","domicile","dist_policy","fund_size_eur",
+                                      "replication","strategy","ter"] if c in jetf_df.columns]
+                e = e.merge(jetf_df[jcols], on="ticker", how="left")
+                if adv_domicile and "domicile" in e.columns:
                     e = e[e["domicile"].isin(adv_domicile)]
-                if adv_dist:
+                if adv_dist and "dist_policy" in e.columns:
                     e = e[e["dist_policy"].isin(adv_dist)]
-                if adv_min_size > 0:
+                if adv_repl and "replication" in e.columns:
+                    e = e[e["replication"].isin(adv_repl)]
+                if adv_strategy and "strategy" in e.columns:
+                    e = e[e["strategy"].isin(adv_strategy)]
+                if adv_min_size > 0 and "fund_size_eur" in e.columns:
                     e = e[e["fund_size_eur"].fillna(0) >= adv_min_size]
+                if "ter" in e.columns:
+                    if adv_min_ter > 0:
+                        e = e[e["ter"].fillna(0) >= adv_min_ter]
+                    if adv_max_ter < 2.0:
+                        e = e[e["ter"].fillna(999) <= adv_max_ter]
             parts.append(e)
         if "Stock" in atype:
             s = universe[universe["type"] == "Stock"].copy()
@@ -333,12 +347,37 @@ def build_ticker_list(preset_key, adv_type, adv_sector, adv_country,
 
     elif ptype == "ETF":
         e = universe[universe["type"] == "ETF"].copy()
-        # Apply domicile if preset specifies it (needs justETF data)
-        if "domicile" in preset and not jetf_df.empty:
-            e = e.merge(jetf_df[["ticker","domicile"]], on="ticker", how="left")
-            e = e[e["domicile"].isin(preset["domicile"])]
         if "category_group" in preset:
             e = e[e["category_group"].isin(preset["category_group"])]
+        if adv_category:
+            e = e[e["category_group"].isin(adv_category)]
+        # Merge justETF for domicile/ter/replication filters
+        need_jetf = (
+            ("domicile" in preset) or adv_domicile or adv_dist or
+            adv_repl or adv_strategy or adv_min_size > 0 or
+            adv_min_ter > 0 or adv_max_ter < 2.0
+        )
+        if need_jetf and not jetf_df.empty:
+            jcols = [c for c in ["ticker","domicile","dist_policy","fund_size_eur",
+                                  "replication","strategy","ter"] if c in jetf_df.columns]
+            e = e.merge(jetf_df[jcols], on="ticker", how="left")
+            if "domicile" in preset:
+                e = e[e["domicile"].isin(preset["domicile"])]
+            if adv_domicile:
+                e = e[e["domicile"].isin(adv_domicile)]
+            if adv_dist and "dist_policy" in e.columns:
+                e = e[e["dist_policy"].isin(adv_dist)]
+            if adv_repl and "replication" in e.columns:
+                e = e[e["replication"].isin(adv_repl)]
+            if adv_strategy and "strategy" in e.columns:
+                e = e[e["strategy"].isin(adv_strategy)]
+            if adv_min_size > 0 and "fund_size_eur" in e.columns:
+                e = e[e["fund_size_eur"].fillna(0) >= adv_min_size]
+            if "ter" in e.columns:
+                if adv_min_ter > 0:
+                    e = e[e["ter"].fillna(0) >= adv_min_ter]
+                if adv_max_ter < 2.0:
+                    e = e[e["ter"].fillna(999) <= adv_max_ter]
         filtered = e
 
     else:  # Stock
@@ -432,15 +471,20 @@ def render_table(df, key_suffix=""):
 
     # ── Row selector → Deep Dive
     tickers = df["Ticker"].tolist()
-    chosen  = st.selectbox(
-        "🔍 Open in Deep Dive →",
-        ["— select a ticker —"] + tickers,
-        key=f"dive_select_{key_suffix}",
-        help="Pick any ticker to analyse it in the Deep Dive tab"
-    )
-    if chosen != "— select a ticker —":
+    sc1, sc2 = st.columns([4, 1])
+    with sc1:
+        chosen = st.selectbox(
+            "🔍 Select ticker to deep dive",
+            ["— pick a ticker —"] + tickers,
+            key=f"dive_select_{key_suffix}",
+        )
+    with sc2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        go = st.button("🔬 Analyse", key=f"dive_go_{key_suffix}", use_container_width=True)
+    if go and chosen != "— pick a ticker —":
         st.session_state["dive_ticker"] = chosen
-        st.info(f"**{chosen}** queued for Deep Dive — click the 🔬 tab above.")
+        st.session_state["dive_open"]   = True
+        st.rerun()
 
 # ═══════════════════════════════════════════════════════════
 # ALLOCATION SIZING
@@ -518,7 +562,13 @@ def run_deep_dive(preloaded_ticker=None):
         st.error("Could not resolve ticker.")
         return
 
-    if not st.button("🔍 Analyse", type="primary", key="dd_run"):
+    from_scanner = bool(preloaded_ticker and user_input == preloaded_ticker.upper())
+    btn_label = f"🔍 Analyse {user_input}" if user_input else "🔍 Analyse"
+    if not st.button(btn_label, type="primary", key="dd_run", use_container_width=True):
+        if not from_scanner:
+            return
+        # If loaded from scanner, show the button prominently but don't auto-run
+        # (user still needs to click to trigger the API call)
         return
 
     with st.spinner(f"Fetching {ticker}…"):
@@ -710,35 +760,93 @@ else:                 st.sidebar.warning(f"⚖️ Normal — {risk_mult:.1f}x")
 st.sidebar.divider()
 
 # ── Preset picker
-st.sidebar.subheader("🎯 What to scan")
-preset = st.sidebar.selectbox("Universe preset", list(PRESETS.keys()), index=0)
+st.sidebar.subheader("🎯 Universe")
+preset = st.sidebar.selectbox("Quick preset", list(PRESETS.keys()), index=0)
 
-# ── Advanced section (only shown for Custom)
-adv_type     = ["ETF"]
+# ── Determine what asset types the preset implies
+_ptype = PRESETS[preset]["type"]
+_etfs_in_preset   = _ptype in ("ETF", "custom")
+_stocks_in_preset = _ptype in ("Stock", "custom")
+
+# ── Optional filters — always visible, cascade on preset
+adv_type     = (["ETF"] if _ptype == "ETF" else
+                ["Stock"] if _ptype == "Stock" else ["ETF"])
 adv_sector   = []
 adv_country  = []
 adv_domicile = []
 adv_dist     = []
+adv_repl     = []
+adv_strategy = []
 adv_min_size = 0
+adv_category = []
+adv_min_ter  = 0.0
+adv_max_ter  = 2.0
 
-if PRESETS[preset]["type"] == "custom":
-    with st.sidebar.expander("⚙️ Custom filters", expanded=True):
+with st.sidebar.expander("🔧 Optional filters", expanded=False):
+
+    if _ptype == "custom":
         adv_type = st.multiselect("Asset type", ["ETF","Stock"], default=["ETF"])
+    else:
+        st.caption(f"Preset: **{preset}** — asset type locked")
 
-        if "Stock" in adv_type:
-            ctries = sorted([c for c in universe[universe["type"]=="Stock"]["country"].unique() if c])
-            adv_country = st.multiselect("Country (empty=all)", ctries)
-            sects = sorted([s for s in universe[universe["type"]=="Stock"]["sector"].unique() if s])
-            adv_sector = st.multiselect("Sector (empty=all)", sects)
+    etfs_active   = "ETF"   in adv_type or _ptype == "ETF"
+    stocks_active = "Stock" in adv_type or _ptype == "Stock"
 
-        if "ETF" in adv_type and not jetf_df.empty:
-            doms = sorted([d for d in jetf_df["domicile"].dropna().unique() if d])
-            adv_domicile = st.multiselect("Domicile (empty=all)", doms)
-            dists = sorted([d for d in jetf_df["dist_policy"].dropna().unique() if d])
-            adv_dist = st.multiselect("Distribution (empty=all)", dists)
-            adv_min_size = st.number_input("Min fund size (€m)", 0, step=50)
-        elif "ETF" in adv_type:
-            st.info("Enable justETF in requirements for domicile filters.")
+    # ── ETF filters (justETF-powered)
+    if etfs_active:
+        st.markdown("**📦 ETF Filters**")
+        if not jetf_df.empty:
+            doms = sorted([d for d in jetf_df["domicile"].dropna().unique() if str(d).strip()])
+            adv_domicile = st.multiselect("Domicile", doms,
+                help="Ireland/Luxembourg = UCITS · United States = US-domiciled")
+
+            dists = sorted([d for d in jetf_df["dist_policy"].dropna().unique() if str(d).strip()])
+            adv_dist = st.multiselect("Distribution policy", dists,
+                help="Accumulating (growth) or Distributing (income)")
+
+            if "replication" in jetf_df.columns:
+                repls = sorted([r for r in jetf_df["replication"].dropna().unique() if str(r).strip()])
+                adv_repl = st.multiselect("Replication method", repls,
+                    help="Physical Full · Physical Sampling · Swap-based")
+
+            if "strategy" in jetf_df.columns:
+                strats = sorted([s for s in jetf_df["strategy"].dropna().unique() if str(s).strip()])
+                adv_strategy = st.multiselect("Strategy", strats,
+                    help="Long-only · Short & Leveraged · Active")
+
+            adv_min_size = st.number_input("Min fund size (€m, 0=all)", 0, step=50,
+                help="100m+ = reasonable liquidity · 500m+ = large & liquid")
+
+            if "ter" in jetf_df.columns:
+                ter_vals = jetf_df["ter"].dropna()
+                if not ter_vals.empty:
+                    tc1, tc2 = st.columns(2)
+                    adv_min_ter = tc1.number_input("Min TER %", 0.0, 5.0, 0.0, step=0.05)
+                    adv_max_ter = tc2.number_input("Max TER %", 0.0, 5.0, 2.0, step=0.05)
+        else:
+            st.info("💡 Add `justetf-scraping` to requirements.txt for domicile, TER, replication filters.")
+
+        # financedatabase ETF category filter (works without justETF)
+        if "category_group" in universe.columns:
+            cats = sorted([c for c in universe[universe["type"]=="ETF"]["category_group"].unique() if c])
+            if cats:
+                adv_category = st.multiselect("Asset class (ETF)", cats,
+                    help="Equities · Fixed Income · Commodities · Real Estate etc.")
+
+    # ── Stock filters
+    if stocks_active:
+        st.markdown("**📈 Stock Filters**")
+        ctries = sorted([c for c in universe[universe["type"]=="Stock"]["country"].unique() if c])
+        adv_country = st.multiselect("Country", ctries,
+            help="Filter stocks by listed country")
+
+        sects = sorted([s for s in universe[universe["type"]=="Stock"]["sector"].unique() if s])
+        # Cascade: if country selected, narrow sectors
+        if adv_country:
+            sects = sorted([s for s in universe[
+                (universe["type"]=="Stock") & (universe["country"].isin(adv_country))
+            ]["sector"].unique() if s])
+        adv_sector = st.multiselect("Sector", sects)
 
 st.sidebar.divider()
 
@@ -749,26 +857,77 @@ n_workers = st.sidebar.slider("⚡ Parallel workers", 2, 12, 6,
 
 # ── Links
 st.sidebar.divider()
-st.sidebar.caption("[📈 VIX](https://finance.yahoo.com/quote/%5EVIX/) · [🧠 F&G](https://edition.cnn.com/markets/fear-and-greed)")
+with st.sidebar.expander("📖 VIX & Fear & Greed guide"):
+    st.markdown("""
+**VIX (Volatility Index)**
+Measures expected S&P 500 volatility over 30 days.
+- < 15 → Complacency / low fear
+- 15–25 → Normal market
+- 25–30 → Elevated tension
+- > 30 → Fear / sell-off
+- > 40 → Crisis / extreme fear
+
+[📈 Live VIX on Yahoo](https://finance.yahoo.com/quote/%5EVIX/)
+
+---
+
+**CNN Fear & Greed Index**
+Composite of 7 market indicators: momentum, breadth, put/call ratio, junk bond demand, safe haven demand, market volatility, and stock price strength.
+- 0–25 → Extreme Fear 🔴 (historically: best entry)
+- 25–45 → Fear 🟠
+- 45–55 → Neutral 🟡
+- 55–75 → Greed 🟢
+- 75–100 → Extreme Greed 💚 (historically: caution)
+
+[🧠 CNN Fear & Greed](https://edition.cnn.com/markets/fear-and-greed)
+
+---
+*This tool auto-fetches both. If CNN API fails, alternative.me is used as fallback.*
+    """)
 
 # ═══════════════════════════════════════════════════════════
 # BUILD TICKER LIST
 # ═══════════════════════════════════════════════════════════
 
-all_tickers = build_ticker_list(preset, adv_type, adv_sector, adv_country,
-                                adv_domicile, adv_dist, adv_min_size)
+all_tickers = build_ticker_list(
+    preset, adv_type, adv_sector, adv_country,
+    adv_domicile, adv_dist, adv_min_size,
+    adv_repl=adv_repl, adv_strategy=adv_strategy,
+    adv_category=adv_category,
+    adv_min_ter=adv_min_ter, adv_max_ter=adv_max_ter,
+)
 
 MAX_SCAN = 10_000
 if len(all_tickers) > MAX_SCAN:
     all_tickers = all_tickers[:MAX_SCAN]
 
-st.sidebar.caption(f"Tickers in scope: {len(all_tickers):,}")
+# Active filter summary
+active_filters = []
+if adv_domicile:    active_filters.append(f"Domicile: {', '.join(adv_domicile)}")
+if adv_dist:        active_filters.append(f"Dist: {', '.join(adv_dist)}")
+if adv_repl:        active_filters.append(f"Replication: {', '.join(adv_repl)}")
+if adv_strategy:    active_filters.append(f"Strategy: {', '.join(adv_strategy)}")
+if adv_category:    active_filters.append(f"Class: {', '.join(adv_category)}")
+if adv_country:     active_filters.append(f"Country: {', '.join(adv_country[:3])}")
+if adv_sector:      active_filters.append(f"Sector: {', '.join(adv_sector[:2])}")
+if adv_min_size:    active_filters.append(f"Size ≥ €{adv_min_size}m")
+if adv_min_ter > 0 or adv_max_ter < 2.0:
+    active_filters.append(f"TER {adv_min_ter:.2f}–{adv_max_ter:.2f}%")
+
+st.sidebar.caption(f"**{len(all_tickers):,} tickers in scope**")
+if active_filters:
+    st.sidebar.caption("🔧 " + "  ·  ".join(active_filters))
 
 # ═══════════════════════════════════════════════════════════
 # MAIN — TABS
 # ═══════════════════════════════════════════════════════════
 
 st.title(f"Market Decision Engine {APP_VERSION}")
+
+# Auto-switch to Deep Dive tab when user clicked Analyse
+_default_tab = 1 if st.session_state.get("dive_open") else 0
+if st.session_state.get("dive_open"):
+    st.session_state.pop("dive_open", None)
 
 tab_scan, tab_dive = st.tabs(["🔭 Market Scanner", "🔬 Deep Dive"])
 
@@ -918,4 +1077,6 @@ with tab_scan:
 
 with tab_dive:
     preloaded = st.session_state.get("dive_ticker", "")
+    if preloaded:
+        st.info(f"**{preloaded}** loaded from Scanner — click **🔍 Analyse** below to run analysis.")
     run_deep_dive(preloaded_ticker=preloaded)
