@@ -658,9 +658,13 @@ def scanner_tab():
                              color="light", show_initially=False)],
                 id="run-btn", color="danger", size="lg", className="w-100"
             ), width=10),
+            dbc.Col(dbc.Button("⏹ Stop", id="stop-btn", color="warning",
+                               size="lg", className="w-100",
+                               disabled=True), width=2),
             dbc.Col(dbc.Button("🗑️ Clear", id="clear-btn", color="secondary",
                                size="lg", className="w-100"), width=2),
-        ], className="mb-3"),
+        ], className="mb-3", style={"--bs-gutter-x":"0.5rem"}),
+        dcc.Store(id="abort-store", data=False),
 
         # Scan status bar
         html.Div(id="scan-status-bar", children=[
@@ -864,6 +868,7 @@ def update_scope(preset, types, domicile, dist, repl, strategy, category,
     Output("scan-running","data"),
     Input("run-btn","n_clicks"),
     Input("clear-btn","n_clicks"),
+    Input("stop-btn","n_clicks"),
     State("preset-dd","value"),
     State("filter-types","value"),
     State("filter-domicile","value"),
@@ -880,7 +885,7 @@ def update_scope(preset, types, domicile, dist, repl, strategy, category,
     State("budget-input","value"),
     prevent_initial_call=True,
 )
-def run_scan(run_clicks, clear_clicks, preset, types, domicile, dist,
+def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dist,
              repl, strategy, category, country, sector,
              minsize, maxter, workers, fetch_pe, budget):
     ctx = callback_context
@@ -889,7 +894,11 @@ def run_scan(run_clicks, clear_clicks, preset, types, domicile, dist,
     triggered = ctx.triggered[0]["prop_id"]
 
     if "clear-btn" in triggered:
-        return None, "Results cleared."
+        return None, "Results cleared.", {"display":"none"}, False, False
+
+    if "stop-btn" in triggered:
+        cache_set("current_scan_id", "stopped")
+        return no_update, "⏹ Scan stopped.", {"display":"block"}, False, False
 
     if "run-btn" not in triggered:
         return no_update, no_update, no_update, no_update, no_update
@@ -909,10 +918,18 @@ def run_scan(run_clicks, clear_clicks, preset, types, domicile, dist,
         return None, "⚠️ No tickers match filters.", {}, False, False
 
     # Parallel scan
+    import uuid
+    scan_id = str(uuid.uuid4())[:8]
+    cache_set("current_scan_id", scan_id)
+
     results = {}
     with ThreadPoolExecutor(max_workers=int(workers or 6)) as ex:
         futs = {ex.submit(analyse_ticker, t, risk_mult): t for t in tickers}
         for fut in as_completed(futs):
+            if cache_get("current_scan_id") != scan_id:
+                return (no_update,
+                        "⏹ Scan cancelled.",
+                        {"display":"block"}, False, False)
             t = futs[fut]
             try:
                 r = fut.result()
@@ -1186,21 +1203,41 @@ def run_deep_dive(n_clicks, user_input, budget):
     ticker = user_input.strip().upper()
     budget = budget or 1000
 
-    # ISIN → ticker lookup
     isin = None
     def is_isin(x):
         return len(x)==12 and x[:2].isalpha() and x[2:].isalnum()
+
     if is_isin(ticker):
         isin = ticker
-        # Try to find ticker from justETF
+        resolved = False
         if not jetf_df.empty and "isin" in jetf_df.columns:
-            match = jetf_df[jetf_df["isin"]==ticker]
+            match = jetf_df[jetf_df["isin"]==isin]
             if not match.empty:
                 ticker = match.iloc[0]["ticker"]
+                resolved = True
+        if not resolved:
+            try:
+                sr = yf.Search(isin, max_results=5)
+                if hasattr(sr,"quotes") and sr.quotes:
+                    ticker = sr.quotes[0]["symbol"]
+                    resolved = True
+            except Exception:
+                pass
+        if not resolved:
+            return dbc.Alert(
+                f"Could not resolve ISIN {isin} to a ticker. Try the ticker symbol directly.",
+                color="warning")
 
     raw = fetch_ticker_data(ticker)
     if raw is None:
-        return dbc.Alert(f"No data found for {ticker}. Try a different ticker.", color="danger")
+        try:
+            sr = yf.Search(ticker, max_results=3)
+            if hasattr(sr,"quotes") and sr.quotes:
+                sugg = ", ".join([q["symbol"] for q in sr.quotes[:3]])
+                return dbc.Alert(f"No data for **{ticker}**. Try: {sugg}", color="warning")
+        except Exception:
+            pass
+        return dbc.Alert(f"No data found for {ticker}.", color="danger")
 
     close    = raw["close"]
     ma50_s   = raw["ma50_s"]
@@ -1318,17 +1355,21 @@ def run_deep_dive(n_clicks, user_input, budget):
             fund_parts.append(f"{k}: {v}")
     fund_strip = html.P("  ·  ".join(fund_parts), className="text-muted small") if fund_parts else None
 
-    # Links
     links = html.Div([
-        dbc.Button("📈 Yahoo Finance", href=f"https://finance.yahoo.com/quote/{ticker}",
-                   target="_blank", color="link", size="sm"),
-        dbc.Button("📊 ETF.com", href=f"https://www.etf.com/{ticker}",
-                   target="_blank", color="link", size="sm"),
-        dbc.Button("🔍 justETF",
-                   href=f"https://www.justetf.com/en/etf-profile.html?isin={isin}" if isin
-                        else f"https://www.justetf.com/en/search.html?query={ticker}",
-                   target="_blank", color="link", size="sm"),
-    ])
+        dbc.Button("📈 Yahoo Finance",
+            href=f"https://finance.yahoo.com/quote/{ticker}",
+            target="_blank", color="link", size="sm"),
+        dbc.Button("📊 ETF.com",
+            href=f"https://www.etf.com/{ticker}",
+            target="_blank", color="link", size="sm"),
+        dbc.Button("🔍 justETF (ISIN)" if isin else "🔍 justETF",
+            href=f"https://www.justetf.com/en/etf-profile.html?isin={isin}"
+                 if isin else f"https://www.justetf.com/en/search.html?query={ticker}",
+            target="_blank", color="link", size="sm"),
+        *([ html.Code(isin, style={"marginLeft":"8px","color":"#aaa","fontSize":"11px",
+            "background":"#1e1e2e","padding":"2px 6px","borderRadius":"4px"})
+           ] if isin else []),
+    ], className="mb-2")
 
     # Signal detail table
     price_chg = float((close.iloc[-1]-close.iloc[-2])/close.iloc[-2]*100)
@@ -1378,12 +1419,12 @@ def run_deep_dive(n_clicks, user_input, budget):
     Output("filter-country","disabled"),
     Output("filter-sector","disabled"),
     Output("preset-dd","disabled"),
+    Output("stop-btn","disabled"),
     Input("run-btn","disabled"),
     prevent_initial_call=True,
 )
 def disable_filters_during_scan(btn_disabled):
-    """Lock all filters while scan is running to prevent confusion."""
-    return [btn_disabled] * 8
+    return [btn_disabled]*8 + [not btn_disabled]
 
 @app.callback(
     Output("dl-csv","data"),
