@@ -150,6 +150,22 @@ def load_justetf():
 universe = load_base_universe()
 jetf_df  = load_justetf()
 
+# Pre-warm suffix cache for top justETF tickers in background
+def _prewarm_suffix_cache():
+    if jetf_df.empty:
+        return
+    top = jetf_df["ticker"].head(300).tolist()
+    for t in top:
+        if cache_get(f"sfx_{t}") is None:
+            try:
+                info = yf.Ticker(t + ".DE").fast_info
+                if hasattr(info,"last_price") and info.last_price and float(info.last_price) > 0:
+                    cache_set(f"sfx_{t}", ".DE", ttl=86400*7)
+            except Exception:
+                pass
+
+threading.Thread(target=_prewarm_suffix_cache, daemon=True).start()
+
 # Pre-build name lookup from universe (instant, improves first scan speed)
 _name_lookup = {}
 if not universe.empty and "name" in universe.columns:
@@ -270,7 +286,7 @@ def fetch_ticker_data(ticker):
         if df.empty or "Close" not in df.columns or len(df["Close"].dropna()) < 30:
             # Check if we already know the working suffix
             known_sfx = cache_get(f"sfx_{ticker}")
-            suffixes = [known_sfx] if known_sfx else [".L",".DE",".MI",".PA",".AS",".SW",".F",".VI",".BR",".MC"]
+            suffixes = [known_sfx] if known_sfx else [".DE",".L",".AS",".PA",".MI",".SW",".F",".VI",".BR"]
             for sfx in suffixes:
                 try:
                     df2 = flatten_df(yf.Ticker(ticker+sfx).history(period="1y", auto_adjust=True))
@@ -375,19 +391,20 @@ def resolve_yf_ticker(ticker, isin=None):
     if sfx:
         return ticker + sfx
 
-    # Try bare ticker
+    # Try bare ticker using fast_info (much faster than history())
     try:
-        df = flatten_df(yf.Ticker(ticker).history(period="5d", auto_adjust=True))
-        if not df.empty and len(df["Close"].dropna()) >= 3:
+        info = yf.Ticker(ticker).fast_info
+        if hasattr(info, "last_price") and info.last_price and float(info.last_price) > 0:
+            cache_set(f"sfx_{ticker}", "", ttl=86400*7)
             return ticker
     except Exception:
         pass
 
-    # Try suffixes
-    for sfx in [".L",".DE",".MI",".PA",".AS",".SW",".F",".VI",".BR"]:
+    # Try suffixes — .DE first since justETF uses Xetra tickers
+    for sfx in [".DE",".L",".AS",".PA",".MI",".SW",".F",".VI",".BR"]:
         try:
-            df = flatten_df(yf.Ticker(ticker+sfx).history(period="5d", auto_adjust=True))
-            if not df.empty and len(df["Close"].dropna()) >= 3:
+            info = yf.Ticker(ticker+sfx).fast_info
+            if hasattr(info, "last_price") and info.last_price and float(info.last_price) > 0:
                 cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
                 return ticker + sfx
         except Exception:
