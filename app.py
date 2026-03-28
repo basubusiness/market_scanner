@@ -235,10 +235,12 @@ def fetch_ticker_data(ticker):
         if len(close) < 30:
             return None
         price = float(close.iloc[-1])
-        if price < 0.50:
+        if price < 0.10:  # only filter near-zero prices
             return None
         if "Volume" in df.columns:
-            if df["Volume"].dropna().tail(20).mean() < 1000:
+            avg_vol = df["Volume"].dropna().tail(20).mean()
+            # ETFs can have very low volume but still be valid — only filter true zeros
+            if avg_vol == 0:
                 return None
         ma50   = float(close.rolling(50).mean().iloc[-1])
         ma200  = float(close.rolling(200).mean().iloc[-1])
@@ -776,9 +778,9 @@ def update_live(_):
     Input("preset-dd","value"),
     Input("filter-types","value"),
     Input("filter-country","value"),  # cascade: country narrows sector
-    Input("live-interval","n_intervals"),  # fires on page load too
+    Input("live-interval","n_intervals"),  # ensures fire on first page load
 )
-def update_filter_sections(preset, types, selected_country, _n):
+def update_filter_sections(preset, types, selected_country, _):
     ptype   = PRESETS.get(preset,{}).get("type","ETF")
     custom  = ptype == "custom"
     etfs_on   = (custom and "ETF"   in (types or [])) or ptype == "ETF"
@@ -990,10 +992,21 @@ def run_scan(run_clicks, clear_clicks, preset, types, domicile, dist,
     Output("results-table","children"),
     Input("scan-store","data"),
     Input("signal-tabs","active_tab"),
+    prevent_initial_call=False,  # Must fire initially to show empty state
 )
 def render_results(store_data, active_tab):
     if not store_data:
-        return [], [], html.P("Run a scan to see results.", className="text-muted mt-4")
+        # Clean empty state — no spinner, no confusion
+        return (
+            [],
+            [],
+            html.Div([
+                html.Div(style={"height":"60px"}),
+                html.P("🔭 Select a preset and click Run Scan to begin.",
+                       className="text-muted text-center mt-4",
+                       style={"fontSize":"16px"}),
+            ])
+        )
 
     df = pd.read_json(store_data, orient="split")
 
@@ -1068,8 +1081,16 @@ def render_results(store_data, active_tab):
             "background":"#1a1a2e","color":"#fff",
             "border":"1px solid #2a2a3e",
             "fontSize":"12px","padding":"6px 10px",
-            "whiteSpace":"normal","maxWidth":"200px",
+            "whiteSpace":"nowrap","overflow":"hidden",
+            "textOverflow":"ellipsis","maxWidth":"180px",
         },
+        style_cell_conditional=[
+            {"if":{"column_id":"Name"},  "maxWidth":"160px","minWidth":"120px"},
+            {"if":{"column_id":"ISIN"},  "maxWidth":"110px","fontFamily":"monospace"},
+            {"if":{"column_id":"Ticker"},"maxWidth":"70px","fontWeight":"bold"},
+            {"if":{"column_id":"Signal"},"maxWidth":"130px"},
+            {"if":{"column_id":"Allocation"},"maxWidth":"140px"},
+        ],
         style_header={
             "background":"#12121f","color":"#00bcd4",
             "fontWeight":"bold","border":"1px solid #2a2a3e",
@@ -1358,6 +1379,7 @@ def run_deep_dive(n_clicks, user_input, budget):
     Output("filter-sector","disabled"),
     Output("preset-dd","disabled"),
     Input("run-btn","disabled"),
+    prevent_initial_call=True,
 )
 def disable_filters_during_scan(btn_disabled):
     """Lock all filters while scan is running to prevent confusion."""
