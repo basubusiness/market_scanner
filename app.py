@@ -85,22 +85,6 @@ universe = load_universe()
 def get_justetf_data():
     return load_justetf_universe()
 
-def enrich_with_justetf(universe_df, jetf_df):
-    """Merge justETF metadata into universe on ticker. ETF rows only."""
-    if jetf_df.empty:
-        return universe_df
-    etf_mask = universe_df["type"] == "ETF"
-    merged   = universe_df.copy()
-    # Left join on ticker for ETF rows
-    etf_rows = universe_df[etf_mask].merge(
-        jetf_df, on="ticker", how="left"
-    )
-    merged.loc[etf_mask] = etf_rows.values
-    merged.columns = universe_df.columns.tolist() + [
-        c for c in etf_rows.columns if c not in universe_df.columns
-    ]
-    return merged
-
 # ─────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────
