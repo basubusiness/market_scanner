@@ -962,7 +962,7 @@ def scanner_tab():
         dcc.Store(id="dive-trigger"),
         dcc.Store(id="scan-running", data=False),
         # Progress polling
-        dcc.Interval(id="progress-interval", interval=1000, disabled=False),
+        dcc.Interval(id="progress-interval", interval=1500, disabled=True),
     ])
 
 def deepdive_tab():
@@ -1150,6 +1150,7 @@ def update_scope(preset, types, domicile, dist, repl, strategy, category,
     Output("scan-status-alert","style"),
     Output("run-btn","disabled"),
     Output("scan-running","data"),
+    Output("progress-interval","disabled"),
     Input("run-btn","n_clicks"),
     Input("clear-btn","n_clicks"),
     Input("stop-btn","n_clicks"),
@@ -1174,20 +1175,20 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
              minsize, maxter, workers, fetch_pe, budget):
     ctx = callback_context
     if not ctx.triggered:
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
     triggered = ctx.triggered[0]["prop_id"]
 
     if "clear-btn" in triggered:
-        return None, "Results cleared.", {"display":"none"}, False, False
+        return None, "Results cleared.", {"display":"none"}, False, False, True
 
     if "stop-btn" in triggered:
         for sid in list(_active_scans.keys()):
             _active_scans[sid] = False
         cache_set("current_scan_id", "stopped")
-        return no_update, "⏹ Scan stopped.", {"display":"block"}, False, False
+        return no_update, "⏹ Scan stopped.", {"display":"block"}, False, False, True
 
     if "run-btn" not in triggered:
-        return no_update, no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update
 
     vix = get_live_vix()
     fg, _ = get_fg_index()
@@ -1202,7 +1203,7 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
     tickers = build_tickers(preset, filters)
     print(f"[scan] {len(tickers)} tickers, preset={preset}", flush=True)
     if not tickers:
-        return None, "⚠️ No tickers match filters.", {}, False, False
+        return None, "⚠️ No tickers match filters.", {}, False, False, True
 
     # Cap at 500 per scan to stay within Railway memory limits
     # justETF tickers are sorted by size so top ones are most liquid
@@ -1220,7 +1221,7 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
     results = {}
     total = len(tickers)
     done  = 0
-    cache_set(f"progress_{scan_id}", {"done": 0, "total": total, "valid": 0}, ttl=300)
+    cache_set(f"progress_{scan_id}", {"done": 0, "total": total, "valid": 0, "pct": 0}, ttl=300)
 
     with ThreadPoolExecutor(max_workers=int(workers or 6)) as ex:
         isin_map = {}
@@ -1232,7 +1233,7 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
                 _active_scans.pop(scan_id, None)
                 cache_set(f"progress_{scan_id}", None)
                 return (no_update, "⏹ Scan cancelled.",
-                        {"display":"block"}, False, False)
+                        {"display":"block"}, False, False, True)
             t = futs[fut]
             try:
                 r = fut.result()
@@ -1251,7 +1252,7 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
 
     rows = [r for t in tickers if (r := results.get(t)) is not None]
     if not rows:
-        return None, "❌ No data returned.", {}, False, False
+        return None, "❌ No data returned.", {}, False, False, True
 
     # Names from cache/universe — instant, no separate API calls needed
     valid_tickers = [r["Ticker"] for r in rows]
@@ -1316,7 +1317,7 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
 
     _active_scans.pop(scan_id, None)
     return (df.to_json(date_format="iso", orient="split"),
-            status, {"display":"block"}, False, False)
+            status, {"display":"block"}, False, False, True)
 
 # ───────────────────────────────────────────────────────────────────
 # CALLBACKS — Results display
@@ -1740,6 +1741,30 @@ def update_run_btn_label(is_disabled):
         return [dbc.Spinner(size="sm", color="light",
                             style={"marginRight":"8px"}), "Scanning…"]
     return "🔄 Run Scan"
+
+# Fast callback: show progress bar immediately when Run Scan clicked
+# Fires before run_scan (which is slow) to give instant feedback
+app.clientside_callback(
+    """
+    function(n_clicks) {
+        if (n_clicks) {
+            // Show scanning indicator immediately
+            var ind = document.getElementById('scanning-indicator');
+            if (ind) ind.style.display = 'block';
+            var bar = document.getElementById('scan-progress-bar');
+            if (bar) {
+                bar.style.width = '5%';
+                var label = bar.querySelector('.progress-bar');
+                if (label) label.textContent = '⏳ Starting scan…';
+            }
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("scanning-indicator","style"),
+    Input("run-btn","n_clicks"),
+    prevent_initial_call=True,
+)
 
 @app.callback(
     Output("filter-domicile","disabled"),
