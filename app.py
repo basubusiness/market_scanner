@@ -654,9 +654,7 @@ def scanner_tab():
         # Scan controls
         dbc.Row([
             dbc.Col(dbc.Button(
-                [html.Span("🔄 Run Scan"),
-                 dbc.Spinner(size="sm", spinner_style={"marginLeft":"8px"},
-                             color="light", show_initially=False)],
+                "🔄 Run Scan",
                 id="run-btn", color="danger", size="lg", className="w-100"
             ), width=8),
             dbc.Col(dbc.Button("⏹ Stop", id="stop-btn", color="warning",
@@ -667,11 +665,11 @@ def scanner_tab():
                     width=2),
         ], className="mb-2 g-1"),
 
-        # Scan status bar
-        html.Div(id="scan-status-bar", children=[
+        # Scan status bar — loading indicator tied to button state only
+        html.Div([
             dbc.Alert(id="scan-status-alert", color="info",
-                      className="py-2 px-3 mb-2", style={"display":"none"}),
-        ]),
+                      className="py-2 px-3 mb-2 mt-2", style={"display":"none"}),
+        ], id="scan-status-bar"),
 
         # Wrap all results in a Loading component
         dcc.Loading(
@@ -1414,6 +1412,16 @@ def run_deep_dive(n_clicks, user_input, budget):
         ], className="mb-3"),
         dbc.Accordion([dbc.AccordionItem(detail_tbl, title="⏱ Full Signal Detail")], start_collapsed=True),
     ])
+
+@app.callback(
+    Output("run-btn","children"),
+    Input("run-btn","disabled"),
+)
+def update_run_btn_label(is_disabled):
+    if is_disabled:
+        return [dbc.Spinner(size="sm", color="light",
+                            style={"marginRight":"8px"}), "Scanning…"]
+    return "🔄 Run Scan"
 
 @app.callback(
     Output("filter-domicile","disabled"),
