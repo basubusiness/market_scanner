@@ -516,15 +516,23 @@ if stocks_selected:
     if industry: s = s[s["industry_group"].isin(industry)]
     parts.append(s)
 
-filtered = pd.concat(parts) if parts else pd.DataFrame()
-tickers  = list(dict.fromkeys(filtered["ticker"].str.upper().str.strip().tolist()))
+filtered = pd.concat(parts) if parts else pd.DataFrame(columns=["ticker"])
+tickers  = (
+    list(dict.fromkeys(filtered["ticker"].str.upper().str.strip().tolist()))
+    if not filtered.empty and "ticker" in filtered.columns
+    else []
+)
 
 MAX_TICKERS = 1000
 st.sidebar.caption(
     f"Universe: {len(universe):,} | Filtered: {len(filtered):,} | "
     f"Will scan: {min(len(tickers), MAX_TICKERS):,}"
 )
-if len(tickers) > MAX_TICKERS:
+if not asset_type:
+    st.sidebar.warning("⚠️ Select at least one Asset Type to scan.")
+elif len(tickers) == 0:
+    st.sidebar.warning("⚠️ No tickers match the current filters.")
+elif len(tickers) > MAX_TICKERS:
     st.sidebar.warning(f"Capped at {MAX_TICKERS:,} tickers")
     tickers = tickers[:MAX_TICKERS]
 
@@ -914,8 +922,11 @@ with _tab_scanner:
     # SCAN
     # ─────────────────────────────────────────────
 
+    if not asset_type:
+        st.info("👈 Select an Asset Type in the sidebar to get started.")
+        st.stop()
     if len(tickers) == 0:
-        st.error("No tickers match current filters.")
+        st.warning("⚠️ No tickers match the current filters. Try broadening your selection.")
         st.stop()
 
     c1, c2 = st.columns([4, 1])
