@@ -158,8 +158,8 @@ def _prewarm_suffix_cache():
     for t in top:
         if cache_get(f"sfx_{t}") is None:
             try:
-                info = yf.Ticker(t + ".DE").fast_info
-                if hasattr(info,"last_price") and info.last_price and float(info.last_price) > 0:
+                df = flatten_df(yf.Ticker(t + ".DE").history(period="3d", auto_adjust=True))
+                if not df.empty and "Close" in df.columns and len(df["Close"].dropna()) >= 1:
                     cache_set(f"sfx_{t}", ".DE", ttl=86400*7)
             except Exception:
                 pass
@@ -272,7 +272,7 @@ def get_live_vix():
 # TICKER ANALYSIS
 # ───────────────────────────────────────────────────────────────────
 
-def fetch_ticker_data(ticker):
+def fetch_ticker_data(ticker, isin=None):
     # Quick reject obvious invalid tickers before any API call
     if not ticker or ticker.startswith("$") or len(ticker) < 2:
         return None
@@ -281,21 +281,38 @@ def fetch_ticker_data(ticker):
     if cached is not None:
         return cached
     try:
-        df = flatten_df(yf.Ticker(ticker).history(period="1y", auto_adjust=True))
-        # UCITS ETFs need exchange suffix — try common ones if bare ticker fails
-        if df.empty or "Close" not in df.columns or len(df["Close"].dropna()) < 30:
-            # Check if we already know the working suffix
-            known_sfx = cache_get(f"sfx_{ticker}")
-            suffixes = [known_sfx] if known_sfx else [".DE",".L",".AS",".PA",".MI",".SW",".F",".VI",".BR"]
-            for sfx in suffixes:
-                try:
-                    df2 = flatten_df(yf.Ticker(ticker+sfx).history(period="1y", auto_adjust=True))
-                    if not df2.empty and "Close" in df2.columns and len(df2["Close"].dropna()) >= 30:
-                        df = df2
-                        cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
-                        break
-                except Exception:
-                    continue
+        # Check if we already know the working suffix
+        known_sfx = cache_get(f"sfx_{ticker}")
+        if known_sfx is not None:
+            # Use known suffix directly
+            sym = ticker + known_sfx
+            df = flatten_df(yf.Ticker(sym).history(period="1y", auto_adjust=True))
+        else:
+            # Try bare ticker first
+            df = flatten_df(yf.Ticker(ticker).history(period="1y", auto_adjust=True))
+            # If fails, try exchange suffixes — .DE first for UCITS ETFs
+            if df.empty or "Close" not in df.columns or len(df["Close"].dropna()) < 30:
+                for sfx in [".DE",".L",".AS",".PA",".MI",".SW",".F",".VI",".BR"]:
+                    try:
+                        df2 = flatten_df(yf.Ticker(ticker+sfx).history(period="1y", auto_adjust=True))
+                        if not df2.empty and "Close" in df2.columns and len(df2["Close"].dropna()) >= 30:
+                            df = df2
+                            cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
+                            break
+                    except Exception:
+                        continue
+                # Last resort: search by ISIN
+                if (df.empty or len(df.get("Close",pd.Series()).dropna()) < 30) and isin:
+                    try:
+                        sr = yf.Search(isin, max_results=3)
+                        if hasattr(sr,"quotes") and sr.quotes:
+                            sym2 = sr.quotes[0]["symbol"]
+                            df2 = flatten_df(yf.Ticker(sym2).history(period="1y", auto_adjust=True))
+                            if not df2.empty and len(df2["Close"].dropna()) >= 30:
+                                df = df2
+                                cache_set(f"sfx_{ticker}", f"→{sym2}", ttl=86400*7)
+                    except Exception:
+                        pass
         if df.empty or "Close" not in df.columns:
             return None
         close = df["Close"].dropna()
@@ -343,15 +360,9 @@ def fetch_ticker_data(ticker):
         return None
 
 def analyse_ticker(ticker, risk_mult, isin=None):
-    # Try to resolve the correct yfinance symbol first
-    yf_sym = resolve_yf_ticker(ticker, isin)
-    if yf_sym is None:
-        return None
-    raw = fetch_ticker_data(yf_sym)
+    raw = fetch_ticker_data(ticker, isin=isin)
     if raw is None:
         return None
-    # Store original ticker in result for display
-    raw = dict(raw)
     dm, rsi, conf = raw["dist_ma"], raw["rsi"], raw["confidence"]
     macd_bull  = raw["macd"] > raw["macd_signal"]
     macd_accel = raw["macd_hist"] > 0
@@ -391,24 +402,32 @@ def resolve_yf_ticker(ticker, isin=None):
     if sfx:
         return ticker + sfx
 
-    # Try bare ticker using fast_info (much faster than history())
-    try:
-        info = yf.Ticker(ticker).fast_info
-        if hasattr(info, "last_price") and info.last_price and float(info.last_price) > 0:
-            cache_set(f"sfx_{ticker}", "", ttl=86400*7)
-            return ticker
-    except Exception:
-        pass
+    def _has_price(sym):
+        """Quick check if a symbol has valid price data."""
+        try:
+            t = yf.Ticker(sym)
+            # Try fast_info first
+            fi = t.fast_info
+            for attr in ["last_price", "regularMarketPrice", "currentPrice"]:
+                val = getattr(fi, attr, None)
+                if val and float(val) > 0:
+                    return True
+            # Fall back to 3-day history
+            df = flatten_df(t.history(period="3d", auto_adjust=True))
+            return not df.empty and "Close" in df.columns and len(df["Close"].dropna()) >= 1
+        except Exception:
+            return False
+
+    # Try bare ticker
+    if _has_price(ticker):
+        cache_set(f"sfx_{ticker}", "", ttl=86400*7)
+        return ticker
 
     # Try suffixes — .DE first since justETF uses Xetra tickers
     for sfx in [".DE",".L",".AS",".PA",".MI",".SW",".F",".VI",".BR"]:
-        try:
-            info = yf.Ticker(ticker+sfx).fast_info
-            if hasattr(info, "last_price") and info.last_price and float(info.last_price) > 0:
-                cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
-                return ticker + sfx
-        except Exception:
-            continue
+        if _has_price(ticker + sfx):
+            cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
+            return ticker + sfx
 
     # Last resort: search by ISIN
     if isin:
