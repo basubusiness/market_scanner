@@ -1165,7 +1165,7 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
 
     # Cap at 500 per scan to stay within Railway memory limits
     # justETF tickers are sorted by size so top ones are most liquid
-    MAX_PER_SCAN = 500
+    MAX_PER_SCAN = 200
     if len(tickers) > MAX_PER_SCAN:
         print(f"[run_scan] capping {len(tickers)} → {MAX_PER_SCAN}", flush=True)
         tickers = tickers[:MAX_PER_SCAN]
