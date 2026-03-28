@@ -795,34 +795,41 @@ with st.sidebar.expander("🔧 Optional filters", expanded=False):
     # ── ETF filters (justETF-powered)
     if etfs_active:
         st.markdown("**📦 ETF Filters**")
+        def _jcol(col):
+            """Safe unique values from jetf_df column — empty list if missing."""
+            if jetf_df.empty or col not in jetf_df.columns:
+                return []
+            return sorted([v for v in jetf_df[col].dropna().unique() if str(v).strip()])
+
         if not jetf_df.empty:
-            doms = sorted([d for d in jetf_df["domicile"].dropna().unique() if str(d).strip()])
-            adv_domicile = st.multiselect("Domicile", doms,
-                help="Ireland/Luxembourg = UCITS · United States = US-domiciled")
+            doms = _jcol("domicile")
+            if doms:
+                adv_domicile = st.multiselect("Domicile", doms,
+                    help="Ireland/Luxembourg = UCITS · United States = US-domiciled")
 
-            dists = sorted([d for d in jetf_df["dist_policy"].dropna().unique() if str(d).strip()])
-            adv_dist = st.multiselect("Distribution policy", dists,
-                help="Accumulating (growth) or Distributing (income)")
+            dists = _jcol("dist_policy")
+            if dists:
+                adv_dist = st.multiselect("Distribution policy", dists,
+                    help="Accumulating (growth) or Distributing (income)")
 
-            if "replication" in jetf_df.columns:
-                repls = sorted([r for r in jetf_df["replication"].dropna().unique() if str(r).strip()])
+            repls = _jcol("replication")
+            if repls:
                 adv_repl = st.multiselect("Replication method", repls,
                     help="Physical Full · Physical Sampling · Swap-based")
 
-            if "strategy" in jetf_df.columns:
-                strats = sorted([s for s in jetf_df["strategy"].dropna().unique() if str(s).strip()])
+            strats = _jcol("strategy")
+            if strats:
                 adv_strategy = st.multiselect("Strategy", strats,
                     help="Long-only · Short & Leveraged · Active")
 
             adv_min_size = st.number_input("Min fund size (€m, 0=all)", 0, step=50,
                 help="100m+ = reasonable liquidity · 500m+ = large & liquid")
 
-            if "ter" in jetf_df.columns:
-                ter_vals = jetf_df["ter"].dropna()
-                if not ter_vals.empty:
-                    tc1, tc2 = st.columns(2)
-                    adv_min_ter = tc1.number_input("Min TER %", 0.0, 5.0, 0.0, step=0.05)
-                    adv_max_ter = tc2.number_input("Max TER %", 0.0, 5.0, 2.0, step=0.05)
+            ter_vals = jetf_df["ter"].dropna() if "ter" in jetf_df.columns else []
+            if len(ter_vals) > 0:
+                tc1, tc2 = st.columns(2)
+                adv_min_ter = tc1.number_input("Min TER %", 0.0, 5.0, 0.0, step=0.05)
+                adv_max_ter = tc2.number_input("Max TER %", 0.0, 5.0, 2.0, step=0.05)
         else:
             st.info("💡 Add `justetf-scraping` to requirements.txt for domicile, TER, replication filters.")
 
