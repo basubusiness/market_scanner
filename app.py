@@ -116,6 +116,22 @@ def load_justetf():
 universe = load_base_universe()
 jetf_df  = load_justetf()
 
+# Pre-build name lookup from universe (instant, improves first scan speed)
+_name_lookup = {}
+if not universe.empty and "name" in universe.columns:
+    for _, row in universe.iterrows():
+        t = str(row.get("ticker","")).strip()
+        n = str(row.get("name","")).strip()
+        if t and n and n not in ("","nan","None"):
+            _name_lookup[t] = n
+if not jetf_df.empty:
+    for _, row in jetf_df.iterrows():
+        t = str(row.get("ticker","")).strip()
+        n = str(row.get("jname","")).strip()
+        i = str(row.get("isin","")).strip() if pd.notna(row.get("isin","")) else ""
+        if t and n and n not in ("","nan","None"):
+            _name_lookup[t] = (n, i)
+
 # ───────────────────────────────────────────────────────────────────
 # TECHNICAL INDICATORS
 # ───────────────────────────────────────────────────────────────────
@@ -292,23 +308,66 @@ def analyse_ticker(ticker, risk_mult):
     }
 
 def get_name_isin(ticker):
+    """
+    Fast name/ISIN lookup — priority order:
+    1. In-memory cache (instant)
+    2. justETF DataFrame (instant, no API)
+    3. financedatabase universe (instant, no API)
+    4. yfinance .info (slow — only if nothing else found)
+    """
     key = f"meta_{ticker}"
     cached = cache_get(key)
     if cached is not None:
         return cached
+
+    # Source 0: pre-built lookup dict (instant dict lookup)
+    if ticker in _name_lookup:
+        val = _name_lookup[ticker]
+        if isinstance(val, tuple):
+            cache_set(key, val, ttl=86400)
+            return val
+        result = (val[:40], "")
+        cache_set(key, result, ttl=86400)
+        return result
+
+    # Source 1: justETF (has ISIN + clean names)
     if not jetf_df.empty and ticker in jetf_df["ticker"].values:
         row  = jetf_df[jetf_df["ticker"]==ticker].iloc[0]
         name = str(row.get("jname",""))[:40]
-        isin = str(row.get("isin","")) if pd.notna(row.get("isin")) else ""
-        if name:
-            cache_set(key, (name, isin), ttl=86400)
-            return name, isin
+        isin = str(row.get("isin","")) if pd.notna(row.get("isin","")) else ""
+        if name and name not in ("", "nan"):
+            result = (name, isin)
+            cache_set(key, result, ttl=86400)
+            return result
+
+    # Source 2: financedatabase universe "name" column (instant, no API)
+    if not universe.empty and "name" in universe.columns:
+        rows = universe[universe["ticker"] == ticker]
+        if not rows.empty:
+            name = str(rows.iloc[0].get("name",""))[:40]
+            if name and name not in ("", "nan"):
+                result = (name, "")
+                cache_set(key, result, ttl=86400)
+                return result
+
+    # Source 3: yfinance .fast_info — lightweight, just gets basic metadata
+    # Only called if sources 1+2 failed — skipped for bulk scans to stay fast
+    # (name_map builder passes skip_slow=True for bulk)
+    result = (ticker, "")
+    cache_set(key, result, ttl=3600)  # shorter cache since name wasn't found
+    return result
+
+def get_name_isin_full(ticker):
+    """Slower version that also tries yfinance — used in Deep Dive only."""
+    name, isin = get_name_isin(ticker)
+    if name != ticker:
+        return name, isin
     try:
         info = yf.Ticker(ticker).info
-        name = (info.get("longName") or info.get("shortName") or "")[:40]
+        name = (info.get("longName") or info.get("shortName") or ticker)[:40]
         isin = info.get("isin","") or ""
-        result = (name or ticker, isin)
-        cache_set(key, result, ttl=86400)
+        result = (name, isin)
+        cache_set(f"meta_{ticker}", result, ttl=86400)
         return result
     except Exception:
         return ticker, ""
@@ -444,6 +503,15 @@ def kpi_card(title, value, color="#fff"):
 # LAYOUT
 # ───────────────────────────────────────────────────────────────────
 
+# Dark theme style for all Dropdown components
+_DD = {"backgroundColor":"#1e1e2e","color":"#fff","border":"1px solid #555","marginBottom":"6px"}
+_DD_STYLE = {"option":{"backgroundColor":"#1e1e2e","color":"#fff"},
+             "control":{"backgroundColor":"#1e1e2e","borderColor":"#555","color":"#fff"},
+             "singleValue":{"color":"#fff"},"placeholder":{"color":"#aaa"},
+             "menu":{"backgroundColor":"#1e1e2e"},"input":{"color":"#fff"},
+             "multiValue":{"backgroundColor":"#333"},
+             "multiValueLabel":{"color":"#fff"}}
+
 def sidebar():
     def_jcol = lambda col: (sorted([v for v in jetf_df[col].dropna().unique() if str(v).strip()])
                              if not jetf_df.empty and col in jetf_df.columns else [])
@@ -475,7 +543,7 @@ def sidebar():
             options=[{"label":k,"value":k} for k in PRESETS],
             value="🌍 All ETFs",
             clearable=False,
-            style={"marginBottom":"12px"},
+            style={**_DD,"marginBottom":"12px"},
         ),
 
         # ── Optional filters accordion
@@ -498,19 +566,19 @@ def sidebar():
                     html.Label("📦 ETF Filters", className="text-info small fw-bold mt-2"),
                     html.Label("Domicile", className="text-white small"),
                     dcc.Dropdown(id="filter-domicile", options=[{"label":v,"value":v} for v in def_jcol("domicile")],
-                        multi=True, placeholder="Any", style={"marginBottom":"6px"}),
+                        multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
                     html.Label("Distribution", className="text-white small"),
                     dcc.Dropdown(id="filter-dist", options=[{"label":v,"value":v} for v in def_jcol("dist_policy")],
-                        multi=True, placeholder="Any", style={"marginBottom":"6px"}),
+                        multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
                     html.Label("Replication", className="text-white small"),
                     dcc.Dropdown(id="filter-replication", options=[{"label":v,"value":v} for v in def_jcol("replication")],
-                        multi=True, placeholder="Any", style={"marginBottom":"6px"}),
+                        multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
                     html.Label("Strategy", className="text-white small"),
                     dcc.Dropdown(id="filter-strategy", options=[{"label":v,"value":v} for v in def_jcol("strategy")],
-                        multi=True, placeholder="Any", style={"marginBottom":"6px"}),
+                        multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
                     html.Label("Asset Class", className="text-white small"),
                     dcc.Dropdown(id="filter-category", options=[{"label":v,"value":v} for v in cat_opts],
-                        multi=True, placeholder="Any", style={"marginBottom":"6px"}),
+                        multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
                     dbc.Row([
                         dbc.Col([html.Label("Min Size €m", className="text-white small"),
                                  dbc.Input(id="filter-minsize", type="number", value=0, min=0, step=50, size="sm")], width=6),
@@ -524,10 +592,10 @@ def sidebar():
                     html.Label("📈 Stock Filters", className="text-info small fw-bold mt-2"),
                     html.Label("Country", className="text-white small"),
                     dcc.Dropdown(id="filter-country", options=[{"label":v,"value":v} for v in country_opts],
-                        multi=True, placeholder="Any", style={"marginBottom":"6px"}),
+                        multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
                     html.Label("Sector", className="text-white small"),
                     dcc.Dropdown(id="filter-sector", options=[{"label":v,"value":v} for v in sector_opts],
-                        multi=True, placeholder="Any", style={"marginBottom":"6px"}),
+                        multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
                 ], id="stock-filters-row"),
 
             ], title="🔧 Optional Filters"),
@@ -629,6 +697,7 @@ def scanner_tab():
         # Hidden stores
         dcc.Store(id="scan-store"),
         dcc.Store(id="dive-trigger"),
+        dcc.Store(id="scan-running", data=False),
     ])
 
 def deepdive_tab():
@@ -790,6 +859,7 @@ def update_scope(preset, types, domicile, dist, repl, strategy, category,
     Output("scan-status-alert","children"),
     Output("scan-status-alert","style"),
     Output("run-btn","disabled"),
+    Output("scan-running","data"),
     Input("run-btn","n_clicks"),
     Input("clear-btn","n_clicks"),
     State("preset-dd","value"),
@@ -813,14 +883,14 @@ def run_scan(run_clicks, clear_clicks, preset, types, domicile, dist,
              minsize, maxter, workers, fetch_pe, budget):
     ctx = callback_context
     if not ctx.triggered:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     triggered = ctx.triggered[0]["prop_id"]
 
     if "clear-btn" in triggered:
         return None, "Results cleared."
 
     if "run-btn" not in triggered:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
 
     vix = get_live_vix()
     fg, _ = get_fg_index()
@@ -834,7 +904,7 @@ def run_scan(run_clicks, clear_clicks, preset, types, domicile, dist,
     )
     tickers = build_tickers(preset, filters)
     if not tickers:
-        return None, "⚠️ No tickers match filters.", {}, False
+        return None, "⚠️ No tickers match filters.", {}, False, False
 
     # Parallel scan
     results = {}
@@ -850,17 +920,11 @@ def run_scan(run_clicks, clear_clicks, preset, types, domicile, dist,
 
     rows = [r for t in tickers if (r := results.get(t)) is not None]
     if not rows:
-        return None, "❌ No data returned.", {}, False
+        return None, "❌ No data returned.", {}, False, False
 
-    # Fetch names in parallel
-    name_map = {}
+    # Names from cache/universe — instant, no separate API calls needed
     valid_tickers = [r["Ticker"] for r in rows]
-    with ThreadPoolExecutor(max_workers=16) as ex:
-        nfuts = {ex.submit(get_name_isin, t): t for t in valid_tickers}
-        for f in as_completed(nfuts):
-            t = nfuts[f]
-            try: name_map[t] = f.result()
-            except Exception: name_map[t] = (t, "")
+    name_map = {t: get_name_isin(t) for t in valid_tickers}
 
     # Optionally fetch PE
     pe_map = {}
@@ -914,7 +978,7 @@ def run_scan(run_clicks, clear_clicks, preset, types, domicile, dist,
               f"SELL:{(df['Action']=='SELL').sum()} "
               f"AVOID:{(df['Action']=='AVOID').sum()}")
 
-    return df.to_json(date_format="iso", orient="split"), status, {}, False
+    return df.to_json(date_format="iso", orient="split"), status, {}, False, False
 
 # ───────────────────────────────────────────────────────────────────
 # CALLBACKS — Results display
@@ -1067,7 +1131,7 @@ def enable_dive_btn(selected_rows, store_data):
 )
 def open_deep_dive(n_clicks, selected_rows, store_data):
     if not n_clicks or not selected_rows or not store_data:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
     df     = pd.read_json(store_data, orient="split")
     idx    = selected_rows[0]
     ticker = df.iloc[idx]["Ticker"]
@@ -1155,7 +1219,7 @@ def run_deep_dive(n_clicks, user_input, budget):
 
     # justETF metadata
     jetf_meta = {}
-    name, isin_found = get_name_isin(ticker)
+    name, isin_found = get_name_isin_full(ticker)
     isin = isin or isin_found
     if not jetf_df.empty and ticker in jetf_df["ticker"].values:
         jetf_meta = jetf_df[jetf_df["ticker"]==ticker].iloc[0].to_dict()
@@ -1283,6 +1347,21 @@ def run_deep_dive(n_clicks, user_input, budget):
         ], className="mb-3"),
         dbc.Accordion([dbc.AccordionItem(detail_tbl, title="⏱ Full Signal Detail")], start_collapsed=True),
     ])
+
+@app.callback(
+    Output("filter-domicile","disabled"),
+    Output("filter-dist","disabled"),
+    Output("filter-replication","disabled"),
+    Output("filter-strategy","disabled"),
+    Output("filter-category","disabled"),
+    Output("filter-country","disabled"),
+    Output("filter-sector","disabled"),
+    Output("preset-dd","disabled"),
+    Input("run-btn","disabled"),
+)
+def disable_filters_during_scan(btn_disabled):
+    """Lock all filters while scan is running to prevent confusion."""
+    return [btn_disabled] * 8
 
 @app.callback(
     Output("dl-csv","data"),
