@@ -720,13 +720,11 @@ def run_deep_dive():
         st.line_chart(rsi_df, use_container_width=True)
         st.caption("Oversold zone: <30 · Overbought zone: >70")
 
-with _tab_dive:
-    run_deep_dive()
+
 
 _tab_scanner, _tab_dive = st.tabs(["🔭 Market Scanner", "🔬 Deep Dive — Individual Asset"])
 
 with _tab_scanner:
-
     fg_auto, fg_rating = get_fg_index()
 
     col_vix, col_fg = st.columns(2)
@@ -924,3 +922,6 @@ with _tab_scanner:
     # ═══════════════════════════════════════════════════════════════════
     # DEEP DIVE — Individual Asset Analysis (appended as a second page)
     # ═══════════════════════════════════════════════════════════════════
+
+with _tab_dive:
+    run_deep_dive()
