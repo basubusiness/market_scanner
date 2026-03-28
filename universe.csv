@@ -1,280 +1,280 @@
 ticker,yf_symbol,yf_suffix,isin,name,type,domicile,dist_policy,replication,strategy,ter,fund_size_eur,country,sector,currency
-SXR8,SXR8.DE,.DE,IE00B5BMR087,iShares Core S&P 500 UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.07,,,,USD
-EUNL,EUNL.DE,.DE,IE00B4L5Y983,iShares Core MSCI World UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.2,,,,USD
-VUSA,VUSA.DE,.DE,IE00B3XXRP09,Vanguard S&P 500 UCITS ETF (USD) Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.07,,,,USD
-IS3N,IS3N.DE,.DE,IE00BKM4GZ66,iShares Core MSCI Emerging Markets IMI UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,USD
-VWCE,VWCE.DE,.DE,IE00BK5BQT80,Vanguard FTSE All-World UCITS ETF (USD) Accumulating,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.19,,,,USD
-PPFB,PPFB.DE,.DE,IE00B4ND3602,iShares Physical Gold ETC,ETF,Ireland,Accumulating,Physically backed,Long-only,0.12,,,,USD
-P500,P500.DE,.DE,IE00B3YCGJ38,Invesco S&P 500 UCITS ETF Acc,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.05,,,,USD
-VUAA,VUAA.DE,.DE,IE00BFMXXD54,Vanguard S&P 500 UCITS ETF (USD) Accumulating,ETF,Ireland,Accumulating,Full replication,Long-only,0.07,,,,USD
-8PSG,8PSG.DE,.DE,IE00B579F325,Invesco Physical Gold ETC,ETF,Ireland,Accumulating,Physically backed,Long-only,0.12,,,,USD
-IUSQ,IUSQ.DE,.DE,IE00B6R52259,iShares MSCI ACWI UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.2,,,,USD
-4GLD,4GLD.DE,.DE,DE000A0S9GB0,Xetra-Gold,ETF,Germany,Accumulating,Physically backed,Long-only,0.0,,,,EUR
-XEON,XEON.DE,.DE,LU0290358497,Xtrackers II EUR Overnight Rate Swap UCITS ETF 1C,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.1,,,,EUR
-VGWL,VGWL.DE,.DE,IE00B3RBWM25,Vanguard FTSE All-World UCITS ETF (USD) Distributing,ETF,Ireland,Distributing,Optimized sampling,Long-only,0.19,,,,USD
-SXRV,SXRV.DE,.DE,IE00B53SZB19,iShares Nasdaq 100 UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
-LYP6,LYP6.DE,.DE,LU0908500753,Amundi Core Stoxx Europe 600 UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.07,,,,EUR
-IUSZ,IUSZ.DE,.DE,IE0005042456,iShares Core FTSE 100 UCITS ETF GBP (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.07,,,,GBP
-IUSA,IUSA.DE,.DE,IE0031442068,iShares Core S&P 500 UCITS ETF USD (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.07,,,,USD
-XDWD,XDWD.DE,.DE,IE00BJ0KDQ92,Xtrackers MSCI World UCITS ETF 1C,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,USD
-IBC1,IB01.L,→IB01.L,IE00BGSF1X88,iShares USD Treasury Bond 0-1yr UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,USD
-SPY5,SPY5.DE,.DE,IE00B6YX5C33,State Street SPDR S&P 500 UCITS ETF USD Unhedged (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.03,,,,USD
-SPPW,SPPW.DE,.DE,IE00BFY0GT14,State Street SPDR MSCI World UCITS ETF USD Unhedged,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,USD
-EUNK,EUNK.DE,.DE,IE00B4K48X80,iShares Core MSCI Europe UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,EUR
-SGAS,SGAS.DE,.DE,IE00BFNM3G45,iShares MSCI USA Screened UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.07,,,,USD
-LYP5,LYP5.DE,.DE,LU1135865084,Amundi Core S&P 500 Swap UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.05,,,,EUR
-OM3L,OM3L.DE,.DE,IE00BHZPJ890,iShares MSCI USA ESG Enhanced CTB UCITS ETF USD (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.07,,,,USD
-QDVE,QDVE.DE,.DE,IE00B3WJKG14,iShares S&P 500 Information Technology Sector UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
-SPYL,SPYL.DE,.DE,IE000XZSV718,State Street SPDR S&P 500 UCITS ETF USD Unhedged (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.03,,,,USD
-H4ZJ,H4ZJ.DE,.DE,IE00B4X9L533,HSBC MSCI World UCITS ETF USD,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.15,,,,USD
-MWRE,MWRE.DE,.DE,IE000BI8OT95,Amundi Core MSCI World UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.12,,,,USD
-IQQY,IQQY.DE,.DE,IE00B1YZSC51,iShares Core MSCI Europe UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Optimized sampling,Long-only,0.12,,,,EUR
-GLDA,GLDA.DE,.DE,FR0013416716,Amundi Physical Gold ETC (C),ETF,Ireland,Accumulating,Physically backed,Long-only,0.12,,,,USD
-EXW1,EXW1.DE,.DE,DE0005933956,iShares EURO STOXX 50 UCITS ETF (DE),ETF,Germany,Accumulating,Full replication,Long-only,0.09,,,,EUR
-XMME,XMME.DE,.DE,IE00BTJRMP35,Xtrackers MSCI Emerging Markets UCITS ETF 1C,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.18,,,,USD
-I500,I500.DE,.DE,IE00BMTX1Y45,iShares S&P 500 Swap UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.05,,,,USD
-XD9U,XD9U.DE,.DE,IE00BJ0KDR00,Xtrackers MSCI USA UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.03,,,,USD
-XDEW,XDEW.DE,.DE,IE00BLNMYC90,Xtrackers S&P 500 Equal Weight UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
-EUN5,EUN5.DE,.DE,IE00B3F81R35,iShares Core EUR Corporate Bond UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.09,,,,EUR
-JREU,JREU.DE,.DE,IE00BF4G7076,JPMorgan US Research Enhanced Index Equity Active UCITS ETF USD (acc),ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.2,,,,USD
-EXSA,EXSA.DE,.DE,DE0002635307,iShares STOXX Europe 600 UCITS ETF (DE),ETF,Germany,Accumulating,Full replication,Long-only,0.2,,,,EUR
-EQQQ,EQQQ.DE,.DE,IE0032077012,Invesco EQQQ Nasdaq-100 UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
-D500,D500.DE,.DE,IE00BYML9W36,Invesco S&P 500 UCITS ETF Dist,ETF,Ireland,Distributing,Swap based Unfunded,Long-only,0.05,,,,USD
-SPYY,SPYY.DE,.DE,IE00B44Z5B48,State Street SPDR MSCI All Country World UCITS ETF USD Unhedged (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,USD
-EXS1,EXS1.DE,.DE,DE0005933931,iShares Core DAX® UCITS ETF (DE) EUR (Acc),ETF,Germany,Accumulating,Full replication,Long-only,0.16,,,,EUR
-DFEN,DFEN,,IE000YYE6WK5,VanEck Defense UCITS ETF A,ETF,Ireland,Accumulating,Full replication,Long-only,0.55,,,,USD
-EDM2,EDM2.DE,.DE,IE00BHZPJ239,iShares MSCI EM ESG Enhanced CTB UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,USD
-IBCF,IBCF.DE,.DE,IE00B3ZW0K18,iShares S&P 500 EUR Hedged UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,EUR
-LYYA,LYYA.DE,.DE,FR0010315770,Amundi MSCI World Swap II UCITS ETF Dist,ETF,France,Distributing,Swap based Unfunded,Long-only,0.3,,,,EUR
-VGWD,VGWD.DE,.DE,IE00B8GKDB10,Vanguard FTSE All-World High Dividend Yield UCITS ETF Distributing,ETF,Ireland,Distributing,Optimized sampling,Long-only,0.29,,,,USD
-IQQE,IQQE.DE,.DE,IE00B0M63177,iShares MSCI EM UCITS ETF (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.18,,,,USD
-IQQW,IQQW.DE,.DE,IE00B0M62Q58,iShares MSCI World UCITS ETF (Dist),ETF,Ireland,Distributing,Optimized sampling,Long-only,0.5,,,,USD
-XZMU,XZMU.DE,.DE,IE00BFMNPS42,Xtrackers MSCI USA ESG UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
-H4ZF,H4ZF.DE,.DE,IE00B5KQNG97,HSBC S&P 500 UCITS ETF USD,ETF,Ireland,Accumulating,Full replication,Long-only,0.09,,,,USD
-VDIV,VDIV.DE,.DE,NL0011683594,VanEck Morningstar Developed Markets Dividend Leaders UCITS ETF,ETF,Netherlands,Distributing,Full replication,Long-only,0.38,,,,EUR
-UETW,UETW.DE,.DE,IE00BD4TXV59,UBS Core MSCI World UCITS ETF USD acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.06,,,,USD
-XMEU,XMEU.DE,.DE,LU0274209237,Xtrackers MSCI Europe UCITS ETF 1C,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,USD
-EDMU,EDMU.DE,.DE,IE00BHZPJ908,iShares MSCI USA ESG Enhanced CTB UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.07,,,,USD
-EUNM,EUNM.DE,.DE,IE00B4L5YC18,iShares MSCI EM UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,USD
-SXRT,SXRT.DE,.DE,IE00B53L3W79,iShares Core EURO STOXX 50 UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.1,,,,EUR
+SXR8,,,IE00B5BMR087,iShares Core S&P 500 UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.07,,,,USD
+EUNL,,,IE00B4L5Y983,iShares Core MSCI World UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.2,,,,USD
+VUSA,,,IE00B3XXRP09,Vanguard S&P 500 UCITS ETF (USD) Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.07,,,,USD
+IS3N,,,IE00BKM4GZ66,iShares Core MSCI Emerging Markets IMI UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,USD
+VWCE,,,IE00BK5BQT80,Vanguard FTSE All-World UCITS ETF (USD) Accumulating,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.19,,,,USD
+PPFB,,,IE00B4ND3602,iShares Physical Gold ETC,ETF,Ireland,Accumulating,Physically backed,Long-only,0.12,,,,USD
+P500,,,IE00B3YCGJ38,Invesco S&P 500 UCITS ETF Acc,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.05,,,,USD
+VUAA,,,IE00BFMXXD54,Vanguard S&P 500 UCITS ETF (USD) Accumulating,ETF,Ireland,Accumulating,Full replication,Long-only,0.07,,,,USD
+8PSG,,,IE00B579F325,Invesco Physical Gold ETC,ETF,Ireland,Accumulating,Physically backed,Long-only,0.12,,,,USD
+IUSQ,,,IE00B6R52259,iShares MSCI ACWI UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.2,,,,USD
+4GLD,,,DE000A0S9GB0,Xetra-Gold,ETF,Germany,Accumulating,Physically backed,Long-only,0.0,,,,EUR
+XEON,,,LU0290358497,Xtrackers II EUR Overnight Rate Swap UCITS ETF 1C,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.1,,,,EUR
+VGWL,,,IE00B3RBWM25,Vanguard FTSE All-World UCITS ETF (USD) Distributing,ETF,Ireland,Distributing,Optimized sampling,Long-only,0.19,,,,USD
+SXRV,,,IE00B53SZB19,iShares Nasdaq 100 UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
+LYP6,,,LU0908500753,Amundi Core Stoxx Europe 600 UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.07,,,,EUR
+IUSZ,,,IE0005042456,iShares Core FTSE 100 UCITS ETF GBP (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.07,,,,GBP
+IUSA,,,IE0031442068,iShares Core S&P 500 UCITS ETF USD (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.07,,,,USD
+XDWD,,,IE00BJ0KDQ92,Xtrackers MSCI World UCITS ETF 1C,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,USD
+IBC1,,,IE00BGSF1X88,iShares USD Treasury Bond 0-1yr UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,USD
+SPY5,,,IE00B6YX5C33,State Street SPDR S&P 500 UCITS ETF USD Unhedged (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.03,,,,USD
+SPPW,,,IE00BFY0GT14,State Street SPDR MSCI World UCITS ETF USD Unhedged,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,USD
+EUNK,,,IE00B4K48X80,iShares Core MSCI Europe UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,EUR
+SGAS,,,IE00BFNM3G45,iShares MSCI USA Screened UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.07,,,,USD
+LYP5,,,LU1135865084,Amundi Core S&P 500 Swap UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.05,,,,EUR
+OM3L,,,IE00BHZPJ890,iShares MSCI USA ESG Enhanced CTB UCITS ETF USD (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.07,,,,USD
+QDVE,,,IE00B3WJKG14,iShares S&P 500 Information Technology Sector UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
+SPYL,,,IE000XZSV718,State Street SPDR S&P 500 UCITS ETF USD Unhedged (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.03,,,,USD
+H4ZJ,,,IE00B4X9L533,HSBC MSCI World UCITS ETF USD,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.15,,,,USD
+MWRE,,,IE000BI8OT95,Amundi Core MSCI World UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.12,,,,USD
+IQQY,,,IE00B1YZSC51,iShares Core MSCI Europe UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Optimized sampling,Long-only,0.12,,,,EUR
+GLDA,,,FR0013416716,Amundi Physical Gold ETC (C),ETF,Ireland,Accumulating,Physically backed,Long-only,0.12,,,,USD
+EXW1,,,DE0005933956,iShares EURO STOXX 50 UCITS ETF (DE),ETF,Germany,Accumulating,Full replication,Long-only,0.09,,,,EUR
+XMME,,,IE00BTJRMP35,Xtrackers MSCI Emerging Markets UCITS ETF 1C,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.18,,,,USD
+I500,,,IE00BMTX1Y45,iShares S&P 500 Swap UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.05,,,,USD
+XD9U,,,IE00BJ0KDR00,Xtrackers MSCI USA UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.03,,,,USD
+XDEW,,,IE00BLNMYC90,Xtrackers S&P 500 Equal Weight UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
+EUN5,,,IE00B3F81R35,iShares Core EUR Corporate Bond UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.09,,,,EUR
+JREU,,,IE00BF4G7076,JPMorgan US Research Enhanced Index Equity Active UCITS ETF USD (acc),ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.2,,,,USD
+EXSA,,,DE0002635307,iShares STOXX Europe 600 UCITS ETF (DE),ETF,Germany,Accumulating,Full replication,Long-only,0.2,,,,EUR
+EQQQ,,,IE0032077012,Invesco EQQQ Nasdaq-100 UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
+D500,,,IE00BYML9W36,Invesco S&P 500 UCITS ETF Dist,ETF,Ireland,Distributing,Swap based Unfunded,Long-only,0.05,,,,USD
+SPYY,,,IE00B44Z5B48,State Street SPDR MSCI All Country World UCITS ETF USD Unhedged (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,USD
+EXS1,,,DE0005933931,iShares Core DAX® UCITS ETF (DE) EUR (Acc),ETF,Germany,Accumulating,Full replication,Long-only,0.16,,,,EUR
+DFEN,,,IE000YYE6WK5,VanEck Defense UCITS ETF A,ETF,Ireland,Accumulating,Full replication,Long-only,0.55,,,,USD
+EDM2,,,IE00BHZPJ239,iShares MSCI EM ESG Enhanced CTB UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,USD
+IBCF,,,IE00B3ZW0K18,iShares S&P 500 EUR Hedged UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,EUR
+LYYA,,,FR0010315770,Amundi MSCI World Swap II UCITS ETF Dist,ETF,France,Distributing,Swap based Unfunded,Long-only,0.3,,,,EUR
+VGWD,,,IE00B8GKDB10,Vanguard FTSE All-World High Dividend Yield UCITS ETF Distributing,ETF,Ireland,Distributing,Optimized sampling,Long-only,0.29,,,,USD
+IQQE,,,IE00B0M63177,iShares MSCI EM UCITS ETF (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.18,,,,USD
+IQQW,,,IE00B0M62Q58,iShares MSCI World UCITS ETF (Dist),ETF,Ireland,Distributing,Optimized sampling,Long-only,0.5,,,,USD
+XZMU,,,IE00BFMNPS42,Xtrackers MSCI USA ESG UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
+H4ZF,,,IE00B5KQNG97,HSBC S&P 500 UCITS ETF USD,ETF,Ireland,Accumulating,Full replication,Long-only,0.09,,,,USD
+VDIV,,,NL0011683594,VanEck Morningstar Developed Markets Dividend Leaders UCITS ETF,ETF,Netherlands,Distributing,Full replication,Long-only,0.38,,,,EUR
+UETW,,,IE00BD4TXV59,UBS Core MSCI World UCITS ETF USD acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.06,,,,USD
+XMEU,,,LU0274209237,Xtrackers MSCI Europe UCITS ETF 1C,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,USD
+EDMU,,,IE00BHZPJ908,iShares MSCI USA ESG Enhanced CTB UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.07,,,,USD
+EUNM,,,IE00B4L5YC18,iShares MSCI EM UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,USD
+SXRT,,,IE00B53L3W79,iShares Core EURO STOXX 50 UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.1,,,,EUR
 VZLD,,,JE00B1VS3770,WisdomTree Physical Gold,ETF,Jersey,Accumulating,Physically backed,Long-only,0.39,,,,USD
-DBXD,DBXD.DE,.DE,LU0274211480,Xtrackers DAX UCITS ETF 1C,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.09,,,,EUR
-SXRL,SXRL.DE,.DE,IE00B3VWN393,iShares USD Treasury Bond 3-7yr UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,USD
-IUSN,IUSN.DE,.DE,IE00BF4RFH31,iShares MSCI World Small Cap UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.35,,,,USD
-SC0H,SC0H.DE,.DE,IE00B60SX170,Invesco MSCI USA UCITS ETF,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.05,,,,USD
-EUNN,EUNN.DE,.DE,IE00B4L5YX21,iShares Core MSCI Japan IMI UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,USD
-2B7K,2B7K.DE,.DE,IE00BYX2JD69,iShares MSCI World SRI UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,EUR
-IS0F,IBTA.L,→IBTA.L,IE00BYXPSP02,iShares USD Treasury Bond 1-3yr UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,USD
-XESC,XESC.DE,.DE,LU0380865021,Xtrackers EURO STOXX 50 UCITS ETF 1C,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.09,,,,EUR
-SXR7,SXR7.DE,.DE,IE00B53QG562,iShares Core MSCI EMU UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.12,,,,EUR
-XGDU,XGDU.DE,.DE,DE000A2T0VU5,Xtrackers IE Physical Gold ETC Securities,ETF,Ireland,Accumulating,Physically backed,Long-only,0.11,,,,USD
-AHYQ,AHYQ.DE,.DE,LU2572257124,Amundi Core MSCI World Swap UCITS ETF Dist,ETF,Luxembourg,Distributing,Swap based Unfunded,Long-only,0.2,,,,USD
-SC0J,SC0J.DE,.DE,IE00B60SX394,Invesco MSCI World UCITS ETF Acc,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.19,,,,USD
-CEBL,CEBL.DE,.DE,IE00B5L8K969,iShares MSCI EM Asia UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
-EMMUSC,EMMUSC.MI,.MI,LU0950674175,UBS Core MSCI EM UCITS ETF USD acc,ETF,Luxembourg,Accumulating,Optimized sampling,Long-only,0.15,,,,USD
-XAIX,XAIX,,IE00BGV5VN51,Xtrackers Artificial Intelligence & Big Data UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.35,,,,USD
-AMEW,AMEW.DE,.DE,LU1681043599,Amundi MSCI World Swap UCITS ETF EUR Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.38,,,,EUR
-LYOR,LYOR.DE,.DE,LU1190417599,Amundi Smart Overnight Return UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.1,,,,EUR
-XESX,XESX.DE,.DE,LU0274211217,Xtrackers EURO STOXX 50 UCITS ETF 1D,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.09,,,,EUR
-EUN2,EUN2.DE,.DE,IE0008471009,iShares Core EURO STOXX 50 UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.1,,,,EUR
-AYEM,AYEM.DE,.DE,IE00BFNM3P36,iShares MSCI EM IMI Screened UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,USD
-IS09,SDIA.L,→SDIA.L,IE00BYXYYP94,iShares USD Short Duration Corporate Bond UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.2,,,,USD
-VGVF,VGVF.DE,.DE,IE00BK5BQV03,Vanguard FTSE Developed World UCITS ETF Acc,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,USD
-EUNH,EUNH.DE,.DE,IE00B4WXJJ64,iShares Core Euro Government Bond UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.07,,,,EUR
-IS3S,IS3S.DE,.DE,IE00BP3QZB59,iShares Edge MSCI World Value Factor UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.25,,,,USD
-JREG,JREG.DE,.DE,IE00BF4G6Y48,JPMorgan Global Research Enhanced Index Equity (ESG) UCITS ETF USD (acc),ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.25,,,,USD
-EXUS,EXUS,,IE0006WW1TQ4,Xtrackers MSCI World ex USA UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
-LCUJ,LCUJ.DE,.DE,LU1781541252,Amundi Core MSCI Japan UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,JPY
-VUKE,VUKE.DE,.DE,IE00B810Q511,Vanguard FTSE 100 UCITS ETF (GBP) Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.09,,,,GBP
-SPP5,SPP5.DE,.DE,IE0002H3JQ66,State Street SPDR Bloomberg 1-5 Year U.S. Corporate Bond UCITS ETF USD Unhedged (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.08,,,,USD
-EUNW,EUNW.DE,.DE,IE00B66F4759,iShares EUR High Yield Corporate Bond UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.5,,,,EUR
-XMAW,XMAW.DE,.DE,IE00BGHQ0G80,Xtrackers MSCI AC World Screened UCITS ETF 1C,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.25,,,,EUR
-XZW0,XZW0.DE,.DE,IE00BZ02LR44,Xtrackers MSCI World ESG UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
-EBBU,EBBU.PA,.PA,LU3046359165,Amundi EUR Corporate Bond 1-5Y ESG UCITS ETF USD Hedged Acc,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.22,,,,USD
-DBXW,DBXW.DE,.DE,LU0274208692,Xtrackers MSCI World Swap UCITS ETF 1C,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.45,,,,USD
-A4H8,A4H8.DE,.DE,LU1437018168,Amundi Index Euro Corporate SRI UCITS ETF DR (C),ETF,Luxembourg,Accumulating,Sampling,Long-only,0.14,,,,EUR
-EUDF,EUDF.DE,.DE,IE0002Y8CX98,WisdomTree Europe Defence UCITS ETF EUR Unhedged Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.4,,,,EUR
-SLMC,SLMC.DE,.DE,IE00BFNM3D14,iShares MSCI Europe Screened UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,EUR
-LYBK,LYBK.DE,.DE,LU1829219390,Amundi Euro Stoxx Banks UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.3,,,,EUR
-IUSP,IUSP.DE,.DE,IE00B5M4WH52,iShares J.P. Morgan EM Local Government Bond UCITS ETF,ETF,Ireland,Accumulating,Sampling,Long-only,0.5,,,,USD
-D5BG,D5BG.DE,.DE,LU0478205379,Xtrackers II EUR Corporate Bond UCITS ETF 1C,ETF,Luxembourg,Accumulating,Optimized sampling,Long-only,0.09,,,,EUR
-IBCH,IBCH.DE,.DE,IE00B441G979,iShares MSCI World EUR Hedged UCITS ETF (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.55,,,,EUR
-ELFW,ELFW.DE,.DE,DE000ETFL508,Deka MSCI World UCITS ETF Distribution,ETF,Germany,Distributing,Full replication,Long-only,0.3,,,,EUR
-SPYI,SPYI,,IE00B3YLTY66,State Street SPDR MSCI All Country World Investable Market UCITS ETF USD Unhedged (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.17,,,,USD
-SNAW,SNAW.DE,.DE,IE00BFNM3J75,iShares MSCI World Screened UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.2,,,,USD
-SPY4,SPY4.DE,.DE,IE00B4YBJ215,State Street SPDR S&P 400 U.S. Mid Cap UCITS ETF USD Unhedged (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
+DBXD,,,LU0274211480,Xtrackers DAX UCITS ETF 1C,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.09,,,,EUR
+SXRL,,,IE00B3VWN393,iShares USD Treasury Bond 3-7yr UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,USD
+IUSN,,,IE00BF4RFH31,iShares MSCI World Small Cap UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.35,,,,USD
+SC0H,,,IE00B60SX170,Invesco MSCI USA UCITS ETF,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.05,,,,USD
+EUNN,,,IE00B4L5YX21,iShares Core MSCI Japan IMI UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,USD
+2B7K,,,IE00BYX2JD69,iShares MSCI World SRI UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,EUR
+IS0F,,,IE00BYXPSP02,iShares USD Treasury Bond 1-3yr UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,USD
+XESC,,,LU0380865021,Xtrackers EURO STOXX 50 UCITS ETF 1C,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.09,,,,EUR
+SXR7,,,IE00B53QG562,iShares Core MSCI EMU UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.12,,,,EUR
+XGDU,,,DE000A2T0VU5,Xtrackers IE Physical Gold ETC Securities,ETF,Ireland,Accumulating,Physically backed,Long-only,0.11,,,,USD
+AHYQ,,,LU2572257124,Amundi Core MSCI World Swap UCITS ETF Dist,ETF,Luxembourg,Distributing,Swap based Unfunded,Long-only,0.2,,,,USD
+SC0J,,,IE00B60SX394,Invesco MSCI World UCITS ETF Acc,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.19,,,,USD
+CEBL,,,IE00B5L8K969,iShares MSCI EM Asia UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
+EMMUSC,,,LU0950674175,UBS Core MSCI EM UCITS ETF USD acc,ETF,Luxembourg,Accumulating,Optimized sampling,Long-only,0.15,,,,USD
+XAIX,,,IE00BGV5VN51,Xtrackers Artificial Intelligence & Big Data UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.35,,,,USD
+AMEW,,,LU1681043599,Amundi MSCI World Swap UCITS ETF EUR Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.38,,,,EUR
+LYOR,,,LU1190417599,Amundi Smart Overnight Return UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.1,,,,EUR
+XESX,,,LU0274211217,Xtrackers EURO STOXX 50 UCITS ETF 1D,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.09,,,,EUR
+EUN2,,,IE0008471009,iShares Core EURO STOXX 50 UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.1,,,,EUR
+AYEM,,,IE00BFNM3P36,iShares MSCI EM IMI Screened UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,USD
+IS09,,,IE00BYXYYP94,iShares USD Short Duration Corporate Bond UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.2,,,,USD
+VGVF,,,IE00BK5BQV03,Vanguard FTSE Developed World UCITS ETF Acc,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,USD
+EUNH,,,IE00B4WXJJ64,iShares Core Euro Government Bond UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.07,,,,EUR
+IS3S,,,IE00BP3QZB59,iShares Edge MSCI World Value Factor UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.25,,,,USD
+JREG,,,IE00BF4G6Y48,JPMorgan Global Research Enhanced Index Equity (ESG) UCITS ETF USD (acc),ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.25,,,,USD
+EXUS,,,IE0006WW1TQ4,Xtrackers MSCI World ex USA UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
+LCUJ,,,LU1781541252,Amundi Core MSCI Japan UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,JPY
+VUKE,,,IE00B810Q511,Vanguard FTSE 100 UCITS ETF (GBP) Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.09,,,,GBP
+SPP5,,,IE0002H3JQ66,State Street SPDR Bloomberg 1-5 Year U.S. Corporate Bond UCITS ETF USD Unhedged (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.08,,,,USD
+EUNW,,,IE00B66F4759,iShares EUR High Yield Corporate Bond UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.5,,,,EUR
+XMAW,,,IE00BGHQ0G80,Xtrackers MSCI AC World Screened UCITS ETF 1C,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.25,,,,EUR
+XZW0,,,IE00BZ02LR44,Xtrackers MSCI World ESG UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
+EBBU,,,LU3046359165,Amundi EUR Corporate Bond 1-5Y ESG UCITS ETF USD Hedged Acc,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.22,,,,USD
+DBXW,,,LU0274208692,Xtrackers MSCI World Swap UCITS ETF 1C,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.45,,,,USD
+A4H8,,,LU1437018168,Amundi Index Euro Corporate SRI UCITS ETF DR (C),ETF,Luxembourg,Accumulating,Sampling,Long-only,0.14,,,,EUR
+EUDF,,,IE0002Y8CX98,WisdomTree Europe Defence UCITS ETF EUR Unhedged Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.4,,,,EUR
+SLMC,,,IE00BFNM3D14,iShares MSCI Europe Screened UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,EUR
+LYBK,,,LU1829219390,Amundi Euro Stoxx Banks UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.3,,,,EUR
+IUSP,,,IE00B5M4WH52,iShares J.P. Morgan EM Local Government Bond UCITS ETF,ETF,Ireland,Accumulating,Sampling,Long-only,0.5,,,,USD
+D5BG,,,LU0478205379,Xtrackers II EUR Corporate Bond UCITS ETF 1C,ETF,Luxembourg,Accumulating,Optimized sampling,Long-only,0.09,,,,EUR
+IBCH,,,IE00B441G979,iShares MSCI World EUR Hedged UCITS ETF (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.55,,,,EUR
+ELFW,,,DE000ETFL508,Deka MSCI World UCITS ETF Distribution,ETF,Germany,Distributing,Full replication,Long-only,0.3,,,,EUR
+SPYI,,,IE00B3YLTY66,State Street SPDR MSCI All Country World Investable Market UCITS ETF USD Unhedged (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.17,,,,USD
+SNAW,,,IE00BFNM3J75,iShares MSCI World Screened UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.2,,,,USD
+SPY4,,,IE00B4YBJ215,State Street SPDR S&P 400 U.S. Mid Cap UCITS ETF USD Unhedged (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
 GZUR,,,JE00B588CD74,WisdomTree Physical Swiss Gold,ETF,Jersey,Accumulating,Physically backed,Long-only,0.15,,,,USD
-OM3F,OM3F.DE,.DE,IE00BYZTVT56,iShares EUR Corporate Bond ESG SRI UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.14,,,,EUR
-EXXT,EXXT.DE,.DE,DE000A0F5UF5,iShares Nasdaq 100 UCITS ETF (DE),ETF,Germany,Accumulating,Full replication,Long-only,0.3,,,,USD
-EMNU,EMNU.DE,.DE,IE00BHZPJ676,iShares MSCI Europe ESG Enhanced CTB UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Optimized sampling,Long-only,0.12,,,,EUR
-DBXJ,DBXJ.DE,.DE,LU0274209740,Xtrackers MSCI Japan UCITS ETF 1C,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,USD
-XSXD,XSXD.DE,.DE,LU2009147757,Xtrackers S&P 500 Swap UCITS ETF 1D,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.07,,,,USD
-QDV5,QDV5.DE,.DE,IE00BZCQB185,iShares MSCI India UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.65,,,,USD
-4BRZ,4BRZ.DE,.DE,DE000A0Q4R85,iShares MSCI Brazil UCITS ETF (DE) USD (Acc),ETF,Germany,Accumulating,Full replication,Long-only,0.31,,,,USD
-VGEU,VGEU.DE,.DE,IE00B945VV12,Vanguard FTSE Developed Europe UCITS ETF Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.1,,,,EUR
-LYMS,LYMS.DE,.DE,LU1829221024,Amundi Core Nasdaq-100 Swap UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.22,,,,EUR
-SPPY,SPPY.DE,.DE,IE00BH4GPZ28,State Street SPDR S&P 500 Leaders UCITS ETF USD Unhedged (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.03,,,,USD
-AE5A,AE5A.DE,.DE,LU2573966905,Amundi Core MSCI Emerging Markets Swap UCITS ETF Dist,ETF,Luxembourg,Distributing,Swap based Unfunded,Long-only,0.14,,,,USD
-LYSX,LYSX.DE,.DE,FR0007054358,Amundi EURO STOXX 50 II UCITS ETF Acc,ETF,France,Accumulating,Full replication,Long-only,0.2,,,,EUR
-ZPRR,ZPRR.DE,.DE,IE00BJ38QD84,State Street SPDR Russell 2000 U.S. Small Cap UCITS ETF USD,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.3,,,,USD
-XDWL,XDWL.DE,.DE,IE00BK1PV551,Xtrackers MSCI World UCITS ETF 1D,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,USD
-ISPA,ISPA.DE,.DE,DE000A0F5UH1,iShares STOXX Global Select Dividend 100 UCITS ETF (DE),ETF,Germany,Distributing,Full replication,Long-only,0.46,,,,EUR
-84X0,84X0.DE,.DE,IE00BMG6Z448,iShares MSCI EM ex-China UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,USD
-VVSM,VVSM.DE,.DE,IE00BMC38736,VanEck Semiconductor UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.35,,,,USD
-XDWT,XDWT.DE,.DE,IE00BM67HT60,Xtrackers MSCI World Information Technology UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.25,,,,USD
-SXRM,SXRM.DE,.DE,IE00B3VWN518,iShares USD Treasury Bond 7-10yr UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,USD
-LEMA,LEMA.DE,.DE,LU2573967036,Amundi Core MSCI Emerging Markets Swap UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.14,,,,USD
-O4J0,O4J0.DE,.DE,IE000MLMNYS0,iShares S&P 500 Equal Weight UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
-CEU2,CEU2.DE,.DE,LU1437015735,Amundi Core MSCI Europe UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,EUR
-EWG2,EWG2.SG,→EWG2.SG,DE000EWG2LD7,EUWAX Gold II,ETF,Germany,Accumulating,Physically backed,Long-only,0.0,,,,EUR
-IS3Q,IS3Q.DE,.DE,IE00BP3QZ601,iShares Edge MSCI World Quality Factor UCITS ETF (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.25,,,,USD
-EMXC,EMXC,,LU2009202107,Amundi MSCI Emerging Ex China UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.15,,,,USD
-EUNT,EUNT.DE,.DE,IE00B4L60045,iShares EUR Corporate Bond 1-5yr UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.2,,,,EUR
-XMUS,XMUS.DE,.DE,LU0274210672,Xtrackers MSCI USA Swap UCITS ETF 1C,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.15,,,,USD
-EMUAA,EMUAA.MI,.MI,LU0950668870,UBS Core MSCI EMU UCITS ETF EUR acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,EUR
-IS03,IS03.VI,.VI,IE00BYXYYM63,iShares US Aggregate Bond UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.25,,,,USD
-CMOD,CMOD.L,.L,IE00BD6FTQ80,Invesco Bloomberg Commodity UCITS ETF Acc,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.19,,,,USD
-D5BM,D5BM.DE,.DE,LU0490618542,Xtrackers S&P 500 Swap UCITS ETF 1C,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.15,,,,USD
-GG9B,OGG9.L,→OGG9.L,GB00B00FHZ82,Gold Bullion Securities,ETF,Jersey,Accumulating,Physically backed,Long-only,0.4,,,,USD
-XDEV,XDEV.DE,.DE,IE00BL25JM42,Xtrackers MSCI World Value UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.25,,,,USD
-IS01,LQDA.L,→LQDA.L,IE00BYXYYJ35,iShares USD Corporate Bond UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.2,,,,USD
-EDMW,EDMW.DE,.DE,IE00BHZPJ569,iShares MSCI World ESG Enhanced CTB UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.2,,,,USD
-JPNA,JPNA.L,.L,LU0950671825,UBS Core MSCI Japan UCITS ETF JPY acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,JPY
-IS3M,IS3M.DE,.DE,IE00BCRY6557,iShares EUR Ultrashort Bond UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.09,,,,EUR
-UIMM,UIMM.DE,.DE,LU0629459743,UBS MSCI World Socially Responsible UCITS ETF USD dis,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.22,,,,USD
-N810,MUSD.AS,→MUSD.AS,IE0002W8NB38,iShares MSCI USA Swap UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.05,,,,USD
-IS0E,IS0E.DE,.DE,IE00B6R52036,iShares Gold Producers UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.55,,,,USD
-XWD1,XWD1.DE,.DE,LU2263803533,Xtrackers MSCI World Swap UCITS ETF 1D,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.19,,,,USD
-2B7M,IGLT.L,→IGLT.L,IE00B1FZSB30,iShares Core UK Gilts UCITS ETF,ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,GBP
-AMEM,AMEM.DE,.DE,LU1681045370,Amundi MSCI Emerging Markets Swap UCITS ETF EUR Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.2,,,,EUR
-6TVM,6TVM.DE,.DE,LU0496786657,Amundi Core S&P 500 Swap UCITS ETF USD Dist,ETF,Luxembourg,Distributing,Swap based Unfunded,Long-only,0.05,,,,USD
-10AF,AEME.PA,→AEME.PA,LU1437017350,Amundi Core MSCI Emerging Markets UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.18,,,,EUR
-EXV1,EXV1.DE,.DE,DE000A0F5UJ7,iShares STOXX Europe 600 Banks UCITS ETF (DE),ETF,Germany,Accumulating,Full replication,Long-only,0.47,,,,EUR
-XSX6,XSX6.DE,.DE,LU0328475792,Xtrackers STOXX Europe 600 UCITS ETF 1C,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.2,,,,EUR
-VGVE,VGVE.DE,.DE,IE00BKX55T58,Vanguard FTSE Developed World UCITS ETF Distributing,ETF,Ireland,Distributing,Optimized sampling,Long-only,0.12,,,,USD
-AYE2,AYE2.DE,.DE,IE00BJK55C48,iShares EUR High Yield Corporate Bond ESG SRI UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.25,,,,EUR
-IS3R,IS3R.DE,.DE,IE00BP3QZ825,iShares Edge MSCI World Momentum Factor UCITS ETF (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.25,,,,USD
-V50A,V50A.DE,.DE,LU1681047236,Amundi Core EURO STOXX 50 UCITS ETF EUR Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.09,,,,EUR
-SXRW,SXRW.DE,.DE,IE00B53HP851,iShares Core FTSE 100 UCITS ETF GBP (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.07,,,,GBP
-WEBG,WEBG.DE,.DE,IE0009HF1MK9,Amundi Prime All Country World UCITS ETF Dist,ETF,Ireland,Distributing,Full replication,Long-only,0.07,,,,USD
-IUS7,IUS7.DE,.DE,IE00B2NPKV68,iShares J.P. Morgan USD Emerging Markets Bond UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.45,,,,USD
-QDVJ,AGGU.L,→AGGU.L,IE00BZ043R46,iShares Core Global Aggregate Bond UCITS ETF USD Hedged (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.1,,,,USD
-IUSG,IUSG,,IE00BF11F565,iShares Core EUR Corporate Bond UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.09,,,,EUR
-G2X,G2X.DE,.DE,IE00BQQP9F84,VanEck Gold Miners UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.53,,,,USD
-ACWIA,ACWIA.MI,.MI,IE00BYM11H29,UBS MSCI ACWI SF UCITS ETF USD acc,ETF,Ireland,Accumulating,Swap based,Long-only,0.21,,,,USD
-SXR4,SXR4.DE,.DE,IE00B52SFT06,iShares MSCI USA UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.03,,,,USD
-UET5,UET5.DE,.DE,LU1971906802,UBS EURO STOXX 50 ESG UCITS ETF EUR dis,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.1,,,,EUR
-VGEA,VGEA.DE,.DE,IE00BH04GL39,Vanguard EUR Eurozone Government Bond UCITS ETF Accumulating,ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,EUR
-2B76,2B76.DE,.DE,IE00BYZK4552,iShares Automation & Robotics UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.4,,,,USD
-H410,H410.DE,.DE,IE00B5SSQT16,HSBC MSCI Emerging Markets UCITS ETF USD,ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
-EEUX,EEUX.DE,.DE,LU1291099718,BNP Paribas Easy MSCI Europe Min TE UCITS ETF,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.15,,,,EUR
-ESAP,ESAP.DE,.DE,FR0011550177,BNP Paribas Easy S&P 500 UCITS ETF USD (Acc),ETF,France,Accumulating,Swap based Unfunded,Long-only,0.14,,,,USD
-LYY,CAC.PA,→CAC.PA,FR0007052782,Amundi CAC 40 UCITS ETF Dist,ETF,France,Distributing,Full replication,Long-only,0.25,,,,EUR
-F500,F500.DE,.DE,IE000KXCEXR3,Amundi S&P 500 Screened UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.12,,,,EUR
-PJSB,MINT.L,→MINT.L,IE00B67B7N93,PIMCO US Dollar Short Maturity UCITS ETF Dist,ETF,Ireland,Distributing,Optimized sampling,"Long-only, Active",0.35,,,,USD
-SXR1,SXR1.DE,.DE,IE00B52MJY50,iShares Core MSCI Pacific ex Japan UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
-IBCD,IBCD.DE,.DE,IE0032895942,iShares USD Corporate Bond UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.2,,,,USD
-CB3G,CB3G.DE,.DE,LU1681046261,Amundi Euro Government tilted Green Bond UCITS ETF Acc,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.14,,,,EUR
-SPYD,SPYD,,IE00B6YX5D40,State Street SPDR S&P U.S. Dividend Aristocrats UCITS ETF USD Unhedged (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.35,,,,USD
-VERX,VERX,,IE00BKX55S42,Vanguard FTSE Developed Europe ex UK UCITS ETF (EUR) Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.1,,,,EUR
-XXSC,XXSC.DE,.DE,LU0322253906,Xtrackers MSCI Europe Small Cap UCITS ETF 1C,ETF,Luxembourg,Accumulating,Optimized sampling,Long-only,0.3,,,,USD
-ICGA,ICGA.DE,.DE,IE00BJ5JPG56,iShares MSCI China UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.28,,,,USD
-QDVS,QDVS.DE,.DE,IE00BYVJRP78,iShares MSCI EM SRI UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.25,,,,USD
-XZMJ,XZMJ.DE,.DE,IE00BG36TC12,Xtrackers MSCI Japan ESG UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
-VECP,VECP.DE,.DE,IE00BZ163G84,Vanguard EUR Corporate Bond UCITS ETF (EUR) Distributing,ETF,Ireland,Distributing,Sampling,Long-only,0.07,,,,EUR
-EQQB,EQQB.DE,.DE,IE00BFZXGZ54,Invesco EQQQ Nasdaq-100 UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
-ECR3,ECR3.DE,.DE,LU2037748774,Amundi Index Euro Corporate SRI 0-3 Y UCITS ETF DR (C),ETF,Luxembourg,Accumulating,Sampling,Long-only,0.12,,,,EUR
-FYER,FYER.DE,.DE,IE00BLRPN388,Fidelity Emerging Markets Equity Research Enhanced UCITS ETF ACC-USD,ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.3,,,,USD
-L8I3,L8I3.DE,.DE,FR0010510800,Amundi EUR Overnight Return UCITS ETF Acc,ETF,France,Accumulating,Swap based Unfunded,Long-only,0.1,,,,EUR
-QDV4,FLOA.L,→FLOA.L,IE00BDFGJ627,iShares USD Floating Rate Bond UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.1,,,,USD
-ESEE,ESEE.DE,.DE,FR0011550185,BNP Paribas Easy S&P 500 UCITS ETF EUR,ETF,France,Accumulating,Swap based Unfunded,Long-only,0.14,,,,EUR
-EDM4,EDM4.DE,.DE,IE00BHZPJ015,iShares MSCI EMU ESG Enhanced CTB UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,EUR
-VUKG,VUKG.DE,.DE,IE00BFMXYP42,Vanguard FTSE 100 UCITS ETF (GBP) Accumulating,ETF,Ireland,Accumulating,Full replication,Long-only,0.09,,,,GBP
-IUSK,IUSK.DE,.DE,IE00B52VJ196,iShares MSCI Europe SRI UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,EUR
-XDWH,XDWH.DE,.DE,IE00BM67HK77,Xtrackers MSCI World Health Care UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.25,,,,USD
-VFEM,VFEM.DE,.DE,IE00B3VVMM84,Vanguard FTSE Emerging Markets UCITS ETF (USD) Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.17,,,,USD
-QDVI,QDVI.DE,.DE,IE00BD1F4M44,iShares Edge MSCI USA Value Factor UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
-JREE,JREE.DE,.DE,IE00BF4G7183,JPMorgan Europe Research Enhanced Index Equity (ESG) UCITS ETF EUR (acc),ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.23,,,,EUR
-IUSM,IUSM.DE,.DE,IE00B1FZS798,iShares USD Treasury Bond 7-10yr UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.07,,,,USD
-WEBH,WEBH.DE,.DE,IE000FSN19U2,Amundi Core MSCI USA UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.03,,,,USD
-ASWC,ASWC.DE,.DE,IE000OJ5TQP4,HANetf Future of Defence UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.49,,,,USD
-FLXK,FLXK.DE,.DE,IE00BHZRR030,Franklin FTSE Korea UCITS ETF ,ETF,Ireland,Accumulating,Full replication,Long-only,0.09,,,,USD
-EXSI,EXSI.DE,.DE,DE000A0D8Q07,iShares EURO STOXX UCITS ETF (DE),ETF,Germany,Accumulating,Full replication,Long-only,0.2,,,,EUR
-LYPS,LYPS.DE,.DE,LU0496786574,Amundi Core S&P 500 Swap UCITS ETF EUR Dist,ETF,Luxembourg,Distributing,Swap based Unfunded,Long-only,0.05,,,,EUR
-10AP,500U.L,→500U.L,LU1681049018,Amundi S&P 500 Swap UCITS ETF USD Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.15,,,,USD
-ESGU,ESGU,,IE00BJQRDM08,Invesco MSCI USA Universal Screened UCITS ETF Acc,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.09,,,,USD
-VUCE,VUCE.DE,.DE,IE00BGYWFK87,Vanguard USD Corporate Bond UCITS ETF Accumulating,ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,USD
-CSY1,CSY1.DE,.DE,IE000OULL4R4,UBS MSCI USA NSL UCITS ETF USD acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.09,,,,USD
-DBXP,DBXP.DE,.DE,LU0290356871,Xtrackers Eurozone Government Bond 1-3 UCITS ETF 1C,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.1,,,,EUR
-PPFD,ISLN.L,→ISLN.L,IE00B4NCWG09,iShares Physical Silver ETC,ETF,Ireland,Accumulating,Physically backed,Long-only,0.2,,,,USD
-5ESG,5ESG.DE,.DE,IE00BKS7L097,Invesco S&P 500 Scored & Screened UCITS ETF Acc,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.09,,,,USD
-WEB2,WEB2.DE,.DE,IE0006IP4XZ8,Amundi MSCI USA ESG Broad Transition UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.07,,,,EUR
-XAMB,XAMB.DE,.DE,IE000Y77LGG9,Amundi MSCI World SRI Climate Paris Aligned UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,EUR
-VZLC,1673.T,→1673.T,JE00B1VS3333,WisdomTree Physical Silver,ETF,Jersey,Accumulating,Physically backed,Long-only,0.49,,,,USD
-IQQH,IQQH.DE,.DE,IE00B1XNHC34,iShares Global Clean Energy Transition UCITS ETF USD (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.65,,,,USD
-VECA,VECA.DE,.DE,IE00BGYWT403,Vanguard EUR Corporate Bond UCITS ETF Accumulating,ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,EUR
-ERNX,ERNX.DE,.DE,IE000RHYOR04,iShares EUR Ultrashort Bond UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.09,,,,EUR
-UC64,UC64.L,.L,LU0950670850,UBS MSCI United Kingdom UCITS ETF GBP acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.2,,,,GBP
-IQQ0,IQQ0.DE,.DE,IE00B8FHGS14,iShares Edge MSCI World Minimum Volatility UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.3,,,,USD
-IXUA,IXUA.DE,.DE,IE000R4ZNTN3,iShares MSCI World ex-USA UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
-IMBA,IMBA.L,.L,IE00BYXYYN70,iShares US Mortgage Backed Securities UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.28,,,,USD
-E500,E500.DE,.DE,IE00BRKWGL70,Invesco S&P 500 EUR Hedged UCITS ETF,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.05,,,,EUR
-VNRT,VNRT.DE,.DE,IE00BKX55R35,Vanguard FTSE North America UCITS ETF (USD) Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.08,,,,USD
-GBSP,GBSP.L,.L,JE00B7VG2M16,WisdomTree Physical Gold - GBP Daily Hedged,ETF,Jersey,Accumulating,Physically backed,Long-only,0.12,,,,GBP
-FWIA,FWIA.DE,.DE,IE000716YHJ7,Invesco FTSE All-World UCITS ETF Acc,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.15,,,,USD
-XUSW,XUSW.DE,.DE,LU2581375073,Xtrackers MSCI USA Swap UCITS ETF 1D,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.07,,,,USD
-XAD5,XAD5.DE,.DE,DE000A1E0HR8,Xtrackers Physical Gold ETC (EUR),ETF,Jersey,Accumulating,Physically backed,Long-only,0.25,,,,USD
-LBNK,LBNK.DE,.DE,LU1834983477,Amundi STOXX Europe 600 Banks UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.3,,,,EUR
-JEQP,JEQP.DE,.DE,IE000U9J8HX9,JPMorgan Nasdaq Equity Premium Income Active UCITS ETF USD (Dist),ETF,Ireland,Distributing,Full replication,"Long-only, Active",0.35,,,,USD
-QDVR,QDVR.DE,.DE,IE00BYVJRR92,iShares MSCI USA SRI UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
-ZPAB,ZPAB.DE,.DE,LU2195226068,Amundi S&P Eurozone Climate Paris Aligned UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.2,,,,EUR
+OM3F,,,IE00BYZTVT56,iShares EUR Corporate Bond ESG SRI UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.14,,,,EUR
+EXXT,,,DE000A0F5UF5,iShares Nasdaq 100 UCITS ETF (DE),ETF,Germany,Accumulating,Full replication,Long-only,0.3,,,,USD
+EMNU,,,IE00BHZPJ676,iShares MSCI Europe ESG Enhanced CTB UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Optimized sampling,Long-only,0.12,,,,EUR
+DBXJ,,,LU0274209740,Xtrackers MSCI Japan UCITS ETF 1C,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,USD
+XSXD,,,LU2009147757,Xtrackers S&P 500 Swap UCITS ETF 1D,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.07,,,,USD
+QDV5,,,IE00BZCQB185,iShares MSCI India UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.65,,,,USD
+4BRZ,,,DE000A0Q4R85,iShares MSCI Brazil UCITS ETF (DE) USD (Acc),ETF,Germany,Accumulating,Full replication,Long-only,0.31,,,,USD
+VGEU,,,IE00B945VV12,Vanguard FTSE Developed Europe UCITS ETF Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.1,,,,EUR
+LYMS,,,LU1829221024,Amundi Core Nasdaq-100 Swap UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.22,,,,EUR
+SPPY,,,IE00BH4GPZ28,State Street SPDR S&P 500 Leaders UCITS ETF USD Unhedged (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.03,,,,USD
+AE5A,,,LU2573966905,Amundi Core MSCI Emerging Markets Swap UCITS ETF Dist,ETF,Luxembourg,Distributing,Swap based Unfunded,Long-only,0.14,,,,USD
+LYSX,,,FR0007054358,Amundi EURO STOXX 50 II UCITS ETF Acc,ETF,France,Accumulating,Full replication,Long-only,0.2,,,,EUR
+ZPRR,,,IE00BJ38QD84,State Street SPDR Russell 2000 U.S. Small Cap UCITS ETF USD,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.3,,,,USD
+XDWL,,,IE00BK1PV551,Xtrackers MSCI World UCITS ETF 1D,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,USD
+ISPA,,,DE000A0F5UH1,iShares STOXX Global Select Dividend 100 UCITS ETF (DE),ETF,Germany,Distributing,Full replication,Long-only,0.46,,,,EUR
+84X0,,,IE00BMG6Z448,iShares MSCI EM ex-China UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,USD
+VVSM,,,IE00BMC38736,VanEck Semiconductor UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.35,,,,USD
+XDWT,,,IE00BM67HT60,Xtrackers MSCI World Information Technology UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.25,,,,USD
+SXRM,,,IE00B3VWN518,iShares USD Treasury Bond 7-10yr UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,USD
+LEMA,,,LU2573967036,Amundi Core MSCI Emerging Markets Swap UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.14,,,,USD
+O4J0,,,IE000MLMNYS0,iShares S&P 500 Equal Weight UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
+CEU2,,,LU1437015735,Amundi Core MSCI Europe UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,EUR
+EWG2,,,DE000EWG2LD7,EUWAX Gold II,ETF,Germany,Accumulating,Physically backed,Long-only,0.0,,,,EUR
+IS3Q,,,IE00BP3QZ601,iShares Edge MSCI World Quality Factor UCITS ETF (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.25,,,,USD
+EMXC,,,LU2009202107,Amundi MSCI Emerging Ex China UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.15,,,,USD
+EUNT,,,IE00B4L60045,iShares EUR Corporate Bond 1-5yr UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.2,,,,EUR
+XMUS,,,LU0274210672,Xtrackers MSCI USA Swap UCITS ETF 1C,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.15,,,,USD
+EMUAA,,,LU0950668870,UBS Core MSCI EMU UCITS ETF EUR acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,EUR
+IS03,,,IE00BYXYYM63,iShares US Aggregate Bond UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.25,,,,USD
+CMOD,,,IE00BD6FTQ80,Invesco Bloomberg Commodity UCITS ETF Acc,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.19,,,,USD
+D5BM,,,LU0490618542,Xtrackers S&P 500 Swap UCITS ETF 1C,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.15,,,,USD
+GG9B,,,GB00B00FHZ82,Gold Bullion Securities,ETF,Jersey,Accumulating,Physically backed,Long-only,0.4,,,,USD
+XDEV,,,IE00BL25JM42,Xtrackers MSCI World Value UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.25,,,,USD
+IS01,,,IE00BYXYYJ35,iShares USD Corporate Bond UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.2,,,,USD
+EDMW,,,IE00BHZPJ569,iShares MSCI World ESG Enhanced CTB UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.2,,,,USD
+JPNA,,,LU0950671825,UBS Core MSCI Japan UCITS ETF JPY acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,JPY
+IS3M,,,IE00BCRY6557,iShares EUR Ultrashort Bond UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.09,,,,EUR
+UIMM,,,LU0629459743,UBS MSCI World Socially Responsible UCITS ETF USD dis,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.22,,,,USD
+N810,,,IE0002W8NB38,iShares MSCI USA Swap UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.05,,,,USD
+IS0E,,,IE00B6R52036,iShares Gold Producers UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.55,,,,USD
+XWD1,,,LU2263803533,Xtrackers MSCI World Swap UCITS ETF 1D,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.19,,,,USD
+2B7M,,,IE00B1FZSB30,iShares Core UK Gilts UCITS ETF,ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,GBP
+AMEM,,,LU1681045370,Amundi MSCI Emerging Markets Swap UCITS ETF EUR Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.2,,,,EUR
+6TVM,,,LU0496786657,Amundi Core S&P 500 Swap UCITS ETF USD Dist,ETF,Luxembourg,Distributing,Swap based Unfunded,Long-only,0.05,,,,USD
+10AF,,,LU1437017350,Amundi Core MSCI Emerging Markets UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.18,,,,EUR
+EXV1,,,DE000A0F5UJ7,iShares STOXX Europe 600 Banks UCITS ETF (DE),ETF,Germany,Accumulating,Full replication,Long-only,0.47,,,,EUR
+XSX6,,,LU0328475792,Xtrackers STOXX Europe 600 UCITS ETF 1C,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.2,,,,EUR
+VGVE,,,IE00BKX55T58,Vanguard FTSE Developed World UCITS ETF Distributing,ETF,Ireland,Distributing,Optimized sampling,Long-only,0.12,,,,USD
+AYE2,,,IE00BJK55C48,iShares EUR High Yield Corporate Bond ESG SRI UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.25,,,,EUR
+IS3R,,,IE00BP3QZ825,iShares Edge MSCI World Momentum Factor UCITS ETF (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.25,,,,USD
+V50A,,,LU1681047236,Amundi Core EURO STOXX 50 UCITS ETF EUR Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.09,,,,EUR
+SXRW,,,IE00B53HP851,iShares Core FTSE 100 UCITS ETF GBP (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.07,,,,GBP
+WEBG,,,IE0009HF1MK9,Amundi Prime All Country World UCITS ETF Dist,ETF,Ireland,Distributing,Full replication,Long-only,0.07,,,,USD
+IUS7,IEMB.L,→IEMB.L,IE00B2NPKV68,iShares J.P. Morgan USD Emerging Markets Bond UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.45,,,,USD
+QDVJ,,,IE00BZ043R46,iShares Core Global Aggregate Bond UCITS ETF USD Hedged (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.1,,,,USD
+IUSG,,,IE00BF11F565,iShares Core EUR Corporate Bond UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.09,,,,EUR
+G2X,,,IE00BQQP9F84,VanEck Gold Miners UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.53,,,,USD
+ACWIA,,,IE00BYM11H29,UBS MSCI ACWI SF UCITS ETF USD acc,ETF,Ireland,Accumulating,Swap based,Long-only,0.21,,,,USD
+SXR4,,,IE00B52SFT06,iShares MSCI USA UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.03,,,,USD
+UET5,,,LU1971906802,UBS EURO STOXX 50 ESG UCITS ETF EUR dis,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.1,,,,EUR
+VGEA,,,IE00BH04GL39,Vanguard EUR Eurozone Government Bond UCITS ETF Accumulating,ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,EUR
+2B76,,,IE00BYZK4552,iShares Automation & Robotics UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.4,,,,USD
+H410,,,IE00B5SSQT16,HSBC MSCI Emerging Markets UCITS ETF USD,ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
+EEUX,,,LU1291099718,BNP Paribas Easy MSCI Europe Min TE UCITS ETF,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.15,,,,EUR
+ESAP,,,FR0011550177,BNP Paribas Easy S&P 500 UCITS ETF USD (Acc),ETF,France,Accumulating,Swap based Unfunded,Long-only,0.14,,,,USD
+LYY,,,FR0007052782,Amundi CAC 40 UCITS ETF Dist,ETF,France,Distributing,Full replication,Long-only,0.25,,,,EUR
+F500,,,IE000KXCEXR3,Amundi S&P 500 Screened UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.12,,,,EUR
+PJSB,,,IE00B67B7N93,PIMCO US Dollar Short Maturity UCITS ETF Dist,ETF,Ireland,Distributing,Optimized sampling,"Long-only, Active",0.35,,,,USD
+SXR1,,,IE00B52MJY50,iShares Core MSCI Pacific ex Japan UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
+IBCD,,,IE0032895942,iShares USD Corporate Bond UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.2,,,,USD
+CB3G,,,LU1681046261,Amundi Euro Government tilted Green Bond UCITS ETF Acc,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.14,,,,EUR
+SPYD,,,IE00B6YX5D40,State Street SPDR S&P U.S. Dividend Aristocrats UCITS ETF USD Unhedged (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.35,,,,USD
+VERX,,,IE00BKX55S42,Vanguard FTSE Developed Europe ex UK UCITS ETF (EUR) Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.1,,,,EUR
+XXSC,,,LU0322253906,Xtrackers MSCI Europe Small Cap UCITS ETF 1C,ETF,Luxembourg,Accumulating,Optimized sampling,Long-only,0.3,,,,USD
+ICGA,,,IE00BJ5JPG56,iShares MSCI China UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.28,,,,USD
+QDVS,,,IE00BYVJRP78,iShares MSCI EM SRI UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.25,,,,USD
+XZMJ,,,IE00BG36TC12,Xtrackers MSCI Japan ESG UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
+VECP,,,IE00BZ163G84,Vanguard EUR Corporate Bond UCITS ETF (EUR) Distributing,ETF,Ireland,Distributing,Sampling,Long-only,0.07,,,,EUR
+EQQB,,,IE00BFZXGZ54,Invesco EQQQ Nasdaq-100 UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
+ECR3,,,LU2037748774,Amundi Index Euro Corporate SRI 0-3 Y UCITS ETF DR (C),ETF,Luxembourg,Accumulating,Sampling,Long-only,0.12,,,,EUR
+FYER,,,IE00BLRPN388,Fidelity Emerging Markets Equity Research Enhanced UCITS ETF ACC-USD,ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.3,,,,USD
+L8I3,,,FR0010510800,Amundi EUR Overnight Return UCITS ETF Acc,ETF,France,Accumulating,Swap based Unfunded,Long-only,0.1,,,,EUR
+QDV4,,,IE00BDFGJ627,iShares USD Floating Rate Bond UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.1,,,,USD
+ESEE,,,FR0011550185,BNP Paribas Easy S&P 500 UCITS ETF EUR,ETF,France,Accumulating,Swap based Unfunded,Long-only,0.14,,,,EUR
+EDM4,,,IE00BHZPJ015,iShares MSCI EMU ESG Enhanced CTB UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,EUR
+VUKG,,,IE00BFMXYP42,Vanguard FTSE 100 UCITS ETF (GBP) Accumulating,ETF,Ireland,Accumulating,Full replication,Long-only,0.09,,,,GBP
+IUSK,,,IE00B52VJ196,iShares MSCI Europe SRI UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,EUR
+XDWH,,,IE00BM67HK77,Xtrackers MSCI World Health Care UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.25,,,,USD
+VFEM,,,IE00B3VVMM84,Vanguard FTSE Emerging Markets UCITS ETF (USD) Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.17,,,,USD
+QDVI,,,IE00BD1F4M44,iShares Edge MSCI USA Value Factor UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
+JREE,,,IE00BF4G7183,JPMorgan Europe Research Enhanced Index Equity (ESG) UCITS ETF EUR (acc),ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.23,,,,EUR
+IUSM,,,IE00B1FZS798,iShares USD Treasury Bond 7-10yr UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.07,,,,USD
+WEBH,,,IE000FSN19U2,Amundi Core MSCI USA UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.03,,,,USD
+ASWC,,,IE000OJ5TQP4,HANetf Future of Defence UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.49,,,,USD
+FLXK,,,IE00BHZRR030,Franklin FTSE Korea UCITS ETF ,ETF,Ireland,Accumulating,Full replication,Long-only,0.09,,,,USD
+EXSI,,,DE000A0D8Q07,iShares EURO STOXX UCITS ETF (DE),ETF,Germany,Accumulating,Full replication,Long-only,0.2,,,,EUR
+LYPS,,,LU0496786574,Amundi Core S&P 500 Swap UCITS ETF EUR Dist,ETF,Luxembourg,Distributing,Swap based Unfunded,Long-only,0.05,,,,EUR
+10AP,,,LU1681049018,Amundi S&P 500 Swap UCITS ETF USD Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.15,,,,USD
+ESGU,,,IE00BJQRDM08,Invesco MSCI USA Universal Screened UCITS ETF Acc,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.09,,,,USD
+VUCE,,,IE00BGYWFK87,Vanguard USD Corporate Bond UCITS ETF Accumulating,ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,USD
+CSY1,,,IE000OULL4R4,UBS MSCI USA NSL UCITS ETF USD acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.09,,,,USD
+DBXP,,,LU0290356871,Xtrackers Eurozone Government Bond 1-3 UCITS ETF 1C,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.1,,,,EUR
+PPFD,,,IE00B4NCWG09,iShares Physical Silver ETC,ETF,Ireland,Accumulating,Physically backed,Long-only,0.2,,,,USD
+5ESG,,,IE00BKS7L097,Invesco S&P 500 Scored & Screened UCITS ETF Acc,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.09,,,,USD
+WEB2,,,IE0006IP4XZ8,Amundi MSCI USA ESG Broad Transition UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.07,,,,EUR
+XAMB,,,IE000Y77LGG9,Amundi MSCI World SRI Climate Paris Aligned UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,EUR
+VZLC,,,JE00B1VS3333,WisdomTree Physical Silver,ETF,Jersey,Accumulating,Physically backed,Long-only,0.49,,,,USD
+IQQH,,,IE00B1XNHC34,iShares Global Clean Energy Transition UCITS ETF USD (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.65,,,,USD
+VECA,,,IE00BGYWT403,Vanguard EUR Corporate Bond UCITS ETF Accumulating,ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,EUR
+ERNX,,,IE000RHYOR04,iShares EUR Ultrashort Bond UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.09,,,,EUR
+UC64,,,LU0950670850,UBS MSCI United Kingdom UCITS ETF GBP acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.2,,,,GBP
+IQQ0,,,IE00B8FHGS14,iShares Edge MSCI World Minimum Volatility UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.3,,,,USD
+IXUA,,,IE000R4ZNTN3,iShares MSCI World ex-USA UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
+IMBA,,,IE00BYXYYN70,iShares US Mortgage Backed Securities UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.28,,,,USD
+E500,,,IE00BRKWGL70,Invesco S&P 500 EUR Hedged UCITS ETF,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.05,,,,EUR
+VNRT,,,IE00BKX55R35,Vanguard FTSE North America UCITS ETF (USD) Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.08,,,,USD
+GBSP,,,JE00B7VG2M16,WisdomTree Physical Gold - GBP Daily Hedged,ETF,Jersey,Accumulating,Physically backed,Long-only,0.12,,,,GBP
+FWIA,,,IE000716YHJ7,Invesco FTSE All-World UCITS ETF Acc,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.15,,,,USD
+XUSW,,,LU2581375073,Xtrackers MSCI USA Swap UCITS ETF 1D,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.07,,,,USD
+XAD5,,,DE000A1E0HR8,Xtrackers Physical Gold ETC (EUR),ETF,Jersey,Accumulating,Physically backed,Long-only,0.25,,,,USD
+LBNK,,,LU1834983477,Amundi STOXX Europe 600 Banks UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.3,,,,EUR
+JEQP,,,IE000U9J8HX9,JPMorgan Nasdaq Equity Premium Income Active UCITS ETF USD (Dist),ETF,Ireland,Distributing,Full replication,"Long-only, Active",0.35,,,,USD
+QDVR,,,IE00BYVJRR92,iShares MSCI USA SRI UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
+ZPAB,,,LU2195226068,Amundi S&P Eurozone Climate Paris Aligned UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.2,,,,EUR
 IS00,,,IE00BYXYYL56,iShares USD High Yield Corporate Bond UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.5,,,,USD
-EUNA,EUNA.DE,.DE,IE00BDBRDM35,iShares Core Global Aggregate Bond UCITS ETF EUR Hedged (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.1,,,,EUR
-VJPN,VJPN.DE,.DE,IE00B95PGT31,Vanguard FTSE Japan UCITS ETF (USD) Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.1,,,,USD
-CEMS,CEMS.DE,.DE,IE00BQN1K901,iShares Edge MSCI Europe Value Factor UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.25,,,,EUR
+EUNA,,,IE00BDBRDM35,iShares Core Global Aggregate Bond UCITS ETF EUR Hedged (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.1,,,,EUR
+VJPN,,,IE00B95PGT31,Vanguard FTSE Japan UCITS ETF (USD) Distributing,ETF,Ireland,Distributing,Full replication,Long-only,0.1,,,,USD
+CEMS,,,IE00BQN1K901,iShares Edge MSCI Europe Value Factor UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.25,,,,EUR
 FRCF,,,LU0977261329,UBS MSCI Switzerland 20/35 UCITS ETF CHF acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.2,,,,CHF
-IUST,IUST.DE,.DE,IE00B1FZSC47,iShares USD TIPS UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.1,,,,USD
-EXI2,EXI2.DE,.DE,DE0006289382,iShares Dow Jones Global Titans 50 UCITS ETF (DE) EUR (Dist),ETF,Germany,Distributing,Optimized sampling,Long-only,0.51,,,,EUR
-XDEQ,XDEQ.DE,.DE,IE00BL25JL35,Xtrackers MSCI World Quality UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.25,,,,USD
-VWCG,VWCG.DE,.DE,IE00BK5BQX27,Vanguard FTSE Developed Europe UCITS ETF (EUR) Accumulating,ETF,Ireland,Accumulating,Full replication,Long-only,0.1,,,,EUR
-IUS3,IUS3.DE,.DE,IE00B2QWCY14,iShares S&P SmallCap 600 UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.3,,,,USD
-CEUG,CEUG.DE,.DE,LU1681042609,Amundi MSCI Europe ESG Broad Transition UCITS ETF - EUR (C),ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,EUR
-QDVL,QDVL.DE,.DE,IE00BYZTVV78,iShares EUR Corporate Bond 0-3yr ESG SRI UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.12,,,,EUR
-XGLE,XGLE.DE,.DE,LU0290355717,Xtrackers II Eurozone Government Bond UCITS ETF 1C,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.07,,,,EUR
-WELE,WELE.DE,.DE,IE000LAP5Z18,Amundi S&P 500 Equal Weight ESG UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,USD
-EXX1,EXX1.DE,.DE,DE0006289309,iShares EURO STOXX Banks 30-15 UCITS ETF (DE),ETF,Germany,Accumulating,Full replication,Long-only,0.52,,,,EUR
-JBEM,JBEM.DE,.DE,LU1481202692,BNP Paribas Easy JPM ESG EMU Government Bond IG UCITS ETF,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.15,,,,EUR
-AUM5,AUM5.DE,.DE,LU1681048804,Amundi S&P 500 Swap UCITS ETF EUR Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.15,,,,EUR
-SECA,SECA.DE,.DE,IE00BLDGH553,iShares EUR Government Bond Climate UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.09,,,,EUR
-PR1J,PR1J.DE,.DE,LU1931974775,Amundi Prime Japan UCITS ETF DR (D),ETF,Luxembourg,Accumulating,Full replication,Long-only,0.05,,,,JPY
-LYQ2,LYQ2.DE,.DE,LU1650487413,Amundi Euro Government Bond 1-3Y UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.15,,,,EUR
-USPY,USPY.DE,.DE,IE00BYPLS672,L&G Cyber Security UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.69,,,,USD
-AE5B,AE5B.DE,.DE,LU2608817958,Amundi MSCI Europe Action UCITS ETF Dist,ETF,Luxembourg,Distributing,Full replication,Long-only,0.09,,,,EUR
-4UBB,4UBB.DE,.DE,IE00BD4TXS21,UBS Core MSCI USA UCITS ETF USD acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.06,,,,USD
-QDVG,QDVG.DE,.DE,IE00B43HR379,iShares S&P 500 Health Care Sector UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
-ASR3,ASR3.DE,.DE,LU2008760592,BNP Paribas Easy EUR Corporate Bond SRI PAB 1-3Y UCITS ETF Dist,ETF,Luxembourg,Distributing,Full replication,Long-only,0.15,,,,EUR
-SEC0,SEC0.DE,.DE,IE000I8KRLL9,iShares MSCI Global Semiconductors UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.35,,,,USD
-SXRG,SXRG.DE,.DE,IE00B3VWM098,iShares MSCI USA Small Cap ESG Enhanced CTB UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.43,,,,USD
-IBCN,IBCN.DE,.DE,IE00B1FZS681,iShares Euro Government Bond 3-5yr UCITS ETF,ETF,Ireland,Accumulating,Sampling,Long-only,0.15,,,,EUR
-VNRA,VNRA.DE,.DE,IE00BK5BQW10,Vanguard FTSE North America UCITS ETF (USD) Accumulating,ETF,Ireland,Accumulating,Full replication,Long-only,0.08,,,,USD
+IUST,,,IE00B1FZSC47,iShares USD TIPS UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.1,,,,USD
+EXI2,,,DE0006289382,iShares Dow Jones Global Titans 50 UCITS ETF (DE) EUR (Dist),ETF,Germany,Distributing,Optimized sampling,Long-only,0.51,,,,EUR
+XDEQ,,,IE00BL25JL35,Xtrackers MSCI World Quality UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.25,,,,USD
+VWCG,,,IE00BK5BQX27,Vanguard FTSE Developed Europe UCITS ETF (EUR) Accumulating,ETF,Ireland,Accumulating,Full replication,Long-only,0.1,,,,EUR
+IUS3,,,IE00B2QWCY14,iShares S&P SmallCap 600 UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.3,,,,USD
+CEUG,,,LU1681042609,Amundi MSCI Europe ESG Broad Transition UCITS ETF - EUR (C),ETF,Luxembourg,Accumulating,Full replication,Long-only,0.12,,,,EUR
+QDVL,,,IE00BYZTVV78,iShares EUR Corporate Bond 0-3yr ESG SRI UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.12,,,,EUR
+XGLE,,,LU0290355717,Xtrackers II Eurozone Government Bond UCITS ETF 1C,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.07,,,,EUR
+WELE,,,IE000LAP5Z18,Amundi S&P 500 Equal Weight ESG UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,USD
+EXX1,,,DE0006289309,iShares EURO STOXX Banks 30-15 UCITS ETF (DE),ETF,Germany,Accumulating,Full replication,Long-only,0.52,,,,EUR
+JBEM,,,LU1481202692,BNP Paribas Easy JPM ESG EMU Government Bond IG UCITS ETF,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.15,,,,EUR
+AUM5,,,LU1681048804,Amundi S&P 500 Swap UCITS ETF EUR Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.15,,,,EUR
+SECA,,,IE00BLDGH553,iShares EUR Government Bond Climate UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.09,,,,EUR
+PR1J,,,LU1931974775,Amundi Prime Japan UCITS ETF DR (D),ETF,Luxembourg,Accumulating,Full replication,Long-only,0.05,,,,JPY
+LYQ2,,,LU1650487413,Amundi Euro Government Bond 1-3Y UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.15,,,,EUR
+USPY,,,IE00BYPLS672,L&G Cyber Security UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.69,,,,USD
+AE5B,,,LU2608817958,Amundi MSCI Europe Action UCITS ETF Dist,ETF,Luxembourg,Distributing,Full replication,Long-only,0.09,,,,EUR
+4UBB,,,IE00BD4TXS21,UBS Core MSCI USA UCITS ETF USD acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.06,,,,USD
+QDVG,,,IE00B43HR379,iShares S&P 500 Health Care Sector UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
+ASR3,,,LU2008760592,BNP Paribas Easy EUR Corporate Bond SRI PAB 1-3Y UCITS ETF Dist,ETF,Luxembourg,Distributing,Full replication,Long-only,0.15,,,,EUR
+SEC0,,,IE000I8KRLL9,iShares MSCI Global Semiconductors UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.35,,,,USD
+SXRG,SXRG.F,.F,IE00B3VWM098,iShares MSCI USA Small Cap ESG Enhanced CTB UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.43,,,,USD
+IBCN,,,IE00B1FZS681,iShares Euro Government Bond 3-5yr UCITS ETF,ETF,Ireland,Accumulating,Sampling,Long-only,0.15,,,,EUR
+VNRA,,,IE00BK5BQW10,Vanguard FTSE North America UCITS ETF (USD) Accumulating,ETF,Ireland,Accumulating,Full replication,Long-only,0.08,,,,USD
 SXRN,,,IE00B3VTMJ91,iShares Euro Government Bond 1-3yr UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.15,,,,EUR
-LYPG,LYPG.DE,.DE,LU0533033667,Amundi MSCI World Information Technology UCITS ETF EUR Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.3,,,,EUR
+LYPG,,,LU0533033667,Amundi MSCI World Information Technology UCITS ETF EUR Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.3,,,,EUR
 IQQJ,IQQJ.DE,.DE,IE00B02KXH56,iShares MSCI Japan UCITS ETF (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.12,,,,USD
-WEBP,WEBP.DE,.DE,IE000UZTA1X0,Amundi S&P 500 Climate Paris Aligned UCITS ETF Dist,ETF,Ireland,Distributing,Full replication,Long-only,0.07,,,,USD
-VAGY,VAGY.DE,.DE,IE00BGYWSV06,Vanguard USD Corporate 1-3 Year Bond UCITS ETF Accumulating,ETF,Ireland,Accumulating,Sampling,Long-only,0.09,,,,USD
-UEF5,UEF5.DE,.DE,LU1048313891,UBS MSCI EM Socially Responsible UCITS ETF USD dis,ETF,Luxembourg,Accumulating,Optimized sampling,Long-only,0.24,,,,USD
+WEBP,,,IE000UZTA1X0,Amundi S&P 500 Climate Paris Aligned UCITS ETF Dist,ETF,Ireland,Distributing,Full replication,Long-only,0.07,,,,USD
+VAGY,,,IE00BGYWSV06,Vanguard USD Corporate 1-3 Year Bond UCITS ETF Accumulating,ETF,Ireland,Accumulating,Sampling,Long-only,0.09,,,,USD
+UEF5,,,LU1048313891,UBS MSCI EM Socially Responsible UCITS ETF USD dis,ETF,Luxembourg,Accumulating,Optimized sampling,Long-only,0.24,,,,USD
 CHCORP,,,CH0226976816,iShares Core CHF Corporate Bond ETF (CH) CHF (Dist),ETF,Switzerland,Distributing,Sampling,Long-only,0.15,,,,CHF
 SXRC,,,IE00BFM6TC58,iShares USD Treasury Bond 20+yr UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,USD
-XRS2,XRS2.DE,.DE,IE00BJZ2DD79,Xtrackers Russell 2000 UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
-EDM6,EDM6.DE,.DE,IE00BHZPJ783,iShares MSCI Europe ESG Enhanced CTB UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,EUR
+XRS2,,,IE00BJZ2DD79,Xtrackers Russell 2000 UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
+EDM6,,,IE00BHZPJ783,iShares MSCI Europe ESG Enhanced CTB UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.12,,,,EUR
 2B7Q,,,IE00B00FV011,iShares Core GBP Corporate Bond UCITS ETF,ETF,Ireland,Accumulating,Sampling,Long-only,0.2,,,,GBP
-IS3C,IS3C.DE,.DE,IE00B9M6RS56,iShares J.P. Morgan USD EM Bond EUR Hedged UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.5,,,,EUR
+IS3C,,,IE00B9M6RS56,iShares J.P. Morgan USD EM Bond EUR Hedged UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.5,,,,EUR
 AWESG,,,IE00BDQZMX67,UBS MSCI ACWI Universal UCITS ETF USD dis,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.23,,,,USD
 SPPE,,,IE00BYYW2V44,State Street SPDR S&P 500 UCITS ETF EUR Hedged,ETF,Ireland,Accumulating,Full replication,Long-only,0.05,,,,EUR
 UIMI,,,LU0480132876,UBS Core MSCI EM UCITS ETF USD dis,ETF,Luxembourg,Accumulating,Optimized sampling,Long-only,0.15,,,,USD
 BPGE,,,IE000ASNLWH9,Nordea BetaPlus Enhanced Global Sustainable Equity UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.25,,,,USD
 CSY2,,,IE00063GNWK1,UBS MSCI USA Selection UCITS ETF USD acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.1,,,,USD
-ASRE,ASRE,,LU2244387457,BNP Paribas Easy JPM ESG EMU Government Bond IG 3-5Y UCITS ETF (Acc),ETF,Luxembourg,Accumulating,Full replication,Long-only,0.15,,,,EUR
+ASRE,,,LU2244387457,BNP Paribas Easy JPM ESG EMU Government Bond IG 3-5Y UCITS ETF (Acc),ETF,Luxembourg,Accumulating,Full replication,Long-only,0.15,,,,EUR
 IBCS,,,IE0032523478,iShares Euro Corporate Bond Large Cap UCITS ETF,ETF,Ireland,Accumulating,Sampling,Long-only,0.09,,,,EUR
 36BZ,,,IE00BQT3WG13,iShares MSCI China A UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.4,,,,USD
 IUSU,,,IE00B14X4S71,iShares USD Treasury Bond 1-3yr UCITS ETF (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.07,,,,USD
@@ -535,17 +535,17 @@ EEDM,,,IE00BHZPJ122,iShares MSCI EM ESG Enhanced CTB UCITS ETF USD (Dist),ETF,Ir
 IQQ6,,,IE00B1FZS350,iShares Developed Markets Property Yield UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.59,,,,USD
 GERD,,,IE0001UQQ933,L&G Gerd Kommer Multifactor Equity UCITS ETF USD Accumulating,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.45,,,,USD
 XSX7,,,LU2581375156,Xtrackers Stoxx Europe 600 UCITS ETF 1D,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.07,,,,EUR
-XHYG,XHYG.MI,.MI,LU1109942653,Xtrackers EUR High Yield Corporate Bond UCITS ETF 1D,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.2,,,,EUR
+XHYG,,,LU1109942653,Xtrackers EUR High Yield Corporate Bond UCITS ETF 1D,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.2,,,,EUR
 EUNR,,,IE00B4L5ZG21,iShares EUR Corporate Bond ex-Financials UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.2,,,,EUR
 SP2Q,,,IE00BNGJJT35,Invesco S&P 500 Equal Weight UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
 2B7A,,,IE00B4KBBD01,iShares S&P 500 Utilities Sector UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.15,,,,USD
 LYQ6,,,LU1650489385,Amundi Euro Government Bond 10-15Y UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.15,,,,EUR
-XUHC,XUHC.L,.L,IE00BCHWNW54,Xtrackers MSCI USA Health Care UCITS ETF 1D,ETF,Ireland,Accumulating,Full replication,Long-only,0.12,,,,USD
+XUHC,,,IE00BCHWNW54,Xtrackers MSCI USA Health Care UCITS ETF 1D,ETF,Ireland,Accumulating,Full replication,Long-only,0.12,,,,USD
 8PSE,,,XS2183935274,Invesco Physical Gold EUR Hedged ETC,ETF,Ireland,Accumulating,Physically backed,Long-only,0.34,,,,EUR
 ETLQ,,,IE00BFXR5S54,L&G Global Equity UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.1,,,,USD
 IBCM,,,IE00B1FZS806,iShares Euro Government Bond 7-10yr UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.15,,,,EUR
 EL4F,,,DE000ETFL060,Deka DAX (ausschüttend) UCITS ETF,ETF,Germany,Accumulating,Full replication,Long-only,0.15,,,,EUR
-IGDA,IGDA.SW,.SW,IE000UOXRAM8,Invesco Dow Jones Islamic Global Developed Markets UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.4,,,,USD
+IGDA,,,IE000UOXRAM8,Invesco Dow Jones Islamic Global Developed Markets UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.4,,,,USD
 XUTD,,,LU0429459356,Xtrackers II US Treasuries UCITS ETF 1D,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.06,,,,USD
 CBRS,,,IE00BF16M727,First Trust Nasdaq Cybersecurity UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.6,,,,USD
 IVOA,,,IE0008UEVOE0,iShares iBonds Dec 2028 Term EUR Corporate UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.12,,,,EUR
@@ -637,7 +637,7 @@ EMWE,,,LU1615092217,BNP Paribas Easy MSCI World SRI S-Series PAB 5% Capped UCITS
 ETBB,,,FR0012740983,BNP Paribas Easy EURO STOXX 50 UCITS ETF,ETF,France,Accumulating,Full replication,Long-only,0.1,,,,EUR
 EXIE,,,DE000A2QP4B6,iShares STOXX Europe 600 UCITS ETF (DE) EUR (Acc),ETF,Germany,Accumulating,Full replication,Long-only,0.2,,,,EUR
 SPF0,,,IE00BMYHQM42,State Street SPDR Bloomberg Euro Government Bond UCITS ETF EUR Unhedged (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.07,,,,EUR
-XCS7,XCS7.L,→XCS7.L,LU2456436083,Xtrackers MSCI China UCITS ETF 1D,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.28,,,,USD
+XCS7,,,LU2456436083,Xtrackers MSCI China UCITS ETF 1D,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.28,,,,USD
 PJSR,,,IE00BVZ6SP04,PIMCO Euro Short Maturity UCITS ETF Acc,ETF,Ireland,Accumulating,Sampling,"Long-only, Active",0.19,,,,EUR
 LCUK,,,LU1781541096,Amundi UK Equity All Cap UCITS ETF Dist,ETF,Luxembourg,Distributing,Full replication,Long-only,0.04,,,,GBP
 UIQI,,,IE00B7WK2W23,UBS MSCI AC Asia ex Japan SF UCITS ETF USD acc,ETF,Ireland,Accumulating,Swap based,Long-only,0.23,,,,USD
@@ -874,7 +874,7 @@ U03A,,,IE000SSFEUS3,iShares USD Treasury Bond 0-3 Month UCITS ETF USD (Acc),ETF,
 IGLD,,,IE0009JOT9U1,iShares Physical Gold EUR Hedged ETC,ETF,Ireland,Accumulating,Physically backed,Long-only,0.25,,,,EUR
 EXSG,,,DE0002635281,iShares EURO STOXX Select Dividend 30 UCITS ETF (DE),ETF,Germany,Distributing,Full replication,Long-only,0.32,,,,EUR
 SC0C,,,IE00B60SWW18,Invesco STOXX Europe 600 UCITS ETF,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.19,,,,EUR
-IQQ7,IQQ7.DE,.DE,IE00B1FZSF77,iShares US Property Yield UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.4,,,,USD
+IQQ7,,,IE00B1FZSF77,iShares US Property Yield UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.4,,,,USD
 B41J,,,IE000PS0J481,Global X European Infrastructure Development UCITS ETF EUR Accumulating,ETF,Ireland,Accumulating,Full replication,Long-only,0.47,,,,EUR
 10AU,,,LU1437024729,Amundi Core Global Aggregate Bond UCITS ETF Acc,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.1,,,,EUR
 2B72,,,IE00BF20LF40,iShares MSCI Europe Mid Cap UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.15,,,,EUR
@@ -1173,7 +1173,7 @@ A4H5,,,LU1437018838,Amundi FTSE EPRA NAREIT Global UCITS ETF Acc,ETF,Luxembourg,
 ASRD,,,LU1547515137,BNP Paribas Easy JPM ESG EMBI Global Diversified Composite UCITS ETF EUR Hedged,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.25,,,,EUR
 E960,,,DE000ETF9603,Amundi STOXX Europe 600 ESG II UCITS ETF Dist,ETF,Germany,Distributing,Full replication,Long-only,0.19,,,,EUR
 CHSE,,,LU1971906984,UBS EURO STOXX 50 ESG UCITS ETF EUR acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.1,,,,EUR
-ETLF,BCOG.L,→BCOG.L,IE00BF0BCP69,L&G All Commodities UCITS ETF,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.15,,,,USD
+ETLF,,,IE00BF0BCP69,L&G All Commodities UCITS ETF,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.15,,,,USD
 AMEE,,,FR0010930644,Amundi Global Hydrogen UCITS ETF Acc,ETF,France,Accumulating,Full replication,Long-only,0.45,,,,EUR
 UCRH,,,LU2297533809,Amundi Index US Corporate SRI UCITS ETF DR Hedged EUR (D),ETF,Luxembourg,Accumulating,Full replication,Long-only,0.18,,,,EUR
 CBU4,,,IE0000VITHT2,iShares iBonds Dec 2028 Term USD Corporate UCITS ETF USD (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.12,,,,USD
@@ -1228,7 +1228,7 @@ TRXS,,,IE00BF2FNB90,Invesco US Treasury Bond 7-10 Year UCITS ETF GBP Hedged Dist
 XEMD,,,IE000GWA2J58,Xtrackers MSCI Emerging Markets UCITS ETF 1D,ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,USD
 WSRIC,,,IE00BK72HT65,UBS MSCI World Socially Responsible UCITS ETF hCHF acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.22,,,,CHF
 XD9C,,,IE00BG04LZ52,Xtrackers MSCI USA UCITS ETF 3C CHF Hedged,ETF,Ireland,Accumulating,Full replication,Long-only,0.08,,,,CHF
-EUNI,EUNI.DE,.DE,IE00B3F81G20,iShares MSCI Emerging Markets Small Cap UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.74,,,,USD
+EUNI,,,IE00B3F81G20,iShares MSCI Emerging Markets Small Cap UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.74,,,,USD
 XFVT,,,LU0322252924,Xtrackers Vietnam Swap UCITS ETF 1C,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.85,,,,USD
 21XP,,,CH0454664043,21shares XRP ETP,ETF,Switzerland,Accumulating,Physically backed,Long-only,2.5,,,,USD
 4UB9,,,IE00BK72HH44,UBS MSCI World Socially Responsible UCITS ETF USD dis,ETF,Ireland,Accumulating,Full replication,Long-only,0.19,,,,USD
@@ -1287,7 +1287,7 @@ AYEG,,,IE00BKPSFC54,iShares MSCI World Quality Dividend Advanced UCITS ETF USD (
 IGBY,,,IE000XRBP9E3,iShares Euro Government Bond 15-30yr UCITS ETF (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.15,,,,EUR
 FRCJ,,,LU1230561679,UBS MSCI Japan Socially Responsible UCITS ETF JPY dis,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.19,,,,JPY
 CBUM,,,IE000CR7DJI8,iShares S&P 500 Scored and Screened UCITS ETF EUR Hedged (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.1,,,,EUR
-GBHG,GBHG.L,.L,IE00020C1NS6,Invesco Global High Yield Corporate Bond ESG Climate Transition UCITS ETF GBP PfHdg Dist,ETF,Ireland,Distributing,Sampling,Long-only,0.3,,,,GBP
+GBHG,,,IE00020C1NS6,Invesco Global High Yield Corporate Bond ESG Climate Transition UCITS ETF GBP PfHdg Dist,ETF,Ireland,Distributing,Sampling,Long-only,0.3,,,,GBP
 SS43,,,IE00BYTRR970,State Street SPDR MSCI World Financials UCITS ETF USD,ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
 83J0,,,IE00BKT6VQ12,iShares China CNY Bond UCITS ETF EUR Hedged (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.4,,,,EUR
 DXSE,,,LU0292103222,Xtrackers MSCI Europe Health Care Screened UCITS ETF 1C,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.17,,,,EUR
@@ -1413,7 +1413,7 @@ WTEQ,,,IE00BZ56RN96,WisdomTree Global Quality Dividend Growth UCITS ETF USD,ETF,
 LYXF,,,LU1287023268,Amundi Euro Government Bond 15+Y UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.15,,,,EUR
 ELFE,,,DE000ETFL524,Deka US Treasury 7-10 UCITS ETF ,ETF,Germany,Accumulating,Full replication,Long-only,0.07,,,,USD
 IFLX,,,IE000NHAIBN0,iShares EUR Flexible Income Bond Active UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Full replication,"Long-only, Active",0.4,,,,EUR
-LYQY,LYQY.F,.F,LU1812090543,Amundi EUR High Yield Corporate Bond ESG UCITS ETF Dist,ETF,Luxembourg,Distributing,Sampling,Long-only,0.25,,,,EUR
+LYQY,,,LU1812090543,Amundi EUR High Yield Corporate Bond ESG UCITS ETF Dist,ETF,Luxembourg,Distributing,Sampling,Long-only,0.25,,,,EUR
 SVE,,,LU1169830103,UBS MSCI Switzerland 20/35 UCITS ETF hEUR acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.23,,,,EUR
 IS0P,,,IE00B428Z604,iShares Spain Government Bond UCITS ETF EUR (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.2,,,,EUR
 V3GS,,,IE00BNDS1T77,Vanguard ESG Global Corporate Bond UCITS ETF GBP Hedged Accumulating,ETF,Ireland,Accumulating,Sampling,Long-only,0.15,,,,GBP
@@ -1425,7 +1425,7 @@ XWEM,,,IE000TL3PL69,Xtrackers MSCI World Momentum ESG UCITS ETF,ETF,Ireland,Accu
 DJAD,,,LU1407890620,Amundi US Treasury Bond Long Dated UCITS ETF Dist,ETF,Luxembourg,Distributing,Full replication,Long-only,0.06,,,,USD
 PR1CH,,,LU2798197641,Amundi Core EUR Corporate Bond UCITS ETF CHF Hedged Acc,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.09,,,,CHF
 D6RS,,,DE000ETFL557,Deka MSCI EMU Climate Change ESG UCITS ETF,ETF,Germany,Accumulating,Full replication,Long-only,0.21,,,,EUR
-PR1E,,,LU1931974262,Amundi Prime Europe UCITS ETF DR (D),ETF,Luxembourg,Accumulating,Full replication,Long-only,0.05,,,,EUR
+PR1E,PR1E.DE,.DE,LU1931974262,Amundi Prime Europe UCITS ETF DR (D),ETF,Luxembourg,Accumulating,Full replication,Long-only,0.05,,,,EUR
 EXV2,,,DE000A0H08R2,iShares STOXX Europe 600 Telecommunications UCITS ETF (DE),ETF,Germany,Accumulating,Full replication,Long-only,0.47,,,,EUR
 AWDE,,,IE000TT7HZ88,AXA IM MSCI World Equity PAB UCITS ETF EUR Hedged Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.23,,,,EUR
 CHSU,,,LU0950668524,UBS Core MSCI Europe UCITS ETF EUR acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.06,,,,EUR
@@ -1540,7 +1540,7 @@ SPQH,,,IE000EPX8KB7,Global X S&P 500 Quarterly Tail Hedge UCITS ETF USD Accumula
 IPAB,,,IE000SE6KPV2,iShares EUR Corporate Bond ESG Paris-Aligned Climate UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.15,,,,EUR
 ETLZ,,,IE00B3CNHJ55,L&G Russell 2000 US Small Cap Quality UCITS ETF,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.3,,,,USD
 IQHE,,,IE000YNVI4W4,Invesco Europe Enhanced Equity UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.24,,,,EUR
-SYBQ,,,IE00BCBJF711,State Street SPDR Bloomberg 0-5 Year Sterling Corporate Bond UCITS ETF GBP,ETF,Ireland,Accumulating,Sampling,Long-only,0.2,,,,GBP
+SYBQ,SYBQ.F,.F,IE00BCBJF711,State Street SPDR Bloomberg 0-5 Year Sterling Corporate Bond UCITS ETF GBP,ETF,Ireland,Accumulating,Sampling,Long-only,0.2,,,,GBP
 WTEJ,,,IE00BJGWQN72,WisdomTree Cloud Computing UCITS ETF USD Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.4,,,,USD
 2B7N,,,IE00BRHZ0398,iShares MSCI Target UK Real Estate UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.4,,,,GBP
 GHYA,,,LU3206575048,Amundi Core EUR High Yield Bond UCITS ETF GBP Hedged Acc,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.17,,,,GBP
@@ -2099,8 +2099,8 @@ BUN5,,,LU1940199984,Amundi MSCI Europe ESG Selection UCITS ETF EUR Hedged Acc,ET
 MHQA,,,IE000U07IGB1,Invesco Emerging Markets Enhanced Equity UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.29,,,,USD
 CLOD,,,IE000U7LIXH5,Invesco EUR AAA CLO UCITS ETF Dist,ETF,Ireland,Distributing,Full replication,"Long-only, Active",0.25,,,,EUR
 TRAU,,,IE00BF2GFJ42,Invesco US Treasury Bond UCITS ETF Acc,ETF,Ireland,Accumulating,Sampling,Long-only,0.06,,,,USD
-FAHY,,,IE00BD0Q9673,Invesco US High Yield Fallen Angels UCITS ETF Dist,ETF,Ireland,Distributing,Full replication,Long-only,0.45,,,,USD
-H4ZK,,,IE0009WMIIC0,HSBC Euro Lower Carbon Government 1-3 Year Bond UCITS ETF,ETF,Ireland,Accumulating,Sampling,Long-only,0.14,,,,EUR
+FAHY,FAHY.DE,.DE,IE00BD0Q9673,Invesco US High Yield Fallen Angels UCITS ETF Dist,ETF,Ireland,Distributing,Full replication,Long-only,0.45,,,,USD
+H4ZK,H4ZK.DE,.DE,IE0009WMIIC0,HSBC Euro Lower Carbon Government 1-3 Year Bond UCITS ETF,ETF,Ireland,Accumulating,Sampling,Long-only,0.14,,,,EUR
 X1GD,,,LU1681046857,Amundi Euro Lowest Rated IG Government Bond UCITS ETF EUR Dist,ETF,Luxembourg,Distributing,Sampling,Long-only,0.14,,,,EUR
 T3MP,,,IE000O8S1EX4,JPMorgan Climate Change Solutions Active UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.55,,,,USD
 6PSK,,,IE00B23D9570,Invesco FTSE RAFI Emerging Markets UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.49,,,,USD
@@ -2226,7 +2226,7 @@ SWCSE,,,IE000KIQ3DT5,Swisscanto (IE) ESGen SDG Index Equity EMU UCITS ETF ET EUR
 SXRR,,,IE00BF11F458,iShares USD Floating Rate Bond UCITS ETF EUR Hedged,ETF,Ireland,Accumulating,Sampling,Long-only,0.12,,,,EUR
 XZBE,,,IE00BL58LL31,Xtrackers USD Corporate Bond SRI PAB UCITS ETF 2C - EUR Hedged,ETF,Ireland,Accumulating,Sampling,Long-only,0.21,,,,EUR
 BCRP,,,IE000HM5TZ60,Amundi EUR Corporate Bond Active UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.2,,,,EUR
-SS41,,,IE00BYTRR640,State Street SPDR MSCI World Consumer Discretionary UCITS ETF USD,ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
+SS41,WCOD.L,→WCOD.L,IE00BYTRR640,State Street SPDR MSCI World Consumer Discretionary UCITS ETF USD,ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
 DBXF,,,LU0290357507,Xtrackers Eurozone Government Bond 15-30 UCITS ETF 1C,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.15,,,,EUR
 WTIF,,,IE00BYQCZJ13,WisdomTree Japan Equity UCITS ETF EUR Hedged Acc,ETF,Ireland,Accumulating,Optimized sampling,Long-only,0.45,,,,EUR
 WATC,,,FR0014002CH1,Amundi MSCI Water UCITS ETF Acc,ETF,France,Accumulating,Full replication,Long-only,0.6,,,,EUR
@@ -2488,7 +2488,7 @@ MSAU,,,IE00BFWMQ331,Invesco MSCI Saudi Arabia UCITS UCITS ETF,ETF,Ireland,Accumu
 XY2D,,,LU2552296563,Xtrackers II iBoxx Eurozone Government Bond Yield Plus 1-3 UCITS ETF 2D,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.15,,,,EUR
 CEB5,,,IE0004L9EID2,iShares India INR Government Bond UCITS ETF USD (Dist),ETF,Ireland,Distributing,Sampling,Long-only,0.35,,,,USD
 XG7G,,,LU0641007421,Xtrackers II Global Inflation-Linked Bond UCITS ETF 4D - CHF Hedged,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.25,,,,CHF
-QAIU,,,IE0000XTDDA8,Global X Artificial Intelligence UCITS ETF USD Accumulating,ETF,Ireland,Accumulating,Full replication,Long-only,0.4,,,,USD
+QAIU,QAIU.DE,.DE,IE0000XTDDA8,Global X Artificial Intelligence UCITS ETF USD Accumulating,ETF,Ireland,Accumulating,Full replication,Long-only,0.4,,,,USD
 HPNA,,,IE00096S6AV7,HSBC FTSE EPRA Nareit Developed Climate Paris Aligned UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
 D6AT,,,IE000FP52WM7,Global X Disruptive Materials UCITS ETF USD Accumulating,ETF,Ireland,Accumulating,Full replication,Long-only,0.5,,,,USD
 IS0S,,,IE00B6QGFW01,iShares Emerging Asia Local Government Bond UCITS ETF,ETF,Ireland,Accumulating,Sampling,Long-only,0.5,,,,USD
@@ -2632,7 +2632,7 @@ WDSD,,,IE000SU1VJ03,State Street SPDR MSCI World Small Cap UCITS ETF USD Unhedge
 XCTE,,,LU2376679564,Xtrackers Harvest MSCI China Tech 100 UCITS ETF 1C,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.44,,,,USD
 ESAD,,,IE0007YP0PL1,BNP Paribas Easy FTSE EPRA Nareit Global Developed Green CTB UCITS ETF EUR Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.41,,,,EUR
 JPUY,,,IE000R88UVN6,JPMorgan USD High Yield Bond Active UCITS ETF USD (dist),ETF,Ireland,Distributing,Full replication,"Long-only, Active",0.45,,,,USD
-XMEA,,,LU0292109005,Xtrackers MSCI EM Europe Middle East and Africa ESG Swap UCITS ETF 1C,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.65,,,,USD
+XMEA,XMXD.L,→XMXD.L,LU0292109005,Xtrackers MSCI EM Europe Middle East and Africa ESG Swap UCITS ETF 1C,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.65,,,,USD
 BSOL,,,DE000A4A59D2,Bitwise Solana Staking ETP,ETF,Germany,Accumulating,Physically backed,Long-only,0.85,,,,USD
 OP8E,,,IE0006QX3Y11,Ossiam Bloomberg Canada PAB UCITS ETF 1A (EUR),ETF,Ireland,Accumulating,Full replication,Long-only,0.29,,,,EUR
 BJLS,,,LU2742533636,BNP Paribas Easy JPM ESG EMU Government Bond IG 10Y+ UCITS ETF Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.15,,,,EUR
@@ -2742,7 +2742,7 @@ UC85,,,LU1048317298,UBS Core BBG US Liquid Corp UCITS ETF hGBP dis,ETF,Luxembour
 AYE9,,,IE00BMDBMG37,iShares MSCI Europe SRI UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.2,,,,USD
 EGV1,,,LU2082997946,Amundi STOXX Europe 600 Insurance UCITS ETF Dist,ETF,Luxembourg,Distributing,Swap based Unfunded,Long-only,0.3,,,,EUR
 ESRI,,,LU1291098314,BNP Paribas Easy MSCI Emerging SRI S-Series PAB 5% Capped UCITS ETF USD Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.31,,,,USD
-CGB,,,LU1094612022,Xtrackers II Harvest China Government Bond UCITS ETF 1D,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.2,,,,USD
+CGB,CGB.MI,.MI,LU1094612022,Xtrackers II Harvest China Government Bond UCITS ETF 1D,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.2,,,,USD
 SC0V,,,IE00B5MTWH09,Invesco European Oil & Gas Sector UCITS ETF,ETF,Ireland,Accumulating,Swap based Unfunded,Long-only,0.2,,,,EUR
 QGRW,,,IE000YGEAK03,WisdomTree US Quality Growth UCITS ETF USD Unhedged Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.33,,,,USD
 EWSD,,,IE000IKMJDQ6,iShares S&P 500 Equal Weight UCITS ETF USD (Dist),ETF,Ireland,Distributing,Full replication,Long-only,0.15,,,,USD
@@ -2908,7 +2908,7 @@ AMEV,,,LU2914157412,Amundi Core MSCI Japan UCITS ETF USD Hedged Acc,ETF,Luxembou
 VEGE,,,IE000HARFTG3,Vanguard EUR Eurozone Government 1-3 Year Bond UCITS ETF (EUR) Distributing,ETF,Ireland,Distributing,Sampling,Long-only,0.07,,,,EUR
 XAME,,,LU1681044050,Amundi MSCI China Tech UCITS ETF USD Acc,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.55,,,,USD
 EWGC,,,DE000EWG4CR2,EUWAX Gold Core,ETF,Germany,Accumulating,Physically backed,Long-only,0.25,,,,USD
-GN0M,,,IE00BM8R0N95,Global X Genomics & Biotechnology UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.5,,,,USD
+GN0M,GNOM.L,→GNOM.L,IE00BM8R0N95,Global X Genomics & Biotechnology UCITS ETF,ETF,Ireland,Accumulating,Full replication,Long-only,0.5,,,,USD
 EXH0,,,DE000A2QP398,iShares STOXX Europe 600 Technology UCITS ETF (DE) EUR (Acc),ETF,Germany,Accumulating,Full replication,Long-only,0.39,,,,EUR
 ALTC,,,GB00BMTP1519,WisdomTree Physical Crypto Altcoins,ETF,Jersey,Accumulating,Physically backed,Long-only,0.7,,,,USD
 SHTU,,,LU3046618362,Ossiam Shiller Barclays CAPE® US Sector Tilted TR UCITS ETF 1C (USD),ETF,Luxembourg,Accumulating,Swap based,Long-only,0.65,,,,USD
@@ -2919,7 +2919,7 @@ E0UA,,,IE000JLXYKJ8,iShares EUR Government Bond 0-3 Month UCITS ETF EUR (Acc),ET
 ESAL,,,IE0009WYJCP8,BNP Paribas Easy Alpha Enhanced World UCITS ETF USD Acc,ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.13,,,,USD
 LCHM,,,LU1834983634,Amundi STOXX Europe 600 Basic Materials UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.3,,,,EUR
 AHYX,,,LU3206582846,Amundi Core MSCI World Swap UCITS ETF Acc,ETF,Luxembourg,Accumulating,Swap based Unfunded,Long-only,0.2,,,,USD
-WINA,,,IE0000P0RPE6,iShares World Equity High Income UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.35,,,,USD
+WINA,WINA,,IE0000P0RPE6,iShares World Equity High Income UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.35,,,,USD
 XZ10,,,LU3119430570,Xtrackers II Eurozone Government Bond 10+ ESG Tilted UCITS ETF 1C,ETF,Luxembourg,Accumulating,Optimized sampling,Long-only,0.15,,,,EUR
 ARXX,,,IE000AON7ET1,ARK Space & Defence Innovation UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.75,,,,USD
 JE13,,,IE00BYVZV757,JPMorgan BetaBuilders EUR Government Bond 1-3 UCITS ETF EUR (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.1,,,,EUR
@@ -2967,7 +2967,7 @@ BS6A,,,IE000ZUAJ6B7,Invesco BulletShares 2026 USD Corporate Bond UCITS ETF Acc,E
 MAXD,,,IE000Y1595P8,iShares US Large Cap Max Buffer Dec UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Swap based,"Long-only, Active",0.5,,,,USD
 EL4P,,,DE000ETFL151,Deka iBoxx EUR Liquid Sovereign Diversified 7-10 UCITS ETF,ETF,Germany,Accumulating,Full replication,Long-only,0.15,,,,EUR
 DVDE,,,IE000IMGE5W5,Franklin European Quality Dividend UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.25,,,,EUR
-USIC,,,LU1285959885,Amundi USD Corporate Bond Climate Paris Aligned UCITS ETF Acc,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.14,,,,USD
+USIC,USIC.L,→USIC.L,LU1285959885,Amundi USD Corporate Bond Climate Paris Aligned UCITS ETF Acc,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.14,,,,USD
 XDCH,,,LU1221102491,Xtrackers DAX ESG Screened UCITS ETF 4C CHF Hedged,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.19,,,,CHF
 JOGS,,,IE000AN3AFZ1,Jupiter Origin Global Smaller Companies Active UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.45,,,,USD
 XECT,,,IE000N9MLVT1,Xtrackers MSCI Europe Climate Transition UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.04,,,,EUR
@@ -2978,7 +2978,7 @@ CFTN,,,GB00BMY36D37,CoinShares Finanzen.net Top 10 Crypto ETP,ETF,Jersey,Accumul
 LDCC,,,IE00BWC52F58,PIMCO Advantage US Low Duration Corporate Bond UCITS ETF CHF Hedged (Acc),ETF,Ireland,Accumulating,Sampling,"Long-only, Active",0.3,,,,CHF
 WELT,,,IE00026BEVM6,Amundi S&P Global Industrials ESG UCITS ETF EUR (D),ETF,Ireland,Accumulating,Full replication,Long-only,0.18,,,,EUR
 XBI0,,,IE000E0V65D8,Xtrackers World Biodiversity Focus SRI UCITS ETF 1C,ETF,Ireland,Accumulating,Full replication,Long-only,0.3,,,,USD
-ABIT,,,IE000SBHVL31,AXA IM ACT Biodiversity Equity UCITS ETF USD Acc,ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.7,,,,USD
+ABIT,ABIT,,IE000SBHVL31,AXA IM ACT Biodiversity Equity UCITS ETF USD Acc,ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.7,,,,USD
 XM29,,,LU2673522913,Xtrackers II Target Maturity Sept 2029 EUR Corporate Bond UCITS ETF 1C,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.12,,,,EUR
 ESAR,,,IE000M46QA27,BNP Paribas Easy MSCI USA UCITS ETF EUR Acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.04,,,,EUR
 AK8F,,,LU2780871666,Amundi Fixed Maturity 2028 Euro Government Bond Yield + UCITS ETF Dist,ETF,Luxembourg,Distributing,Full replication,Long-only,0.09,,,,EUR
@@ -3217,7 +3217,7 @@ FLXS,,,IE000C7DDDX4,Franklin FTSE Saudi Arabia UCITS ETF,ETF,Ireland,Accumulatin
 HGBP,,,IE000J4HXHK1,HSBC Sterling Liquidity Fund UCITS ETF (Acc),ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.1,,,,GBP
 EGVA,,,IE0007BT2BH8,Invesco EUR Government and Related Green Bond Weighted UCITS ETF Acc,ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.15,,,,EUR
 TSLI,,,XS2852999429,IncomeShares Tesla (TSLA) Options ETP,ETF,Ireland,Accumulating,Full replication,"Long-only, Active",0.55,,,,USD
-CHEURD,,,LU1169830012,UBS MSCI Switzerland 20/35 UCITS ETF hEUR dis,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.23,,,,EUR
+CHEURD,CHEURD.SW,.SW,LU1169830012,UBS MSCI Switzerland 20/35 UCITS ETF hEUR dis,ETF,Luxembourg,Accumulating,Full replication,Long-only,0.23,,,,EUR
 XBHR,,,IE000CWS09Q9,L&G Corporate Bond ex-Banks Higher Ratings 0-2Y UCITS ETF USD Acc,ETF,Ireland,Accumulating,Sampling,Long-only,0.12,,,,USD
 MDB1E,,,LU3065094974,UBS Sustainable Development Bank Bonds 1-5 UCITS ETF hEUR acc,ETF,Luxembourg,Accumulating,Sampling,Long-only,0.18,,,,EUR
 GXPE,,,IE000GNOSM10,Goldman Sachs MSCI World Private Equity Return Tracker UCITS ETF USD (Acc),ETF,Ireland,Accumulating,Full replication,Long-only,0.5,,,,USD
@@ -3718,7 +3718,7 @@ BJLD,,,LU2533812728,BNP Paribas Easy EUR Aggregate Bond SRI Fossil Free UCITS ET
 BCFW,,,IE0009TPHUV6,UBS Nuclear Economies UCITS ETF USD acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.44,,,,USD
 EDEK,,,LU2993394241,BNP Paribas Easy Alpha Enhanced EUR Corporate Bond UCITS ETF (Acc),ETF,Luxembourg,Accumulating,Full replication,"Long-only, Active",0.1,,,,EUR
 BS27,,,IE000BMDG046,Invesco BulletShares 2027 USD Corporate Bond UCITS ETF Dist,ETF,Ireland,Distributing,Sampling,Long-only,0.1,,,,USD
-ROX,,,BGROBET05176,Expat Romania BET UCITS ETF,ETF,Bulgaria,Accumulating,Full replication,Long-only,1.38,,,,EUR
+ROX,ROX.VI,.VI,BGROBET05176,Expat Romania BET UCITS ETF,ETF,Bulgaria,Accumulating,Full replication,Long-only,1.38,,,,EUR
 BCFV,,,IE000YCD1TY0,UBS MSCI USA Mega Cap UCITS ETF USD acc,ETF,Ireland,Accumulating,Full replication,Long-only,0.12,,,,USD
 B4NY,,,DE000PZ9REB6,BNPP RICI Enhanced Brent Crude Oil (ER) Index EUR Hedge ETC,ETF,Netherlands,Accumulating,Swap based,Long-only,1.2,,,,EUR
 WNGA,,,IE000SN2VKB0,iShares Fallen Angels High Yield Corporate Bond UCITS ETF EUR Hedged (Acc),ETF,Ireland,Accumulating,Sampling,Long-only,0.55,,,,EUR
