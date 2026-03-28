@@ -867,20 +867,20 @@ def scanner_tab():
                     width=2),
         ], className="mb-2 g-1"),
 
-        # Scan status bar — loading indicator tied to button state only
+        # Scan status bar — always visible while scanning
         html.Div([
-            # Progress bar
+            # Active scanning indicator
             html.Div([
                 dbc.Progress(id="scan-progress-bar", value=0, max=100,
-                             label="", striped=True, animated=True,
+                             label="⏳ Initialising…", striped=True, animated=True,
                              color="danger",
-                             style={"height":"24px","marginBottom":"8px",
-                                    "display":"none","fontSize":"12px"}),
-                html.Small(id="scan-progress-text", className="text-muted",
-                           style={"display":"none"}),
-            ], id="progress-container"),
+                             style={"height":"28px","fontSize":"13px","fontWeight":"bold"}),
+                html.Div(id="scan-progress-text",
+                         style={"fontSize":"11px","color":"#aaa","marginTop":"4px"}),
+            ], id="scanning-indicator", style={"display":"none","marginBottom":"8px"}),
+            # Completed status
             dbc.Alert(id="scan-status-alert", color="info",
-                      className="py-2 px-3 mb-2 mt-2", style={"display":"none"}),
+                      className="py-2 px-3 mb-2", style={"display":"none"}),
         ], id="scan-status-bar"),
 
         # Wrap all results in a Loading component
@@ -1262,7 +1262,8 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
               f"AVOID:{(df['Action']=='AVOID').sum()}")
 
     _active_scans.pop(scan_id, None)
-    return df.to_json(date_format="iso", orient="split"), status, {}, False, False
+    return (df.to_json(date_format="iso", orient="split"),
+            status, {"display":"block"}, False, False)
 
 # ───────────────────────────────────────────────────────────────────
 # CALLBACKS — Results display
@@ -1679,14 +1680,19 @@ def run_deep_dive(n_clicks, user_input, budget):
 @app.callback(
     Output("run-btn","children"),
     Output("progress-interval","disabled"),
+    Output("scan-status-alert","style"),
+    Output("scanning-indicator","style", allow_duplicate=True),
     Input("run-btn","disabled"),
+    prevent_initial_call=True,
 )
 def update_run_btn_label(is_disabled):
     if is_disabled:
         return ([dbc.Spinner(size="sm", color="light",
                              style={"marginRight":"8px"}), "Scanning…"],
-                False)  # enable interval
-    return "🔄 Run Scan", True  # disable interval
+                False,
+                {"display":"none"},           # hide old results alert
+                {"display":"block","marginBottom":"8px"})  # show progress bar
+    return "🔄 Run Scan", True, no_update, {"display":"none"}
 
 @app.callback(
     Output("filter-domicile","disabled"),
@@ -1707,26 +1713,26 @@ def disable_filters_during_scan(btn_disabled):
 @app.callback(
     Output("scan-progress-bar","value"),
     Output("scan-progress-bar","label"),
-    Output("scan-progress-bar","style"),
     Output("scan-progress-text","children"),
-    Output("scan-progress-text","style"),
+    Output("scanning-indicator","style"),
     Input("progress-interval","n_intervals"),
     State("run-btn","disabled"),
     prevent_initial_call=True,
 )
 def update_progress(_, is_scanning):
+    hidden  = {"display":"none"}
+    visible = {"display":"block","marginBottom":"8px"}
+
     if not is_scanning:
-        hidden = {"display":"none"}
-        return 0, "", hidden, "", hidden
+        return 0, "", "", hidden
 
     scan_id = cache_get("current_scan_id")
     if not scan_id or scan_id == "stopped":
-        return 0, "", {"display":"none"}, "", {"display":"none"}
+        return 0, "⏳ Initialising…", "", visible
 
     prog = cache_get(f"progress_{scan_id}")
     if not prog:
-        return 0, "Starting…", {"height":"24px","marginBottom":"8px",
-                                 "fontSize":"12px"}, "", {"display":"none"}
+        return 0, "⏳ Starting scan…", "", visible
 
     pct   = prog.get("pct", 0)
     done  = prog.get("done", 0)
@@ -1734,11 +1740,9 @@ def update_progress(_, is_scanning):
     valid = prog.get("valid", 0)
     last  = prog.get("ticker", "")
 
-    bar_style = {"height":"24px","marginBottom":"4px","fontSize":"12px"}
-    txt = f"✅ {valid} valid  |  📋 {done:,} / {total:,} scanned  |  Last: {last}"
-    txt_style = {"display":"block","fontSize":"11px","color":"#aaa","marginBottom":"8px"}
-
-    return pct, f"{pct}%", bar_style, txt, txt_style
+    label = f"🔍 {pct}%  ·  {done:,}/{total:,} checked  ·  {valid} valid"
+    txt   = f"Last: {last}"
+    return pct, label, txt, visible
 
 @app.callback(
     Output("dl-csv","data"),
