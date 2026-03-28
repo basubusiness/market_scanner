@@ -119,6 +119,17 @@ def load_justetf():
                              "dist_policy","fund_size_eur","replication","strategy"]
                 if c in df.columns]
         df = df[keep].copy()
+        # Infer dist_policy from ETF name if not provided by the package
+        if "dist_policy" not in df.columns and "jname" in df.columns:
+            def _infer_dist(name):
+                n = str(name).lower()
+                if any(x in n for x in [" acc", "(acc)", "accumulating","accumulation","thesaurierend","capitalisation"]):
+                    return "Accumulating"
+                if any(x in n for x in [" dist", "(dist)", " inc", "(inc)", "distributing","distribution","dividend","ausschüttend"]):
+                    return "Distributing"
+                return "Accumulating"  # majority of UCITS ETFs are accumulating
+            df["dist_policy"] = df["jname"].apply(_infer_dist)
+            print(f"[justETF] inferred dist_policy: {df['dist_policy'].value_counts().to_dict()}", flush=True)
         df["ticker"] = df["ticker"].fillna("").astype(str).str.strip().str.upper()
         df = df[df["ticker"].str.match(r"^[A-Z0-9]{1,6}$")]
         df = df.drop_duplicates(subset=["ticker"], keep="first")
@@ -864,17 +875,21 @@ def update_filter_sections(preset, types, selected_country, _):
     etf_style   = {} if etfs_on   else {"display":"none"}
     stock_style = {} if stocks_on else {"display":"none"}
 
+    # Use module-level jetf_df directly — capture at call time
+    _jdf = jetf_df
+    _univ = universe
+
     def jcol_opts(col):
-        if jetf_df.empty or col not in jetf_df.columns:
+        if _jdf is None or _jdf.empty or col not in _jdf.columns:
             return []
-        vals = sorted([v for v in jetf_df[col].astype(str).str.strip().unique()
-                       if v and v not in ("", "nan", "None")])
+        vals = sorted([v for v in _jdf[col].astype(str).str.strip().unique()
+                       if v and v not in ("", "nan", "None", "nan%")])
         return [{"label":v,"value":v} for v in vals]
 
     def uopts(col, filter_type=None, country_filter=None):
-        if universe.empty:
+        if _univ is None or _univ.empty:
             return []
-        df = universe[universe["type"]==filter_type] if filter_type else universe
+        df = _univ[_univ["type"]==filter_type] if filter_type else _univ
         if country_filter and "country" in df.columns:
             df = df[df["country"].isin(country_filter)]
         if col not in df.columns:
@@ -883,29 +898,34 @@ def update_filter_sections(preset, types, selected_country, _):
                        if v and v not in ("", "nan", "None")])
         return [{"label":v,"value":v} for v in vals]
 
-    dom_opts  = jcol_opts("domicile")
-    dist_opts = jcol_opts("dist_policy")
-    repl_opts = jcol_opts("replication")
-    strat_opts= jcol_opts("strategy")
+    dom_opts   = jcol_opts("domicile")
+    dist_opts  = jcol_opts("dist_policy")
+    repl_opts  = jcol_opts("replication")
+    strat_opts = jcol_opts("strategy")
+
+    # Hard fallbacks for when package doesn't return these fields
+    if not dist_opts:
+        dist_opts = [{"label":"Accumulating","value":"Accumulating"},
+                     {"label":"Distributing", "value":"Distributing"}]
+    if not dom_opts:
+        dom_opts = [{"label":v,"value":v} for v in
+                    ["Ireland","Luxembourg","Germany","France","United States"]]
+    if not repl_opts:
+        repl_opts = [{"label":v,"value":v} for v in
+                     ["Physical (Full)","Physical (Sampling)","Swap-based"]]
+
     cat_opts  = uopts("category_group", "ETF")
-    # Fallback: if financedatabase has no category data, use known values
     if not cat_opts:
         cat_opts = [{"label":v,"value":v} for v in [
             "Equities","Fixed Income","Commodities","Real Estate",
             "Alternatives","Cash","Currencies","Derivatives"]]
+
     ctry_opts = uopts("country", "Stock")
     sect_opts = uopts("sector", "Stock", selected_country)
 
-    # Only update options if we have data — don't wipe existing options
-    from dash import no_update as _nu
     return (types_style, etf_style, stock_style,
-            dom_opts or _nu,
-            dist_opts or _nu,
-            repl_opts or _nu,
-            strat_opts or _nu,
-            cat_opts,      # always update — has fallback
-            ctry_opts or _nu,
-            sect_opts)     # sector cascades so always update
+            dom_opts, dist_opts, repl_opts, strat_opts, cat_opts,
+            ctry_opts, sect_opts)
 
 @app.callback(
     Output("scope-label","children"),
