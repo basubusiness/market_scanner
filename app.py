@@ -1126,10 +1126,13 @@ def update_scope(preset, types, domicile, dist, repl, strategy, category,
 def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dist,
              repl, strategy, category, country, sector,
              minsize, maxter, workers, fetch_pe, budget):
+    print(f"[run_scan] triggered, clicks={run_clicks}", flush=True)
     ctx = callback_context
     if not ctx.triggered:
+        print("[run_scan] no trigger, returning no_update", flush=True)
         return no_update, no_update, no_update, no_update, no_update
     triggered = ctx.triggered[0]["prop_id"]
+    print(f"[run_scan] triggered by: {triggered}", flush=True)
 
     if "clear-btn" in triggered:
         return None, "Results cleared.", {"display":"none"}, False, False
@@ -1680,16 +1683,13 @@ def run_deep_dive(n_clicks, user_input, budget):
 @app.callback(
     Output("run-btn","children"),
     Output("progress-interval","disabled"),
-    Output("scan-status-alert","style"),
     Input("run-btn","disabled"),
 )
 def update_run_btn_label(is_disabled):
     if is_disabled:
         return ([dbc.Spinner(size="sm", color="light",
-                             style={"marginRight":"8px"}), "Scanning…"],
-                False,
-                {"display":"none"})
-    return "🔄 Run Scan", True, no_update
+                             style={"marginRight":"8px"}), "Scanning…"], False)
+    return "🔄 Run Scan", True
 
 @app.callback(
     Output("filter-domicile","disabled"),
