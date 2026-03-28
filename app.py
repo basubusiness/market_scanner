@@ -283,36 +283,41 @@ def fetch_ticker_data(ticker, isin=None):
     try:
         # Check if we already know the working suffix
         known_sfx = cache_get(f"sfx_{ticker}")
+        def _fetch_history(sym):
+            """Fetch 1y history with timeout protection."""
+            try:
+                return flatten_df(yf.Ticker(sym).history(
+                    period="1y", auto_adjust=True, timeout=10))
+            except Exception:
+                return pd.DataFrame()
+
+        def _valid(df):
+            return (not df.empty and "Close" in df.columns
+                    and len(df["Close"].dropna()) >= 30)
+
         if known_sfx is not None:
-            # Use known suffix directly
-            sym = ticker + known_sfx
-            df = flatten_df(yf.Ticker(sym).history(period="1y", auto_adjust=True))
+            df = _fetch_history(ticker + known_sfx)
         else:
-            # Try bare ticker first
-            df = flatten_df(yf.Ticker(ticker).history(period="1y", auto_adjust=True))
-            # If fails, try exchange suffixes — .DE first for UCITS ETFs
-            if df.empty or "Close" not in df.columns or len(df["Close"].dropna()) < 30:
+            df = _fetch_history(ticker)
+            if not _valid(df):
                 for sfx in [".DE",".L",".AS",".PA",".MI",".SW",".F",".VI",".BR"]:
-                    try:
-                        df2 = flatten_df(yf.Ticker(ticker+sfx).history(period="1y", auto_adjust=True))
-                        if not df2.empty and "Close" in df2.columns and len(df2["Close"].dropna()) >= 30:
+                    df2 = _fetch_history(ticker + sfx)
+                    if _valid(df2):
+                        df = df2
+                        cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
+                        break
+            # Last resort: search by ISIN
+            if not _valid(df) and isin:
+                try:
+                    sr = yf.Search(isin, max_results=3)
+                    if hasattr(sr,"quotes") and sr.quotes:
+                        sym2 = sr.quotes[0]["symbol"]
+                        df2 = _fetch_history(sym2)
+                        if _valid(df2):
                             df = df2
-                            cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
-                            break
-                    except Exception:
-                        continue
-                # Last resort: search by ISIN
-                if (df.empty or len(df.get("Close",pd.Series()).dropna()) < 30) and isin:
-                    try:
-                        sr = yf.Search(isin, max_results=3)
-                        if hasattr(sr,"quotes") and sr.quotes:
-                            sym2 = sr.quotes[0]["symbol"]
-                            df2 = flatten_df(yf.Ticker(sym2).history(period="1y", auto_adjust=True))
-                            if not df2.empty and len(df2["Close"].dropna()) >= 30:
-                                df = df2
-                                cache_set(f"sfx_{ticker}", f"→{sym2}", ttl=86400*7)
-                    except Exception:
-                        pass
+                            cache_set(f"sfx_{ticker}", f"→{sym2}", ttl=86400*7)
+                except Exception:
+                    pass
         if df.empty or "Close" not in df.columns:
             return None
         close = df["Close"].dropna()
@@ -1176,6 +1181,8 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
             done += 1
             valid_so_far = sum(1 for v in results.values() if v)
             pct = round(done / total * 100)
+            if done % 50 == 0:
+                print(f"[scan {scan_id}] {done}/{total} done, {valid_so_far} valid", flush=True)
             cache_set(f"progress_{scan_id}", {
                 "done": done, "total": total, "valid": valid_so_far,
                 "pct": pct, "ticker": t
