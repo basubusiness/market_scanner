@@ -99,21 +99,38 @@ def load_justetf():
         return pd.DataFrame()
     try:
         df = justetf_scraping.load_overview().reset_index()
-        rename = {
-            "ticker": "ticker", "isin": "isin", "name": "jname",
-            "domicile_country": "domicile", "ter": "ter",
-            "distribution_policy": "dist_policy",
-            "fund_size_eur": "fund_size_eur",
-            "replication": "replication", "strategy": "strategy",
-        }
-        keep = {k: v for k, v in rename.items() if k in df.columns}
-        df = df[list(keep.keys())].rename(columns=keep)
+        print(f"[justETF] raw cols: {list(df.columns)[:25]}", flush=True)
+        print(f"[justETF] shape: {df.shape}", flush=True)
+        # Auto-detect columns regardless of package version
+        col_map = {}
+        for c in df.columns:
+            cl = c.lower()
+            if cl == "ticker":                                col_map[c] = "ticker"
+            elif cl == "isin":                                col_map[c] = "isin"
+            elif "name" in cl and "index" not in cl:         col_map[c] = "jname"
+            elif "domicile" in cl:                           col_map[c] = "domicile"
+            elif cl in ("ter","expense_ratio"):              col_map[c] = "ter"
+            elif "distribution" in cl or "policy" in cl:    col_map[c] = "dist_policy"
+            elif "fund_size" in cl or "aum" in cl:          col_map[c] = "fund_size_eur"
+            elif "replication" in cl:                        col_map[c] = "replication"
+            elif "strategy" in cl:                           col_map[c] = "strategy"
+        df = df.rename(columns=col_map)
+        keep = [c for c in ["ticker","isin","jname","domicile","ter",
+                             "dist_policy","fund_size_eur","replication","strategy"]
+                if c in df.columns]
+        df = df[keep].copy()
         df["ticker"] = df["ticker"].fillna("").astype(str).str.strip().str.upper()
-        df = df[df["ticker"].str.match(r"^[A-Z]{1,5}$")]
+        df = df[df["ticker"].str.match(r"^[A-Z0-9]{1,6}$")]
         df = df.drop_duplicates(subset=["ticker"], keep="first")
+        print(f"[justETF] loaded {len(df)} ETFs, cols: {list(df.columns)}", flush=True)
+        if "domicile" in df.columns:
+            print(f"[justETF] domicile sample: {df['domicile'].dropna().unique()[:8].tolist()}", flush=True)
+        if "dist_policy" in df.columns:
+            print(f"[justETF] dist sample: {df['dist_policy'].dropna().unique()[:5].tolist()}", flush=True)
         cache_set("justetf", df, ttl=86400*7)
         return df
-    except Exception:
+    except Exception as e:
+        print(f"[justETF] ERROR: {e}", flush=True)
         return pd.DataFrame()
 
 # Load on startup (background thread so server starts fast)
@@ -233,7 +250,18 @@ def fetch_ticker_data(ticker):
     if cached is not None:
         return cached
     try:
-        df    = flatten_df(yf.Ticker(ticker).history(period="1y", auto_adjust=True))
+        df = flatten_df(yf.Ticker(ticker).history(period="1y", auto_adjust=True))
+        # UCITS ETFs need exchange suffix — try common ones if bare ticker fails
+        if df.empty or "Close" not in df.columns or len(df["Close"].dropna()) < 30:
+            for sfx in [".L",".DE",".MI",".PA",".AS",".SW",".F"]:
+                try:
+                    df2 = flatten_df(yf.Ticker(ticker+sfx).history(period="1y", auto_adjust=True))
+                    if not df2.empty and "Close" in df2.columns and len(df2["Close"].dropna()) >= 30:
+                        df = df2
+                        cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
+                        break
+                except Exception:
+                    continue
         if df.empty or "Close" not in df.columns:
             return None
         close = df["Close"].dropna()
@@ -1030,6 +1058,11 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
     for r in rows:
         t    = r["Ticker"]
         name, isin = name_map.get(t, (t,""))
+        if not isin and not jetf_df.empty and "ticker" in jetf_df.columns:
+            jm = jetf_df[jetf_df["ticker"]==t]
+            if not jm.empty and "isin" in jm.columns:
+                v = jm.iloc[0]["isin"]
+                isin = str(v) if pd.notna(v) else ""
         pe   = pe_map.get(t, {})
         row  = {
             "Ticker": t, "Name": name, "ISIN": isin,
