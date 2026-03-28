@@ -1,0 +1,70 @@
+/* Dark theme for Dash dropdowns */
+.Select-control, .Select-menu-outer, .Select--multi .Select-value,
+.VirtualizedSelectOption, .VirtualizedSelectFocusedOption {
+    background-color: #1e1e2e !important;
+    color: #fff !important;
+    border-color: #555 !important;
+}
+
+/* Dropdown options list */
+.Select-menu, .Select-option {
+    background-color: #1e1e2e !important;
+    color: #fff !important;
+}
+.Select-option:hover, .Select-option.is-focused {
+    background-color: #2a2a4e !important;
+    color: #00bcd4 !important;
+}
+
+/* Selected values / pills */
+.Select-value-label { color: #fff !important; }
+.Select-value { background-color: #333 !important; border-color: #555 !important; }
+
+/* Placeholder */
+.Select-placeholder { color: #888 !important; }
+
+/* Input text */
+.Select-input input { color: #fff !important; }
+
+/* Arrow */
+.Select-arrow { border-top-color: #aaa !important; }
+
+/* Accordion dark */
+.accordion-button {
+    background-color: #1e1e2e !important;
+    color: #fff !important;
+    border-color: #444 !important;
+}
+.accordion-button:not(.collapsed) {
+    background-color: #2a2a3e !important;
+    color: #00bcd4 !important;
+}
+.accordion-body {
+    background-color: #12121f !important;
+    color: #fff !important;
+}
+.accordion-item {
+    background-color: #1e1e2e !important;
+    border-color: #444 !important;
+}
+
+/* Progress bar thin */
+.progress { height: 4px !important; }
+
+/* Tab dark */
+.nav-tabs .nav-link {
+    color: #aaa !important;
+    border-color: transparent !important;
+}
+.nav-tabs .nav-link.active {
+    background-color: #1e1e2e !important;
+    color: #00bcd4 !important;
+    border-bottom-color: #00bcd4 !important;
+}
+
+/* DataTable filter row */
+.dash-filter input {
+    background-color: #1a1a2e !important;
+    color: #fff !important;
+    border: 1px solid #333 !important;
+}
