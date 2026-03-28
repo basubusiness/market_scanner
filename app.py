@@ -1577,12 +1577,27 @@ def debug_info():
         ctry_vals = [v for v in stk_u["country"].astype(str).str.strip().unique()
                      if v and v not in ("","nan","None")][:10]
 
+    # justETF column inspection
+    jetf_cols = list(jetf_df.columns) if not jetf_df.empty else []
+    jetf_dist_vals = []
+    jetf_dom_vals  = []
+    if not jetf_df.empty:
+        for col in jetf_df.columns:
+            sample = [v for v in jetf_df[col].dropna().astype(str).unique() if v.strip()][:5]
+            if any(x in col.lower() for x in ["dist","policy","accum","div"]):
+                jetf_dist_vals = [(col, sample)]
+            if "domicile" in col.lower():
+                jetf_dom_vals = [(col, sample)]
+
     info = {
         "universe_rows":     u_size,
         "etf_rows":          len(etf_u),
         "stock_rows":        len(stk_u),
         "justetf_rows":      j_size,
         "justetf_available": JUSTETF_AVAILABLE,
+        "justetf_columns":   jetf_cols,
+        "justetf_dist_col":  jetf_dist_vals,
+        "justetf_dom_col":   jetf_dom_vals,
         "etf_category_group_sample": cat_vals,
         "stock_country_sample":      ctry_vals,
         "name_lookup_size":  len(_name_lookup),
