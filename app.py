@@ -164,7 +164,8 @@ def _prewarm_suffix_cache():
             except Exception:
                 pass
 
-threading.Thread(target=_prewarm_suffix_cache, daemon=True).start()
+# Prewarm disabled — conflicts with scan API calls
+# threading.Thread(target=_prewarm_suffix_cache, daemon=True).start()
 
 # Pre-build name lookup from universe (instant, improves first scan speed)
 _name_lookup = {}
@@ -1156,7 +1157,9 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
         country=country or [], sector=sector or [],
         min_size=minsize or 0, max_ter=maxter or 2.0,
     )
+    print(f"[run_scan] building tickers, preset={preset}, filters={filters}", flush=True)
     tickers = build_tickers(preset, filters)
+    print(f"[run_scan] {len(tickers)} tickers to scan", flush=True)
     if not tickers:
         return None, "⚠️ No tickers match filters.", {}, False, False
 
@@ -1171,12 +1174,15 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
     done  = 0
     cache_set(f"progress_{scan_id}", {"done": 0, "total": total, "valid": 0}, ttl=300)
 
+    print(f"[run_scan] starting ThreadPoolExecutor with {int(workers or 6)} workers", flush=True)
     with ThreadPoolExecutor(max_workers=int(workers or 6)) as ex:
         # Build ISIN map for better ticker resolution
         isin_map = {}
         if not jetf_df.empty and "ticker" in jetf_df.columns and "isin" in jetf_df.columns:
             isin_map = dict(zip(jetf_df["ticker"], jetf_df["isin"].fillna("")))
+        print(f"[run_scan] isin_map size={len(isin_map)}, submitting futures", flush=True)
         futs = {ex.submit(analyse_ticker, t, risk_mult, isin_map.get(t,"")): t for t in tickers}
+        print(f"[run_scan] {len(futs)} futures submitted", flush=True)
         for fut in as_completed(futs):
             if cache_get("current_scan_id") != scan_id or not _active_scans.get(scan_id, True):
                 _active_scans.pop(scan_id, None)
