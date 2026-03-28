@@ -367,14 +367,24 @@ def analyse_ticker(ticker, risk_mult, isin=None):
     macd_bull  = raw["macd"] > raw["macd_signal"]
     macd_accel = raw["macd_hist"] > 0
     rsi_rising = raw["rsi_slope"] > 0
-    knife_thr  = -15 * (1 / risk_mult)
-    is_knife   = (dm < knife_thr) and (rsi < 35) and raw["trend_down_strong"]
+    # Knife threshold — use fixed -25% floor so extreme fear doesn't flag everything
+    knife_thr  = max(-25, -15 * (1 / risk_mult))
+    is_knife   = (dm < knife_thr) and (rsi < 30) and raw["trend_down_strong"]
     reversal   = is_knife and macd_bull and rsi_rising
-    if is_knife and not reversal:        action = "AVOID"
-    elif dm < -10 and rsi < 40 and macd_bull and macd_accel: action = "BUY"
-    elif dm < -10 and rsi < 40 and (macd_bull or rsi_rising): action = "WATCH"
-    elif dm > 10 and rsi > 70:           action = "SELL"
-    else:                                action = "WAIT"
+
+    if is_knife and not reversal:
+        action = "AVOID"
+    elif dm < -10 and rsi < 45 and macd_bull and macd_accel:
+        action = "BUY"
+    elif dm < -10 and rsi < 45 and (macd_bull or rsi_rising):
+        action = "WATCH"
+    elif dm < -5 and rsi < 35:
+        # Deep oversold even without MACD confirmation — worth watching
+        action = "WATCH"
+    elif dm > 10 and rsi > 70:
+        action = "SELL"
+    else:
+        action = "WAIT"
     strength = "Strong" if conf > 0.7 else "Medium" if conf > 0.4 else "Weak"
     dist_s = min(-dm/30,1) if dm < 0 else 0
     rsi_s2 = max((50-rsi)/50, 0)
