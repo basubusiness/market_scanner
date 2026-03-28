@@ -279,7 +279,7 @@ def fetch_ticker_data(ticker, isin=None):
     key = f"tick_{ticker}"
     cached = cache_get(key)
     if cached is not None:
-        return cached
+        return None if cached == "FAILED" else cached
     try:
         # Check if we already know the working suffix
         known_sfx = cache_get(f"sfx_{ticker}")
@@ -300,12 +300,18 @@ def fetch_ticker_data(ticker, isin=None):
         else:
             df = _fetch_history(ticker)
             if not _valid(df):
-                for sfx in [".DE",".L",".AS",".PA",".MI",".SW",".F",".VI",".BR"]:
+                # Limit to top 3 exchanges during bulk scan — full search only in deep dive
+                _sfx_list = [".DE",".L",".AS"] if isin else [".DE",".L",".AS",".PA",".MI",".SW",".F",".VI",".BR"]
+                for sfx in _sfx_list:
                     df2 = _fetch_history(ticker + sfx)
                     if _valid(df2):
                         df = df2
                         cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
                         break
+            # Cache negative result for tickers that failed all suffixes
+            if not _valid(df) and not isin:
+                cache_set(key, "FAILED", ttl=3600)
+                return None
             # Last resort: search by ISIN
             if not _valid(df) and isin:
                 try:
@@ -319,9 +325,11 @@ def fetch_ticker_data(ticker, isin=None):
                 except Exception:
                     pass
         if df.empty or "Close" not in df.columns:
+            cache_set(key, "FAILED", ttl=3600)  # cache failure for 1h
             return None
         close = df["Close"].dropna()
         if len(close) < 30:
+            cache_set(key, "FAILED", ttl=3600)
             return None
         price = float(close.iloc[-1])
         if price < 0.10:  # only filter near-zero prices
