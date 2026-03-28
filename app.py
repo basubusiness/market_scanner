@@ -77,13 +77,19 @@ def linear_slope(series, window=10):
 @st.cache_data(ttl=1800, show_spinner=False)
 def get_fg_index():
     try:
-        url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
-        r   = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
-        if r.status_code == 200:
-            d      = r.json()["fear_and_greed"]
-            score  = round(float(d["score"]))
-            rating = str(d["rating"]).replace("_", " ").title()
-            return score, rating
+        for url in [
+            "https://production.dataviz.cnn.io/index/fearandgreed/graphdata",
+            "https://production.dataviz.cnn.io/index/feargreed/graphdata",
+        ]:
+            try:
+                r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+                if r.status_code == 200:
+                    data = r.json()
+                    fg   = data.get("fear_and_greed") or data.get("fng_value") or {}
+                    if fg and "score" in fg:
+                        return round(float(fg["score"])), str(fg.get("rating","")).replace("_"," ").title()
+            except Exception:
+                continue
     except Exception:
         pass
     return None, None
@@ -432,488 +438,489 @@ with st.sidebar.expander("🔬 Debug (advanced)"):
 
 st.title(f"Market Decision Engine {APP_VERSION}")
 
-fg_auto, fg_rating = get_fg_index()
-
-col_vix, col_fg = st.columns(2)
-with col_vix:
-    live_vix = get_live_vix()
-    st.metric("Live VIX", f"{live_vix:.2f}",
-        delta="High fear" if live_vix > 30 else ("Calm" if live_vix < 15 else "Normal"),
-        delta_color="inverse")
-    st.caption("[📈 Yahoo Finance VIX](https://finance.yahoo.com/quote/%5EVIX/)")
-
-with col_fg:
-    if fg_auto is not None:
-        st.metric("Fear & Greed (CNN live)", f"{fg_auto}",
-            delta=fg_rating, delta_color="off")
-        fg_index = fg_auto
-        st.caption("[🧠 CNN Fear & Greed](https://edition.cnn.com/markets/fear-and-greed)")
-    else:
-        fg_index = st.slider("Fear & Greed (manual)", 0, 100, 50)
-        st.caption("[🧠 CNN Fear & Greed](https://edition.cnn.com/markets/fear-and-greed) — auto-fetch unavailable")
-
-risk_mult = 1.0 + ((live_vix / 20) * ((100 - fg_index) / 50))
-
-st.sidebar.subheader("Market Context")
-if   risk_mult > 2.5: st.sidebar.error(f"🔥 Extreme Fear ({risk_mult:.2f}x)")
-elif risk_mult > 2.0: st.sidebar.error(f"😰 High Fear ({risk_mult:.2f}x)")
-elif risk_mult < 1.2: st.sidebar.info(f"😌 Calm ({risk_mult:.2f}x)")
-else:                 st.sidebar.warning(f"⚖️ Normal ({risk_mult:.2f}x)")
-
-# VIX regime override hint
-if live_vix > 40:
-    st.warning("⚡ VIX > 40 — Extreme regime. MACD confirmation relaxed for reversals. "
-               "Violent bounces possible. Size positions conservatively.")
-
-# ─────────────────────────────────────────────
-# SIGNAL GUIDE
-# ─────────────────────────────────────────────
-
-with st.expander("📖 Signal Guide & Financial Principles"):
-    st.markdown("""
-| Signal | Meaning | Suggested action |
-|--------|---------|-----------------|
-| **BUY** | >10% below MA200 · RSI<40 · MACD bullish · MACD accelerating | Full position — all conditions met |
-| **WATCH** | Oversold but only partial MACD/RSI confirmation | Small starter — wait for BUY confirmation |
-| **AVOID** | Falling knife — deeply below MA200 · RSI<35 · price slope still negative | Do not enter. Wait for reversal |
-| **WAIT** | No clear signal | Hold cash or existing position |
-| **SELL** | >10% above MA200 · RSI>70 | Overbought — trim or take profit |
-
-**Why both MACD and RSI?**
-RSI tells you *how oversold*. MACD tells you *if momentum is turning*. Together they filter out stocks that are cheap for a reason (still falling) vs genuinely recovering.
-
-**RSI↗ arrow:** Rising RSI on an oversold stock is an early reversal signal even before MACD confirms.
-
-**MACD Accel (⚡):** MACD histogram turning positive means the bullish momentum is *accelerating* — strongest buy confirmation.
-
-**Falling Knife:**
-Anything >15% below MA200 with RSI<35 and a negative price slope is dangerous. It looks cheap. It may not be. Always check news before acting.
-
-**P/E context (enable in sidebar):**
-- <15: potentially undervalued · 15–25: fair · >30: growth premium
-- A stock with RSI 30 but P/E 80 is still expensive on earnings
-
-**VIX levels:**
-- <15: complacency — markets may be stretched  
-- 15–25: normal  
-- >30: fear — historically good long-term entries, short-term pain likely  
-- >40: crisis — maximum opportunity AND maximum risk. MACD confirmation less reliable.
-
-**Position sizing:**
-Allocation is scaled by confidence score and volatility — not just signal strength. High-volatility names get smaller allocations automatically.
-    """)
-
-# ─────────────────────────────────────────────
-# SCAN
-# ─────────────────────────────────────────────
-
-if len(tickers) == 0:
-    st.error("No tickers match current filters.")
-    st.stop()
-
-c1, c2 = st.columns([4, 1])
-with c1:
-    run = st.button("🔄 Run Market Scan", type="primary", use_container_width=True)
-with c2:
-    if st.button("🗑️ Clear", use_container_width=True):
-        for k in ["scan_results","scan_attempted","scan_valid"]:
-            st.session_state.pop(k, None)
-        st.rerun()
-
-if run:
-    n = min(len(tickers), MAX_TICKERS)
-    scan_tickers = tickers[:n]
-
-    prog   = st.progress(0, text=f"Launching {n_workers} parallel workers…")
-    status = st.empty()
-
-    # Run parallel scan — progress is approximate since threads complete out of order
-    with st.spinner(f"Scanning {n:,} tickers with {n_workers} workers…"):
-        results = parallel_scan(scan_tickers, risk_mult, fetch_pe, max_workers=n_workers)
-
-    prog.empty()
-
-    if not results:
-        st.error("No valid data returned. Check internet connection.")
-    else:
-        df = pd.DataFrame(results)
-        df["Score"]     = compute_scores(df)
-        df              = df.sort_values("Score", ascending=False).reset_index(drop=True)
-        df["Rank"]      = df.index + 1
-        df["Suggested"] = df.apply(
-            lambda r: allocation_label(r, baseline, fg_index, risk_mult), axis=1)
-
-        st.session_state["scan_results"]  = df
-        st.session_state["scan_attempted"] = n
-        st.session_state["scan_valid"]     = len(df)
-        status.empty()
-        st.success(f"✅ Scan complete — {len(df)} valid results from {n} attempted")
-
-# ─────────────────────────────────────────────
-# RESULTS
-# ─────────────────────────────────────────────
-
-if "scan_results" in st.session_state:
-    df        = st.session_state["scan_results"]
-    attempted = st.session_state.get("scan_attempted", len(df))
-    valid     = st.session_state.get("scan_valid", len(df))
-
-    COLS = ["Rank","Ticker","Price","MA50","MA200","Dist%","52W%","RSI","RSI↗",
-            "MACD","MACD Accel","Vol%","Confidence","PE","Cap",
-            "Signal","Knife","Suggested","Yahoo","etf.com","justETF"]
-    COLS = [c for c in COLS if c in df.columns]
-
-    st.markdown("---")
-    st.subheader("📊 Scan Results")
-
-    k1,k2,k3,k4,k5,k6,k7 = st.columns(7)
-    k1.metric("Attempted",  attempted)
-    k2.metric("Valid",      valid, delta=f"-{attempted-valid} filtered", delta_color="off")
-    k3.metric("🟢 BUY",    int((df["Action"]=="BUY").sum()))
-    k4.metric("👀 WATCH",  int((df["Action"]=="WATCH").sum()))
-    k5.metric("⛔ AVOID",  int((df["Action"]=="AVOID").sum()))
-    k6.metric("🔴 SELL",   int((df["Action"]=="SELL").sum()))
-    k7.metric("🟡 WAIT",   int((df["Action"]=="WAIT").sum()))
-
-    tabs = st.tabs(["All","🟢 BUY","👀 WATCH","⛔ AVOID","🔴 SELL","🟡 WAIT"])
-    filters = [None, "BUY", "WATCH", "AVOID", "SELL", "WAIT"]
-
-    def colour(val):
-        v = str(val)
-        if "BUY"    in v: return "color:#00c853;font-weight:bold"
-        if "WATCH"  in v: return "color:#00bcd4;font-weight:bold"
-        if "AVOID"  in v: return "color:#ff6d00;font-weight:bold"
-        if "SELL"   in v: return "color:#ff1744;font-weight:bold"
-        if "WAIT"   in v: return "color:#ffd600"
-        return ""
-
-    def show_table(data):
-        if data.empty:
-            st.info("No results in this category.")
-            return
-        show_cols = [c for c in COLS if c in data.columns]
-        fmt = {
-            "Price":"{:.2f}", "MA50":"{:.2f}", "MA200":"{:.2f}",
-            "Dist%":"{:+.1f}%", "52W%":"{:+.1f}%",
-            "RSI":"{:.1f}", "Vol%":"{:.2f}%", "Confidence":"{:.2f}",
-        }
-        fmt = {k: v for k, v in fmt.items() if k in show_cols}
-        styled = (
-            data[show_cols].style
-            .applymap(colour, subset=["Signal"])
-            .format(fmt)
-            .background_gradient(subset=["Dist%"],      cmap="RdYlGn")
-            .background_gradient(subset=["RSI"],        cmap="RdYlGn_r")
-            .background_gradient(subset=["Confidence"], cmap="Blues")
-        )
-        st.dataframe(
-            styled,
-            use_container_width=True,
-            height=520,
-            column_config={
-                "Yahoo":   st.column_config.LinkColumn("Yahoo",   display_text="📈 YF"),
-                "etf.com": st.column_config.LinkColumn("ETF.com", display_text="📊 ETF"),
-                "justETF": st.column_config.LinkColumn("justETF", display_text="🔍 jETF"),
-            }
-        )
-
-    for tab, action in zip(tabs, filters):
-        with tab:
-            show_table(df if action is None else df[df["Action"]==action].reset_index(drop=True))
-
-    st.markdown("---")
-    csv = df[COLS].to_csv(index=False).encode("utf-8")
-    st.download_button("⬇️ Download CSV", data=csv,
-        file_name="scan_results.csv", mime="text/csv", use_container_width=True)
-
-# ═══════════════════════════════════════════════════════════════════
-# DEEP DIVE — Individual Asset Analysis (appended as a second page)
-# ═══════════════════════════════════════════════════════════════════
 def run_deep_dive():
-    st.markdown("---")
-    st.header("🔬 Deep Dive — Individual Asset Analysis")
-    st.caption("Search any ticker or ISIN for a full breakdown with entry/exit timing.")
+        st.markdown("---")
+        st.header("🔬 Deep Dive — Individual Asset Analysis")
+        st.caption("Search any ticker or ISIN for a full breakdown with entry/exit timing.")
 
-    # ── Search UI
-    col_in, col_base = st.columns([3, 1])
-    with col_in:
-        user_input = st.text_input("Ticker or ISIN", value="", placeholder="e.g. VOO or IE00B3XXRP09").strip().upper()
-    with col_base:
-        dd_baseline = st.number_input("Monthly budget (EUR)", value=1000, min_value=100, step=100, key="dd_baseline")
+        # ── Search UI
+        col_in, col_base = st.columns([3, 1])
+        with col_in:
+            user_input = st.text_input("Ticker or ISIN", value="", placeholder="e.g. VOO or IE00B3XXRP09").strip().upper()
+        with col_base:
+            dd_baseline = st.number_input("Monthly budget (EUR)", value=1000, min_value=100, step=100, key="dd_baseline")
 
-    if not user_input:
-        st.info("Enter a ticker symbol (e.g. SPY, VWRA) or a full ISIN (12 characters).")
-        return
+        if not user_input:
+            st.info("Enter a ticker symbol (e.g. SPY, VWRA) or a full ISIN (12 characters).")
+            return
 
-    # ── Resolve ticker from ISIN or search
-    def is_isin(x):
-        return len(x) == 12 and x[:2].isalpha() and x[2:].isalnum()
+        # ── Resolve ticker from ISIN or search
+        def is_isin(x):
+            return len(x) == 12 and x[:2].isalpha() and x[2:].isalnum()
 
-    ticker  = None
-    isin    = None
+        ticker  = None
+        isin    = None
 
-    try:
-        if is_isin(user_input):
-            isin = user_input
-            search = yf.Search(user_input, max_results=10)
-        else:
-            search = yf.Search(user_input, max_results=20)
+        try:
+            if is_isin(user_input):
+                isin = user_input
+                search = yf.Search(user_input, max_results=10)
+            else:
+                search = yf.Search(user_input, max_results=20)
 
-        if hasattr(search, "quotes") and search.quotes:
-            options = {
-                f"{r['symbol']}  —  {r.get('longname', r.get('shortname', ''))}  [{r.get('exchDisp','')}]": r["symbol"]
-                for r in search.quotes if "symbol" in r
-            }
-            if options:
-                chosen = st.selectbox("Select asset", list(options.keys()), key="dd_select")
-                ticker = options[chosen]
-                # Try to grab ISIN from result
-                chosen_raw = [r for r in search.quotes if r.get("symbol") == ticker]
-                if chosen_raw:
-                    isin = isin or chosen_raw[0].get("isin")
+            if hasattr(search, "quotes") and search.quotes:
+                options = {
+                    f"{r['symbol']}  —  {r.get('longname', r.get('shortname', ''))}  [{r.get('exchDisp','')}]": r["symbol"]
+                    for r in search.quotes if "symbol" in r
+                }
+                if options:
+                    chosen = st.selectbox("Select asset", list(options.keys()), key="dd_select")
+                    ticker = options[chosen]
+                    # Try to grab ISIN from result
+                    chosen_raw = [r for r in search.quotes if r.get("symbol") == ticker]
+                    if chosen_raw:
+                        isin = isin or chosen_raw[0].get("isin")
+                else:
+                    ticker = user_input
             else:
                 ticker = user_input
-        else:
+        except Exception:
             ticker = user_input
-    except Exception:
-        ticker = user_input
 
-    if not ticker:
-        st.error("Could not resolve ticker.")
-        return
-
-    if not st.button("🔍 Analyse", type="primary", key="dd_run"):
-        return
-
-    # ── Download data
-    with st.spinner(f"Fetching data for {ticker}…"):
-        try:
-            raw_df = flatten_df(yf.download(ticker, period="2y", interval="1d", progress=False, auto_adjust=True))
-        except Exception as e:
-            st.error(f"Download failed: {e}")
+        if not ticker:
+            st.error("Could not resolve ticker.")
             return
 
-    if raw_df is None or raw_df.empty or "Close" not in raw_df.columns:
-        st.error("No usable price data found. Try a different ticker or exchange listing.")
-        return
+        if not st.button("🔍 Analyse", type="primary", key="dd_run"):
+            return
 
-    close = raw_df["Close"].dropna()
+        # ── Download data
+        with st.spinner(f"Fetching data for {ticker}…"):
+            try:
+                raw_df = flatten_df(yf.download(ticker, period="2y", interval="1d", progress=False, auto_adjust=True))
+            except Exception as e:
+                st.error(f"Download failed: {e}")
+                return
 
-    if close.empty:
-        st.error("Price series is empty after cleaning.")
-        return
-    if close.nunique() < 5:
-        st.warning("⚠️ Price has barely moved — signals may be unreliable.")
-    if close.isna().sum() > len(close) * 0.2:
-        st.warning("⚠️ >20% missing data — indicators may be unreliable.")
+        if raw_df is None or raw_df.empty or "Close" not in raw_df.columns:
+            st.error("No usable price data found. Try a different ticker or exchange listing.")
+            return
 
-    # ── Core indicators
-    cur_p  = float(close.iloc[-1])
-    ma50   = close.rolling(50).mean()
-    ma200  = close.rolling(200).mean()
+        close = raw_df["Close"].dropna()
 
-    # RSI (fixed formula)
-    delta_p = close.diff()
-    gain    = delta_p.where(delta_p > 0, 0.0).rolling(14).mean()
-    loss    = (-delta_p.where(delta_p < 0, 0.0)).rolling(14).mean()
-    rs      = gain / loss
-    rs[loss == 0] = np.inf
-    rsi_series = 100 - (100 / (1 + rs))
-    rsi_val  = float(rsi_series.iloc[-1])
-    rsi_prev = float(rsi_series.iloc[-2])
-    rsi_rising = rsi_val > rsi_prev
+        if close.empty:
+            st.error("Price series is empty after cleaning.")
+            return
+        if close.nunique() < 5:
+            st.warning("⚠️ Price has barely moved — signals may be unreliable.")
+        if close.isna().sum() > len(close) * 0.2:
+            st.warning("⚠️ >20% missing data — indicators may be unreliable.")
 
-    # MACD
-    ema12     = close.ewm(span=12, adjust=False).mean()
-    ema26     = close.ewm(span=26, adjust=False).mean()
-    macd_line = ema12 - ema26
-    macd_sig  = macd_line.ewm(span=9, adjust=False).mean()
-    macd_hist = macd_line - macd_sig
-    macd_bull = float(macd_line.iloc[-1]) > float(macd_sig.iloc[-1])
-    macd_accel= float(macd_hist.iloc[-1]) > 0
+        # ── Core indicators
+        cur_p  = float(close.iloc[-1])
+        ma50   = close.rolling(50).mean()
+        ma200  = close.rolling(200).mean()
 
-    # Trend
-    ma200_slope = ((float(ma200.iloc[-1]) - float(ma200.iloc[-20])) / float(ma200.iloc[-20])) * 100
-    trend_weak  = ma200_slope <= 0
-    dist_ma200  = ((cur_p - float(ma200.iloc[-1])) / float(ma200.iloc[-1])) * 100
+        # RSI (fixed formula)
+        delta_p = close.diff()
+        gain    = delta_p.where(delta_p > 0, 0.0).rolling(14).mean()
+        loss    = (-delta_p.where(delta_p < 0, 0.0)).rolling(14).mean()
+        rs      = gain / loss
+        rs[loss == 0] = np.inf
+        rsi_series = 100 - (100 / (1 + rs))
+        rsi_val  = float(rsi_series.iloc[-1])
+        rsi_prev = float(rsi_series.iloc[-2])
+        rsi_rising = rsi_val > rsi_prev
 
-    # Volatility & trigger
-    volatility        = float(close.pct_change().rolling(20).std().iloc[-1] * 100)
-    trigger_threshold = max(1.0, volatility * 1.5)
-    price_change      = float((close.iloc[-1] - close.iloc[-2]) / close.iloc[-2] * 100)
+        # MACD
+        ema12     = close.ewm(span=12, adjust=False).mean()
+        ema26     = close.ewm(span=26, adjust=False).mean()
+        macd_line = ema12 - ema26
+        macd_sig  = macd_line.ewm(span=9, adjust=False).mean()
+        macd_hist = macd_line - macd_sig
+        macd_bull = float(macd_line.iloc[-1]) > float(macd_sig.iloc[-1])
+        macd_accel= float(macd_hist.iloc[-1]) > 0
 
-    # 52-week levels
-    week52h   = float(close.tail(252).max())
-    week52l   = float(close.tail(252).min())
-    dist_52h  = ((cur_p - week52h) / week52h) * 100
-    dist_52l  = ((cur_p - week52l) / week52l) * 100
+        # Trend
+        ma200_slope = ((float(ma200.iloc[-1]) - float(ma200.iloc[-20])) / float(ma200.iloc[-20])) * 100
+        trend_weak  = ma200_slope <= 0
+        dist_ma200  = ((cur_p - float(ma200.iloc[-1])) / float(ma200.iloc[-1])) * 100
 
-    # VIX
-    live_vix_dd, _ = get_live_vix(), None
-    fg_auto_dd, fg_rating_dd = get_fg_index()
-    fg_val = fg_auto_dd if fg_auto_dd is not None else 50
+        # Volatility & trigger
+        volatility        = float(close.pct_change().rolling(20).std().iloc[-1] * 100)
+        trigger_threshold = max(1.0, volatility * 1.5)
+        price_change      = float((close.iloc[-1] - close.iloc[-2]) / close.iloc[-2] * 100)
 
-    # Entry state
-    if rsi_val < 35 and trend_weak:
-        entry_state = "WAIT"
-    elif price_change > trigger_threshold and rsi_rising:
-        entry_state = "TRIGGER"
-    else:
-        entry_state = "WATCH"
+        # 52-week levels
+        week52h   = float(close.tail(252).max())
+        week52l   = float(close.tail(252).min())
+        dist_52h  = ((cur_p - week52h) / week52h) * 100
+        dist_52l  = ((cur_p - week52l) / week52l) * 100
 
-    # Exit state
-    price_drop  = -price_change
-    rsi_falling = not rsi_rising
-    trend_strong = ma200_slope > 0
-    if rsi_val > 65 and trend_strong:
-        exit_state = "WAIT"
-    elif price_drop > trigger_threshold and rsi_falling:
-        exit_state = "TRIGGER"
-    else:
-        exit_state = "WATCH"
+        # VIX
+        live_vix_dd, _ = get_live_vix(), None
+        fg_auto_dd, fg_rating_dd = get_fg_index()
+        fg_val = fg_auto_dd if fg_auto_dd is not None else 50
 
-    # Scores
-    buy_score  = (40 if fg_val < 35 else 0) + (30 if rsi_val < 40 else 0) + (30 if cur_p < float(ma200.iloc[-1]) else 0)
-    sell_score = (40 if fg_val > 65 else 0) + (30 if rsi_val > 65 else 0) + (30 if cur_p > float(ma200.iloc[-1]) else 0)
-
-    # Knife check
-    price_slope_dd = linear_slope(close, window=10)
-    is_knife_dd    = (dist_ma200 < -15) and (rsi_val < 35) and (price_slope_dd < -0.003)
-    reversal_dd    = is_knife_dd and macd_bull and rsi_rising
-
-    # ── Header row
-    st.markdown("---")
-    h1, h2, h3, h4, h5 = st.columns(5)
-    h1.metric("Price",     f"{cur_p:.2f}")
-    h2.metric("MA200",     f"{float(ma200.iloc[-1]):.2f}", delta=f"{dist_ma200:+.1f}%", delta_color="normal")
-    h3.metric("RSI",       f"{rsi_val:.1f}", delta="↗ Rising" if rsi_rising else "↘ Falling", delta_color="off")
-    h4.metric("MACD",      "▲ Bull" if macd_bull else "▼ Bear")
-    h5.metric("52W High",  f"{dist_52h:+.1f}%")
-
-    # Links
-    link_col1, link_col2, link_col3 = st.columns(3)
-    with link_col1:
-        st.markdown(f"[📈 Yahoo Finance](https://finance.yahoo.com/quote/{ticker})")
-    with link_col2:
-        st.markdown(f"[📊 ETF.com](https://www.etf.com/{ticker})")
-    with link_col3:
-        if isin:
-            st.markdown(f"[🔍 justETF (ISIN)](https://www.justetf.com/en/etf-profile.html?isin={isin})")
-            st.caption(f"ISIN: `{isin}`")
+        # Entry state
+        if rsi_val < 35 and trend_weak:
+            entry_state = "WAIT"
+        elif price_change > trigger_threshold and rsi_rising:
+            entry_state = "TRIGGER"
         else:
-            st.markdown(f"[🔍 justETF](https://www.justetf.com/en/search.html?query={ticker})")
+            entry_state = "WATCH"
 
-    # ── Decision boxes
-    st.markdown("### 🎯 Decision")
-    dcol1, dcol2 = st.columns(2)
+        # Exit state
+        price_drop  = -price_change
+        rsi_falling = not rsi_rising
+        trend_strong = ma200_slope > 0
+        if rsi_val > 65 and trend_strong:
+            exit_state = "WAIT"
+        elif price_drop > trigger_threshold and rsi_falling:
+            exit_state = "TRIGGER"
+        else:
+            exit_state = "WATCH"
 
-    with dcol1:
-        st.markdown("#### 📥 Buy")
-        if is_knife_dd and not reversal_dd:
-            st.error("⛔ AVOID — Falling knife. Wait for reversal confirmation.")
-        elif entry_state == "WAIT":
-            st.warning("⏳ WAIT — Market still falling. Let it stabilize.")
-        elif entry_state == "WATCH":
-            if buy_score >= 70:
-                st.info(f"⚖️ PREPARE — Good setup, wait for confirmation (~EUR {dd_baseline:,.0f})")
+        # Scores
+        buy_score  = (40 if fg_val < 35 else 0) + (30 if rsi_val < 40 else 0) + (30 if cur_p < float(ma200.iloc[-1]) else 0)
+        sell_score = (40 if fg_val > 65 else 0) + (30 if rsi_val > 65 else 0) + (30 if cur_p > float(ma200.iloc[-1]) else 0)
+
+        # Knife check
+        price_slope_dd = linear_slope(close, window=10)
+        is_knife_dd    = (dist_ma200 < -15) and (rsi_val < 35) and (price_slope_dd < -0.003)
+        reversal_dd    = is_knife_dd and macd_bull and rsi_rising
+
+        # ── Header row
+        st.markdown("---")
+        h1, h2, h3, h4, h5 = st.columns(5)
+        h1.metric("Price",     f"{cur_p:.2f}")
+        h2.metric("MA200",     f"{float(ma200.iloc[-1]):.2f}", delta=f"{dist_ma200:+.1f}%", delta_color="normal")
+        h3.metric("RSI",       f"{rsi_val:.1f}", delta="↗ Rising" if rsi_rising else "↘ Falling", delta_color="off")
+        h4.metric("MACD",      "▲ Bull" if macd_bull else "▼ Bear")
+        h5.metric("52W High",  f"{dist_52h:+.1f}%")
+
+        # Links
+        link_col1, link_col2, link_col3 = st.columns(3)
+        with link_col1:
+            st.markdown(f"[📈 Yahoo Finance](https://finance.yahoo.com/quote/{ticker})")
+        with link_col2:
+            st.markdown(f"[📊 ETF.com](https://www.etf.com/{ticker})")
+        with link_col3:
+            if isin:
+                st.markdown(f"[🔍 justETF (ISIN)](https://www.justetf.com/en/etf-profile.html?isin={isin})")
+                st.caption(f"ISIN: `{isin}`")
             else:
-                st.info("🔍 WATCH — No strong entry yet.")
-        else:  # TRIGGER
-            if buy_score >= 70:
-                st.success(f"🔥 AGGRESSIVE BUY — EUR {dd_baseline*2:,.0f}")
-            elif buy_score >= 40:
-                st.success(f"⚖️ STEADY BUY — EUR {dd_baseline:,.0f}")
+                st.markdown(f"[🔍 justETF](https://www.justetf.com/en/search.html?query={ticker})")
+
+        # ── Decision boxes
+        st.markdown("### 🎯 Decision")
+        dcol1, dcol2 = st.columns(2)
+
+        with dcol1:
+            st.markdown("#### 📥 Buy")
+            if is_knife_dd and not reversal_dd:
+                st.error("⛔ AVOID — Falling knife. Wait for reversal confirmation.")
+            elif entry_state == "WAIT":
+                st.warning("⏳ WAIT — Market still falling. Let it stabilize.")
+            elif entry_state == "WATCH":
+                if buy_score >= 70:
+                    st.info(f"⚖️ PREPARE — Good setup, wait for confirmation (~EUR {dd_baseline:,.0f})")
+                else:
+                    st.info("🔍 WATCH — No strong entry yet.")
+            else:  # TRIGGER
+                if buy_score >= 70:
+                    st.success(f"🔥 AGGRESSIVE BUY — EUR {dd_baseline*2:,.0f}")
+                elif buy_score >= 40:
+                    st.success(f"⚖️ STEADY BUY — EUR {dd_baseline:,.0f}")
+                else:
+                    st.warning(f"⚠️ LIGHT BUY — EUR {dd_baseline*0.5:,.0f}")
+
+            if reversal_dd:
+                st.success("✅ Reversal confirmed (was knife — MACD + RSI turned bullish)")
+
+        with dcol2:
+            st.markdown("#### 📤 Sell / Exit")
+            if exit_state == "WAIT":
+                st.info("🟡 HOLD — Momentum still strong.")
+            elif exit_state == "WATCH":
+                st.warning("🔵 WATCH — No confirmed downtrend yet.")
             else:
-                st.warning(f"⚠️ LIGHT BUY — EUR {dd_baseline*0.5:,.0f}")
+                st.error("🔴 SELL TRIGGER — Downtrend starting.")
 
-        if reversal_dd:
-            st.success("✅ Reversal confirmed (was knife — MACD + RSI turned bullish)")
+            if sell_score >= 70:
+                st.error("🚨 STRONG SELL — Reduce exposure significantly.")
+            elif sell_score >= 40:
+                st.warning("⚠️ PARTIAL SELL — Trim positions.")
+            else:
+                st.success("🟢 HOLD — No strong sell signal.")
 
-    with dcol2:
-        st.markdown("#### 📤 Sell / Exit")
-        if exit_state == "WAIT":
-            st.info("🟡 HOLD — Momentum still strong.")
-        elif exit_state == "WATCH":
-            st.warning("🔵 WATCH — No confirmed downtrend yet.")
+        # ── Detailed signals
+        st.markdown("### 🧠 Market Signals")
+        s1, s2, s3, s4 = st.columns(4)
+
+        with s1:
+            st.metric("Fear & Greed", fg_auto_dd if fg_auto_dd else "Manual",
+                      delta=fg_rating_dd if fg_rating_dd else "")
+            with st.expander("What this means"):
+                st.write("0–25 Extreme Fear (best opportunities)\n\n25–50 Fear\n\n50–75 Greed\n\n75–100 Extreme Greed (overvalued)")
+
+        with s2:
+            vix_dd = get_live_vix()
+            st.metric("VIX", f"{vix_dd:.2f}")
+            with st.expander("What this means"):
+                st.write("<15 Complacency\n\n15–25 Normal\n\n25–30 Elevated\n\n>30 Fear / crisis")
+
+        with s3:
+            st.metric("RSI (14d)", f"{rsi_val:.1f}", delta="↗" if rsi_rising else "↘", delta_color="off")
+            with st.expander("What this means"):
+                st.write(f"<30 Oversold — potential rebound zone\n\n30–70 Neutral\n\n>70 Overbought\n\nCurrent: {rsi_val:.1f} ({'Rising' if rsi_rising else 'Falling'})")
+
+        with s4:
+            st.metric("MA200 Slope", f"{ma200_slope:+.2f}%")
+            with st.expander("What this means"):
+                st.write("Positive = uptrend intact\n\nNegative = downtrend\n\n|slope| < 0.5% = flat\n\n|slope| > 2% = strong trend")
+
+        # ── Entry timing detail
+        with st.expander("⏱ Entry Timing Detail"):
+            st.markdown(f"""
+    | Signal | Value | Threshold | Status |
+    |--------|-------|-----------|--------|
+    | Price change (1d) | `{price_change:+.2f}%` | `{trigger_threshold:.2f}%` | {'✅ Above trigger' if abs(price_change) > trigger_threshold else '⬇️ Below trigger'} |
+    | RSI momentum | `{rsi_val:.1f}` | — | {'↗ Rising' if rsi_rising else '↘ Falling'} |
+    | MA200 trend | `{ma200_slope:+.2f}%` | 0% | {'✅ Supportive' if not trend_weak else '⚠️ Weak'} |
+    | MACD | {'▲ Bullish' if macd_bull else '▼ Bearish'} | — | {'✅' if macd_bull else '⚠️'} |
+    | MACD Accel | {'⚡ Positive' if macd_accel else '— Neutral'} | — | {'✅' if macd_accel else '—'} |
+    | Volatility (20d) | `{volatility:.2f}%` | — | — |
+    | Dist from MA200 | `{dist_ma200:+.1f}%` | — | {'🟢 Below' if dist_ma200 < 0 else '🔴 Above'} |
+    | 52W High dist | `{dist_52h:+.1f}%` | — | — |
+    | 52W Low dist | `{dist_52l:+.1f}%` | — | — |
+            """)
+
+        # ── Chart
+        st.markdown("### 📊 Price Chart (2Y)")
+        chart_df = pd.DataFrame({
+            "Price": close,
+            "MA50":  ma50,
+            "MA200": ma200,
+        }).dropna(subset=["Price"])
+        st.line_chart(chart_df, use_container_width=True)
+
+        # ── MACD histogram chart
+        st.markdown("### 📈 MACD")
+        macd_df = pd.DataFrame({
+            "MACD":      macd_line,
+            "Signal":    macd_sig,
+            "Histogram": macd_hist,
+        }).tail(180).dropna()
+        st.line_chart(macd_df, use_container_width=True)
+
+        # ── RSI chart
+        st.markdown("### 📉 RSI (14d)")
+        rsi_df = rsi_series.tail(180).to_frame(name="RSI").dropna()
+        st.line_chart(rsi_df, use_container_width=True)
+        st.caption("Oversold zone: <30 · Overbought zone: >70")
+
+with _tab_dive:
+    run_deep_dive()
+
+_tab_scanner, _tab_dive = st.tabs(["🔭 Market Scanner", "🔬 Deep Dive — Individual Asset"])
+
+with _tab_scanner:
+
+    fg_auto, fg_rating = get_fg_index()
+
+    col_vix, col_fg = st.columns(2)
+    with col_vix:
+        live_vix = get_live_vix()
+        st.metric("Live VIX", f"{live_vix:.2f}",
+            delta="High fear" if live_vix > 30 else ("Calm" if live_vix < 15 else "Normal"),
+            delta_color="inverse")
+        st.caption("[📈 Yahoo Finance VIX](https://finance.yahoo.com/quote/%5EVIX/)")
+
+    with col_fg:
+        if fg_auto is not None:
+            st.metric("Fear & Greed (CNN live)", f"{fg_auto}",
+                delta=fg_rating, delta_color="off")
+            fg_index = fg_auto
+            st.caption("[🧠 CNN Fear & Greed](https://edition.cnn.com/markets/fear-and-greed)")
         else:
-            st.error("🔴 SELL TRIGGER — Downtrend starting.")
+            fg_index = st.slider("Fear & Greed (manual)", 0, 100, 50)
+            st.caption("[🧠 CNN Fear & Greed](https://edition.cnn.com/markets/fear-and-greed) — auto-fetch unavailable")
 
-        if sell_score >= 70:
-            st.error("🚨 STRONG SELL — Reduce exposure significantly.")
-        elif sell_score >= 40:
-            st.warning("⚠️ PARTIAL SELL — Trim positions.")
-        else:
-            st.success("🟢 HOLD — No strong sell signal.")
+    risk_mult = 1.0 + ((live_vix / 20) * ((100 - fg_index) / 50))
 
-    # ── Detailed signals
-    st.markdown("### 🧠 Market Signals")
-    s1, s2, s3, s4 = st.columns(4)
+    st.sidebar.subheader("Market Context")
+    if   risk_mult > 2.5: st.sidebar.error(f"🔥 Extreme Fear ({risk_mult:.2f}x)")
+    elif risk_mult > 2.0: st.sidebar.error(f"😰 High Fear ({risk_mult:.2f}x)")
+    elif risk_mult < 1.2: st.sidebar.info(f"😌 Calm ({risk_mult:.2f}x)")
+    else:                 st.sidebar.warning(f"⚖️ Normal ({risk_mult:.2f}x)")
 
-    with s1:
-        st.metric("Fear & Greed", fg_auto_dd if fg_auto_dd else "Manual",
-                  delta=fg_rating_dd if fg_rating_dd else "")
-        with st.expander("What this means"):
-            st.write("0–25 Extreme Fear (best opportunities)\n\n25–50 Fear\n\n50–75 Greed\n\n75–100 Extreme Greed (overvalued)")
+    # VIX regime override hint
+    if live_vix > 40:
+        st.warning("⚡ VIX > 40 — Extreme regime. MACD confirmation relaxed for reversals. "
+                   "Violent bounces possible. Size positions conservatively.")
 
-    with s2:
-        vix_dd = get_live_vix()
-        st.metric("VIX", f"{vix_dd:.2f}")
-        with st.expander("What this means"):
-            st.write("<15 Complacency\n\n15–25 Normal\n\n25–30 Elevated\n\n>30 Fear / crisis")
+    # ─────────────────────────────────────────────
+    # SIGNAL GUIDE
+    # ─────────────────────────────────────────────
 
-    with s3:
-        st.metric("RSI (14d)", f"{rsi_val:.1f}", delta="↗" if rsi_rising else "↘", delta_color="off")
-        with st.expander("What this means"):
-            st.write(f"<30 Oversold — potential rebound zone\n\n30–70 Neutral\n\n>70 Overbought\n\nCurrent: {rsi_val:.1f} ({'Rising' if rsi_rising else 'Falling'})")
+    with st.expander("📖 Signal Guide & Financial Principles"):
+        st.markdown("""
+    | Signal | Meaning | Suggested action |
+    |--------|---------|-----------------|
+    | **BUY** | >10% below MA200 · RSI<40 · MACD bullish · MACD accelerating | Full position — all conditions met |
+    | **WATCH** | Oversold but only partial MACD/RSI confirmation | Small starter — wait for BUY confirmation |
+    | **AVOID** | Falling knife — deeply below MA200 · RSI<35 · price slope still negative | Do not enter. Wait for reversal |
+    | **WAIT** | No clear signal | Hold cash or existing position |
+    | **SELL** | >10% above MA200 · RSI>70 | Overbought — trim or take profit |
 
-    with s4:
-        st.metric("MA200 Slope", f"{ma200_slope:+.2f}%")
-        with st.expander("What this means"):
-            st.write("Positive = uptrend intact\n\nNegative = downtrend\n\n|slope| < 0.5% = flat\n\n|slope| > 2% = strong trend")
+    **Why both MACD and RSI?**
+    RSI tells you *how oversold*. MACD tells you *if momentum is turning*. Together they filter out stocks that are cheap for a reason (still falling) vs genuinely recovering.
 
-    # ── Entry timing detail
-    with st.expander("⏱ Entry Timing Detail"):
-        st.markdown(f"""
-| Signal | Value | Threshold | Status |
-|--------|-------|-----------|--------|
-| Price change (1d) | `{price_change:+.2f}%` | `{trigger_threshold:.2f}%` | {'✅ Above trigger' if abs(price_change) > trigger_threshold else '⬇️ Below trigger'} |
-| RSI momentum | `{rsi_val:.1f}` | — | {'↗ Rising' if rsi_rising else '↘ Falling'} |
-| MA200 trend | `{ma200_slope:+.2f}%` | 0% | {'✅ Supportive' if not trend_weak else '⚠️ Weak'} |
-| MACD | {'▲ Bullish' if macd_bull else '▼ Bearish'} | — | {'✅' if macd_bull else '⚠️'} |
-| MACD Accel | {'⚡ Positive' if macd_accel else '— Neutral'} | — | {'✅' if macd_accel else '—'} |
-| Volatility (20d) | `{volatility:.2f}%` | — | — |
-| Dist from MA200 | `{dist_ma200:+.1f}%` | — | {'🟢 Below' if dist_ma200 < 0 else '🔴 Above'} |
-| 52W High dist | `{dist_52h:+.1f}%` | — | — |
-| 52W Low dist | `{dist_52l:+.1f}%` | — | — |
+    **RSI↗ arrow:** Rising RSI on an oversold stock is an early reversal signal even before MACD confirms.
+
+    **MACD Accel (⚡):** MACD histogram turning positive means the bullish momentum is *accelerating* — strongest buy confirmation.
+
+    **Falling Knife:**
+    Anything >15% below MA200 with RSI<35 and a negative price slope is dangerous. It looks cheap. It may not be. Always check news before acting.
+
+    **P/E context (enable in sidebar):**
+    - <15: potentially undervalued · 15–25: fair · >30: growth premium
+    - A stock with RSI 30 but P/E 80 is still expensive on earnings
+
+    **VIX levels:**
+    - <15: complacency — markets may be stretched  
+    - 15–25: normal  
+    - >30: fear — historically good long-term entries, short-term pain likely  
+    - >40: crisis — maximum opportunity AND maximum risk. MACD confirmation less reliable.
+
+    **Position sizing:**
+    Allocation is scaled by confidence score and volatility — not just signal strength. High-volatility names get smaller allocations automatically.
         """)
 
-    # ── Chart
-    st.markdown("### 📊 Price Chart (2Y)")
-    chart_df = pd.DataFrame({
-        "Price": close,
-        "MA50":  ma50,
-        "MA200": ma200,
-    }).dropna(subset=["Price"])
-    st.line_chart(chart_df, use_container_width=True)
+    # ─────────────────────────────────────────────
+    # SCAN
+    # ─────────────────────────────────────────────
 
-    # ── MACD histogram chart
-    st.markdown("### 📈 MACD")
-    macd_df = pd.DataFrame({
-        "MACD":      macd_line,
-        "Signal":    macd_sig,
-        "Histogram": macd_hist,
-    }).tail(180).dropna()
-    st.line_chart(macd_df, use_container_width=True)
+    if len(tickers) == 0:
+        st.error("No tickers match current filters.")
+        st.stop()
 
-    # ── RSI chart
-    st.markdown("### 📉 RSI (14d)")
-    rsi_df = rsi_series.tail(180).to_frame(name="RSI").dropna()
-    st.line_chart(rsi_df, use_container_width=True)
-    st.caption("Oversold zone: <30 · Overbought zone: >70")
+    c1, c2 = st.columns([4, 1])
+    with c1:
+        run = st.button("🔄 Run Market Scan", type="primary", use_container_width=True)
+    with c2:
+        if st.button("🗑️ Clear", use_container_width=True):
+            for k in ["scan_results","scan_attempted","scan_valid"]:
+                st.session_state.pop(k, None)
+            st.rerun()
 
-# ─────────────────────────────────────────────
-# DEEP DIVE SECTION
-# ─────────────────────────────────────────────
+    if run:
+        n = min(len(tickers), MAX_TICKERS)
+        scan_tickers = tickers[:n]
 
-st.markdown("---")
-run_deep_dive()
+        prog   = st.progress(0, text=f"Launching {n_workers} parallel workers…")
+        status = st.empty()
+
+        # Run parallel scan — progress is approximate since threads complete out of order
+        with st.spinner(f"Scanning {n:,} tickers with {n_workers} workers…"):
+            results = parallel_scan(scan_tickers, risk_mult, fetch_pe, max_workers=n_workers)
+
+        prog.empty()
+
+        if not results:
+            st.error("No valid data returned. Check internet connection.")
+        else:
+            df = pd.DataFrame(results)
+            df["Score"]     = compute_scores(df)
+            df              = df.sort_values("Score", ascending=False).reset_index(drop=True)
+            df["Rank"]      = df.index + 1
+            df["Suggested"] = df.apply(
+                lambda r: allocation_label(r, baseline, fg_index, risk_mult), axis=1)
+
+            st.session_state["scan_results"]  = df
+            st.session_state["scan_attempted"] = n
+            st.session_state["scan_valid"]     = len(df)
+            status.empty()
+            st.success(f"✅ Scan complete — {len(df)} valid results from {n} attempted")
+
+    # ─────────────────────────────────────────────
+    # RESULTS
+    # ─────────────────────────────────────────────
+
+    if "scan_results" in st.session_state:
+        df        = st.session_state["scan_results"]
+        attempted = st.session_state.get("scan_attempted", len(df))
+        valid     = st.session_state.get("scan_valid", len(df))
+
+        COLS = ["Rank","Ticker","Price","MA50","MA200","Dist%","52W%","RSI","RSI↗",
+                "MACD","MACD Accel","Vol%","Confidence","PE","Cap",
+                "Signal","Knife","Suggested","Yahoo","etf.com","justETF"]
+        COLS = [c for c in COLS if c in df.columns]
+
+        st.markdown("---")
+        st.subheader("📊 Scan Results")
+
+        k1,k2,k3,k4,k5,k6,k7 = st.columns(7)
+        k1.metric("Attempted",  attempted)
+        k2.metric("Valid",      valid, delta=f"-{attempted-valid} filtered", delta_color="off")
+        k3.metric("🟢 BUY",    int((df["Action"]=="BUY").sum()))
+        k4.metric("👀 WATCH",  int((df["Action"]=="WATCH").sum()))
+        k5.metric("⛔ AVOID",  int((df["Action"]=="AVOID").sum()))
+        k6.metric("🔴 SELL",   int((df["Action"]=="SELL").sum()))
+        k7.metric("🟡 WAIT",   int((df["Action"]=="WAIT").sum()))
+
+        tabs = st.tabs(["All","🟢 BUY","👀 WATCH","⛔ AVOID","🔴 SELL","🟡 WAIT"])
+        filters = [None, "BUY", "WATCH", "AVOID", "SELL", "WAIT"]
+
+        def colour(val):
+            v = str(val)
+            if "BUY"    in v: return "color:#00c853;font-weight:bold"
+            if "WATCH"  in v: return "color:#00bcd4;font-weight:bold"
+            if "AVOID"  in v: return "color:#ff6d00;font-weight:bold"
+            if "SELL"   in v: return "color:#ff1744;font-weight:bold"
+            if "WAIT"   in v: return "color:#ffd600"
+            return ""
+
+        def show_table(data):
+            if data.empty:
+                st.info("No results in this category.")
+                return
+            show_cols = [c for c in COLS if c in data.columns]
+            fmt = {
+                "Price":"{:.2f}", "MA50":"{:.2f}", "MA200":"{:.2f}",
+                "Dist%":"{:+.1f}%", "52W%":"{:+.1f}%",
+                "RSI":"{:.1f}", "Vol%":"{:.2f}%", "Confidence":"{:.2f}",
+            }
+            fmt = {k: v for k, v in fmt.items() if k in show_cols}
+            styled = (
+                data[show_cols].style
+                .applymap(colour, subset=["Signal"])
+                .format(fmt)
+                .background_gradient(subset=["Dist%"],      cmap="RdYlGn")
+                .background_gradient(subset=["RSI"],        cmap="RdYlGn_r")
+                .background_gradient(subset=["Confidence"], cmap="Blues")
+            )
+            st.dataframe(
+                styled,
+                use_container_width=True,
+                height=520,
+                column_config={
+                    "Yahoo":   st.column_config.LinkColumn("Yahoo",   display_text="📈 YF"),
+                    "etf.com": st.column_config.LinkColumn("ETF.com", display_text="📊 ETF"),
+                    "justETF": st.column_config.LinkColumn("justETF", display_text="🔍 jETF"),
+                }
+            )
+
+        for tab, action in zip(tabs, filters):
+            with tab:
+                show_table(df if action is None else df[df["Action"]==action].reset_index(drop=True))
+
+        st.markdown("---")
+        csv = df[COLS].to_csv(index=False).encode("utf-8")
+        st.download_button("⬇️ Download CSV", data=csv,
+            file_name="scan_results.csv", mime="text/csv", use_container_width=True)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # DEEP DIVE — Individual Asset Analysis (appended as a second page)
+    # ═══════════════════════════════════════════════════════════════════
