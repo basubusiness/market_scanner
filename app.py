@@ -112,15 +112,9 @@ def load_justetf():
         return pd.DataFrame()
 
 # Load on startup (background thread so server starts fast)
-universe = pd.DataFrame()
-jetf_df  = pd.DataFrame()
-
-def _startup_load():
-    global universe, jetf_df
-    universe = load_base_universe()
-    jetf_df  = load_justetf()
-
-threading.Thread(target=_startup_load, daemon=True).start()
+# Load synchronously — universe must be ready before any callback runs
+universe = load_base_universe()
+jetf_df  = load_justetf()
 
 # ───────────────────────────────────────────────────────────────────
 # TECHNICAL INDICATORS
@@ -692,18 +686,56 @@ def update_live(_):
     Output("types-row","style"),
     Output("etf-filters-row","style"),
     Output("stock-filters-row","style"),
+    # Dynamically update filter options based on preset + current selections
+    Output("filter-domicile","options"),
+    Output("filter-dist","options"),
+    Output("filter-replication","options"),
+    Output("filter-strategy","options"),
+    Output("filter-category","options"),
+    Output("filter-country","options"),
+    Output("filter-sector","options"),
     Input("preset-dd","value"),
     Input("filter-types","value"),
+    Input("filter-country","value"),  # cascade: country narrows sector
 )
-def toggle_filter_sections(preset, types):
-    ptype = PRESETS.get(preset,{}).get("type","ETF")
-    custom = ptype == "custom"
-    etfs_on   = custom and "ETF"   in (types or []) or ptype == "ETF"
-    stocks_on = custom and "Stock" in (types or []) or ptype == "Stock"
-    types_style  = {} if custom else {"display":"none"}
-    etf_style    = {} if etfs_on   else {"display":"none"}
-    stock_style  = {} if stocks_on else {"display":"none"}
-    return types_style, etf_style, stock_style
+def update_filter_sections(preset, types, selected_country):
+    ptype   = PRESETS.get(preset,{}).get("type","ETF")
+    custom  = ptype == "custom"
+    etfs_on   = (custom and "ETF"   in (types or [])) or ptype == "ETF"
+    stocks_on = (custom and "Stock" in (types or [])) or ptype == "Stock"
+
+    types_style = {} if custom else {"display":"none"}
+    etf_style   = {} if etfs_on   else {"display":"none"}
+    stock_style = {} if stocks_on else {"display":"none"}
+
+    def jcol_opts(col):
+        if jetf_df.empty or col not in jetf_df.columns:
+            return []
+        vals = sorted([v for v in jetf_df[col].dropna().unique() if str(v).strip()])
+        return [{"label":v,"value":v} for v in vals]
+
+    def uopts(col, filter_type=None, country_filter=None):
+        if universe.empty:
+            return []
+        df = universe[universe["type"]==filter_type] if filter_type else universe
+        if country_filter and "country" in df.columns:
+            df = df[df["country"].isin(country_filter)]
+        if col not in df.columns:
+            return []
+        vals = sorted([v for v in df[col].dropna().unique() if str(v).strip()])
+        return [{"label":v,"value":v} for v in vals]
+
+    dom_opts  = jcol_opts("domicile")
+    dist_opts = jcol_opts("dist_policy")
+    repl_opts = jcol_opts("replication")
+    strat_opts= jcol_opts("strategy")
+    cat_opts  = uopts("category_group", "ETF")
+    ctry_opts = uopts("country", "Stock")
+    sect_opts = uopts("sector", "Stock", selected_country)
+
+    return (types_style, etf_style, stock_style,
+            dom_opts, dist_opts, repl_opts, strat_opts, cat_opts,
+            ctry_opts, sect_opts)
 
 @app.callback(
     Output("scope-label","children"),
@@ -1249,5 +1281,8 @@ def download_csv(n, store_data):
     df = pd.read_json(store_data, orient="split")
     return dcc.send_data_frame(df.to_csv, "scan_results.csv", index=False)
 
+import os
+
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=8050)
+    port = int(os.environ.get("PORT", 8050))
+    app.run(debug=False, host="0.0.0.0", port=port)
