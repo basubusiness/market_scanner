@@ -43,6 +43,7 @@ server = app.server  # expose Flask server for gunicorn
 
 _cache = {}
 _cache_lock = threading.Lock()
+_active_scans = {}  # scan_id -> bool, False = cancelled
 
 def cache_get(key):
     with _cache_lock:
@@ -653,18 +654,18 @@ def scanner_tab():
         # Scan controls
         dbc.Row([
             dbc.Col(dbc.Button(
-                [html.Span("🔄 Run Scan", id="run-btn-text"),
-                 dbc.Spinner(size="sm", spinner_style={"marginLeft":"8px"}, id="run-spinner",
+                [html.Span("🔄 Run Scan"),
+                 dbc.Spinner(size="sm", spinner_style={"marginLeft":"8px"},
                              color="light", show_initially=False)],
                 id="run-btn", color="danger", size="lg", className="w-100"
-            ), width=10),
+            ), width=8),
             dbc.Col(dbc.Button("⏹ Stop", id="stop-btn", color="warning",
-                               size="lg", className="w-100",
-                               disabled=True), width=2),
-            dbc.Col(dbc.Button("🗑️ Clear", id="clear-btn", color="secondary",
-                               size="lg", className="w-100"), width=2),
-        ], className="mb-3", style={"--bs-gutter-x":"0.5rem"}),
-        dcc.Store(id="abort-store", data=False),
+                               size="lg", className="w-100", disabled=True),
+                    width=2),
+            dbc.Col(dbc.Button("🗑️", id="clear-btn", color="secondary",
+                               size="lg", className="w-100", title="Clear"),
+                    width=2),
+        ], className="mb-2 g-1"),
 
         # Scan status bar
         html.Div(id="scan-status-bar", children=[
@@ -897,6 +898,8 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
         return None, "Results cleared.", {"display":"none"}, False, False
 
     if "stop-btn" in triggered:
+        for sid in list(_active_scans.keys()):
+            _active_scans[sid] = False
         cache_set("current_scan_id", "stopped")
         return no_update, "⏹ Scan stopped.", {"display":"block"}, False, False
 
@@ -921,14 +924,15 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
     import uuid
     scan_id = str(uuid.uuid4())[:8]
     cache_set("current_scan_id", scan_id)
+    _active_scans[scan_id] = True
 
     results = {}
     with ThreadPoolExecutor(max_workers=int(workers or 6)) as ex:
         futs = {ex.submit(analyse_ticker, t, risk_mult): t for t in tickers}
         for fut in as_completed(futs):
-            if cache_get("current_scan_id") != scan_id:
-                return (no_update,
-                        "⏹ Scan cancelled.",
+            if cache_get("current_scan_id") != scan_id or not _active_scans.get(scan_id, True):
+                _active_scans.pop(scan_id, None)
+                return (no_update, "⏹ Scan cancelled.",
                         {"display":"block"}, False, False)
             t = futs[fut]
             try:
@@ -997,6 +1001,7 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
               f"SELL:{(df['Action']=='SELL').sum()} "
               f"AVOID:{(df['Action']=='AVOID').sum()}")
 
+    _active_scans.pop(scan_id, None)
     return df.to_json(date_format="iso", orient="split"), status, {}, False, False
 
 # ───────────────────────────────────────────────────────────────────
