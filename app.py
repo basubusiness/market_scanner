@@ -670,6 +670,16 @@ def scanner_tab():
 
         # Scan status bar — loading indicator tied to button state only
         html.Div([
+            # Progress bar
+            html.Div([
+                dbc.Progress(id="scan-progress-bar", value=0, max=100,
+                             label="", striped=True, animated=True,
+                             color="danger",
+                             style={"height":"24px","marginBottom":"8px",
+                                    "display":"none","fontSize":"12px"}),
+                html.Small(id="scan-progress-text", className="text-muted",
+                           style={"display":"none"}),
+            ], id="progress-container"),
             dbc.Alert(id="scan-status-alert", color="info",
                       className="py-2 px-3 mb-2 mt-2", style={"display":"none"}),
         ], id="scan-status-bar"),
@@ -706,6 +716,8 @@ def scanner_tab():
         dcc.Store(id="scan-store"),
         dcc.Store(id="dive-trigger"),
         dcc.Store(id="scan-running", data=False),
+        # Progress polling
+        dcc.Interval(id="progress-interval", interval=1000, disabled=True),
     ])
 
 def deepdive_tab():
@@ -828,9 +840,16 @@ def update_filter_sections(preset, types, selected_country, _):
     ctry_opts = uopts("country", "Stock")
     sect_opts = uopts("sector", "Stock", selected_country)
 
+    # Only update options if we have data — don't wipe existing options
+    from dash import no_update as _nu
     return (types_style, etf_style, stock_style,
-            dom_opts, dist_opts, repl_opts, strat_opts, cat_opts,
-            ctry_opts, sect_opts)
+            dom_opts or _nu,
+            dist_opts or _nu,
+            repl_opts or _nu,
+            strat_opts or _nu,
+            cat_opts,      # always update — has fallback
+            ctry_opts or _nu,
+            sect_opts)     # sector cascades so always update
 
 @app.callback(
     Output("scope-label","children"),
@@ -933,11 +952,16 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
     _active_scans[scan_id] = True
 
     results = {}
+    total = len(tickers)
+    done  = 0
+    cache_set(f"progress_{scan_id}", {"done": 0, "total": total, "valid": 0}, ttl=300)
+
     with ThreadPoolExecutor(max_workers=int(workers or 6)) as ex:
         futs = {ex.submit(analyse_ticker, t, risk_mult): t for t in tickers}
         for fut in as_completed(futs):
             if cache_get("current_scan_id") != scan_id or not _active_scans.get(scan_id, True):
                 _active_scans.pop(scan_id, None)
+                cache_set(f"progress_{scan_id}", None)
                 return (no_update, "⏹ Scan cancelled.",
                         {"display":"block"}, False, False)
             t = futs[fut]
@@ -946,6 +970,13 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
                 results[t] = r
             except Exception:
                 results[t] = None
+            done += 1
+            valid_so_far = sum(1 for v in results.values() if v)
+            pct = round(done / total * 100)
+            cache_set(f"progress_{scan_id}", {
+                "done": done, "total": total, "valid": valid_so_far,
+                "pct": pct, "ticker": t
+            }, ttl=300)
 
     rows = [r for t in tickers if (r := results.get(t)) is not None]
     if not rows:
@@ -1423,13 +1454,15 @@ def run_deep_dive(n_clicks, user_input, budget):
 
 @app.callback(
     Output("run-btn","children"),
+    Output("progress-interval","disabled"),
     Input("run-btn","disabled"),
 )
 def update_run_btn_label(is_disabled):
     if is_disabled:
-        return [dbc.Spinner(size="sm", color="light",
-                            style={"marginRight":"8px"}), "Scanning…"]
-    return "🔄 Run Scan"
+        return ([dbc.Spinner(size="sm", color="light",
+                             style={"marginRight":"8px"}), "Scanning…"],
+                False)  # enable interval
+    return "🔄 Run Scan", True  # disable interval
 
 @app.callback(
     Output("filter-domicile","disabled"),
@@ -1446,6 +1479,42 @@ def update_run_btn_label(is_disabled):
 )
 def disable_filters_during_scan(btn_disabled):
     return [btn_disabled]*8 + [not btn_disabled]
+
+@app.callback(
+    Output("scan-progress-bar","value"),
+    Output("scan-progress-bar","label"),
+    Output("scan-progress-bar","style"),
+    Output("scan-progress-text","children"),
+    Output("scan-progress-text","style"),
+    Input("progress-interval","n_intervals"),
+    State("run-btn","disabled"),
+    prevent_initial_call=True,
+)
+def update_progress(_, is_scanning):
+    if not is_scanning:
+        hidden = {"display":"none"}
+        return 0, "", hidden, "", hidden
+
+    scan_id = cache_get("current_scan_id")
+    if not scan_id or scan_id == "stopped":
+        return 0, "", {"display":"none"}, "", {"display":"none"}
+
+    prog = cache_get(f"progress_{scan_id}")
+    if not prog:
+        return 0, "Starting…", {"height":"24px","marginBottom":"8px",
+                                 "fontSize":"12px"}, "", {"display":"none"}
+
+    pct   = prog.get("pct", 0)
+    done  = prog.get("done", 0)
+    total = prog.get("total", 1)
+    valid = prog.get("valid", 0)
+    last  = prog.get("ticker", "")
+
+    bar_style = {"height":"24px","marginBottom":"4px","fontSize":"12px"}
+    txt = f"✅ {valid} valid  |  📋 {done:,} / {total:,} scanned  |  Last: {last}"
+    txt_style = {"display":"block","fontSize":"11px","color":"#aaa","marginBottom":"8px"}
+
+    return pct, f"{pct}%", bar_style, txt, txt_style
 
 @app.callback(
     Output("dl-csv","data"),
