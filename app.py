@@ -304,10 +304,12 @@ def get_name_isin(ticker):
             cache_set(key, (name, isin), ttl=86400)
             return name, isin
     try:
-        info = yf.Ticker(ticker).fast_info
-        name = str(getattr(info,"name","") or "")[:40]
-        cache_set(key, (name, ""), ttl=86400)
-        return name, ""
+        info = yf.Ticker(ticker).info
+        name = (info.get("longName") or info.get("shortName") or "")[:40]
+        isin = info.get("isin","") or ""
+        result = (name or ticker, isin)
+        cache_set(key, result, ttl=86400)
+        return result
     except Exception:
         return ticker, ""
 
@@ -720,7 +722,8 @@ def update_filter_sections(preset, types, selected_country, _n):
     def jcol_opts(col):
         if jetf_df.empty or col not in jetf_df.columns:
             return []
-        vals = sorted([v for v in jetf_df[col].dropna().unique() if str(v).strip()])
+        vals = sorted([v for v in jetf_df[col].astype(str).str.strip().unique()
+                       if v and v not in ("", "nan", "None")])
         return [{"label":v,"value":v} for v in vals]
 
     def uopts(col, filter_type=None, country_filter=None):
@@ -731,7 +734,8 @@ def update_filter_sections(preset, types, selected_country, _n):
             df = df[df["country"].isin(country_filter)]
         if col not in df.columns:
             return []
-        vals = sorted([v for v in df[col].dropna().unique() if str(v).strip()])
+        vals = sorted([v for v in df[col].astype(str).str.strip().unique()
+                       if v and v not in ("", "nan", "None")])
         return [{"label":v,"value":v} for v in vals]
 
     dom_opts  = jcol_opts("domicile")
