@@ -1488,8 +1488,9 @@ def enable_dive_btn(selected_rows, store_data):
 )
 def open_deep_dive(n_clicks, selected_rows, store_data):
     if not n_clicks or not selected_rows or not store_data:
-        return no_update, no_update, no_update, no_update, no_update
-    df     = pd.read_json(store_data, orient="split")
+        return no_update, no_update
+    import io
+    df     = pd.read_json(io.StringIO(store_data), orient="split")
     idx    = selected_rows[0]
     ticker = df.iloc[idx]["Ticker"]
     return "deepdive", ticker
