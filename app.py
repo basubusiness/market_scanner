@@ -256,15 +256,43 @@ def fetch_ticker_data(ticker):
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_pe_ratio(ticker):
     try:
-        info = yf.Ticker(ticker).info
-        pe   = info.get("trailingPE") or info.get("forwardPE")
-        mcap = info.get("marketCap")
-        return (
-            round(float(pe), 1) if pe and 0 < pe < 1000 else None,
-            mcap,
-        )
+        info = yf.Ticker(ticker).fast_info
+        # fast_info is more reliable and faster than .info
+        mcap = getattr(info, "market_cap", None)
+        # PE not in fast_info — fall through to full info
     except Exception:
-        return None, None
+        mcap = None
+
+    pe = None
+    try:
+        info_full = yf.Ticker(ticker).info
+        # Try multiple PE fields in order of preference
+        for field in ["trailingPE", "forwardPE", "pegRatio"]:
+            val = info_full.get(field)
+            if val and isinstance(val, (int, float)) and 0 < float(val) < 2000:
+                pe = round(float(val), 1)
+                break
+        # Get market cap from full info if fast_info failed
+        if mcap is None:
+            mcap = info_full.get("marketCap")
+        # Also grab extra useful fields
+        eps          = info_full.get("trailingEps")
+        revenue_gr   = info_full.get("revenueGrowth")
+        profit_mar   = info_full.get("profitMargins")
+        div_yield    = info_full.get("dividendYield")
+        beta         = info_full.get("beta")
+        return {
+            "pe":         pe,
+            "mcap":       mcap,
+            "eps":        round(float(eps), 2)        if eps        else None,
+            "rev_growth": f"{revenue_gr*100:.1f}%"   if revenue_gr else None,
+            "margin":     f"{profit_mar*100:.1f}%"   if profit_mar else None,
+            "div_yield":  f"{div_yield*100:.2f}%"    if div_yield  else None,
+            "beta":       round(float(beta), 2)       if beta       else None,
+        }
+    except Exception:
+        return {"pe": pe, "mcap": mcap, "eps": None, "rev_growth": None,
+                "margin": None, "div_yield": None, "beta": None}
 
 def analyse_ticker(ticker, risk_mult, fetch_pe=False):
     raw = fetch_ticker_data(ticker)
@@ -296,7 +324,14 @@ def analyse_ticker(ticker, risk_mult, fetch_pe=False):
 
     strength = "Strong" if conf > 0.7 else "Medium" if conf > 0.4 else "Weak"
 
-    pe, mcap = (fetch_pe_ratio(ticker) if fetch_pe else (None, None))
+    fund = fetch_pe_ratio(ticker) if fetch_pe else {}
+
+    pe        = fund.get("pe")
+    mcap      = fund.get("mcap")
+    beta      = fund.get("beta")
+    div_yield = fund.get("div_yield")
+    margin    = fund.get("margin")
+    rev_gr    = fund.get("rev_growth")
 
     # Market cap bucket
     if mcap:
@@ -307,6 +342,8 @@ def analyse_ticker(ticker, risk_mult, fetch_pe=False):
         else:              cap_label = "Micro"
     else:
         cap_label = "—"
+
+    def fmt(v): return v if v is not None else "—"
 
     return {
         "Ticker":     ticker,
@@ -321,7 +358,11 @@ def analyse_ticker(ticker, risk_mult, fetch_pe=False):
         "MACD Accel": "⚡" if macd_accel else "—",
         "Vol%":       round(raw["vol"], 2),
         "Confidence": round(conf, 2),
-        "PE":         pe if pe else "—",
+        "PE":         fmt(pe),
+        "Beta":       fmt(beta),
+        "Div Yield":  fmt(div_yield),
+        "Margin":     fmt(margin),
+        "Rev Growth": fmt(rev_gr),
         "Cap":        cap_label,
         "Signal":     f"{action} ({strength})",
         "Action":     action,
@@ -923,7 +964,8 @@ with _tab_scanner:
         valid     = st.session_state.get("scan_valid", len(df))
 
         COLS = ["Rank","Ticker","Price","MA50","MA200","Dist%","52W%","RSI","RSI↗",
-                "MACD","MACD Accel","Vol%","Confidence","PE","Cap",
+                "MACD","MACD Accel","Vol%","Confidence",
+                "PE","Beta","Div Yield","Margin","Rev Growth","Cap",
                 "Signal","Knife","Suggested","Yahoo","etf.com","justETF"]
         COLS = [c for c in COLS if c in df.columns]
 
