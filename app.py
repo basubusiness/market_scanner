@@ -962,7 +962,7 @@ def scanner_tab():
         dcc.Store(id="dive-trigger"),
         dcc.Store(id="scan-running", data=False),
         # Progress polling
-        dcc.Interval(id="progress-interval", interval=2000, disabled=False),
+        dcc.Interval(id="progress-interval", interval=5000, disabled=False),
     ])
 
 def deepdive_tab():
@@ -1764,20 +1764,18 @@ def disable_filters_during_scan(btn_disabled):
     Output("scan-progress-text","children"),
     Output("scanning-indicator","style"),
     Input("progress-interval","n_intervals"),
-    prevent_initial_call=False,
+    prevent_initial_call=True,  # Don't fire on load
 )
 def update_progress(_):
-    # Check if a scan is actively running by looking at cache
     scan_id = cache_get("current_scan_id")
 
+    # No active scan — hide everything, return no_update to avoid DOM churn
     if not scan_id or scan_id in ("stopped", ""):
-        return 0, "", "", {"display":"none"}
+        return no_update, no_update, no_update, {"display":"none"}
 
     prog = cache_get(f"progress_{scan_id}")
-
     if not prog:
-        # Scan started but no progress yet — show initialising
-        return 0, "⏳ Initialising scan…", "", {"display":"block","marginBottom":"8px"}
+        return 0, "⏳ Starting…", "", {"display":"block","marginBottom":"8px"}
 
     pct   = prog.get("pct", 0)
     done  = prog.get("done", 0)
@@ -1786,11 +1784,10 @@ def update_progress(_):
     last  = prog.get("ticker", "")
 
     if pct >= 100:
-        # Scan complete — hide progress bar
-        return 100, "", "", {"display":"none"}
+        return no_update, no_update, no_update, {"display":"none"}
 
-    label = f"🔍 Scanning… {pct}%  ·  {done:,}/{total:,}  ·  {valid} valid so far"
-    txt   = f"Last ticker checked: {last}"
+    label = f"🔍 {pct}%  ·  {done:,}/{total:,} checked  ·  {valid} valid"
+    txt   = f"Last: {last}"
     return pct, label, txt, {"display":"block","marginBottom":"8px"}
 
 @app.callback(
