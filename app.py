@@ -86,7 +86,8 @@ def load_base_universe():
     for col in df.columns:
         if df[col].dtype == object:
             df[col] = df[col].fillna("").astype(str).str.strip()
-    df = df[df["ticker"].str.match(r"^[A-Z]{1,5}$")]
+    df = df[df["ticker"].str.match(r"^[A-Z]{2,5}$")]  # min 2 chars, letters only
+    df = df[~df["ticker"].str.startswith("$")]  # remove dollar-sign tickers
     df = df.drop_duplicates(subset=["ticker","type"], keep="first")
     cache_set("universe", df)  # permanent cache
     return df
@@ -256,6 +257,9 @@ def get_live_vix():
 # ───────────────────────────────────────────────────────────────────
 
 def fetch_ticker_data(ticker):
+    # Quick reject obvious invalid tickers before any API call
+    if not ticker or ticker.startswith("$") or len(ticker) < 2:
+        return None
     key = f"tick_{ticker}"
     cached = cache_get(key)
     if cached is not None:
@@ -479,21 +483,19 @@ def build_tickers(preset_key, filters):
     # ETF branch
     etf_types = ["ETF"] if ptype == "ETF" else (filters.get("types",[]) if ptype=="custom" else [])
     if "ETF" in etf_types or ptype == "ETF":
-        e = universe[universe["type"]=="ETF"].copy()
-        cat = preset.get("category_group") or filters.get("category",[])
-        if cat:
-            e = e[e["category_group"].isin(cat)]
-        # justETF filters
         need_jetf = (
             "domicile" in preset or filters.get("domicile") or filters.get("dist_policy") or
             filters.get("replication") or filters.get("strategy") or
             filters.get("min_size",0) > 0 or filters.get("max_ter",2.0) < 2.0
         )
+
         if need_jetf and not jetf_df.empty:
-            jcols = [c for c in ["ticker","domicile","dist_policy","fund_size_eur","replication","strategy","ter"] if c in jetf_df.columns]
-            e = e.merge(jetf_df[jcols], on="ticker", how="left")
+            # Use justETF as PRIMARY source — it has 4000+ UCITS ETFs with correct metadata
+            # financedatabase only has ~2800 and misses most UCITS ETFs
+            e = jetf_df.copy()
             dom = preset.get("domicile") or filters.get("domicile",[])
-            if dom and "domicile" in e.columns: e = e[e["domicile"].isin(dom)]
+            if dom and "domicile" in e.columns:
+                e = e[e["domicile"].isin(dom)]
             if filters.get("dist_policy") and "dist_policy" in e.columns:
                 e = e[e["dist_policy"].isin(filters["dist_policy"])]
             if filters.get("replication") and "replication" in e.columns:
@@ -507,6 +509,24 @@ def build_tickers(preset_key, filters):
                     e = e[e["ter"].fillna(0) >= filters["min_ter"]]
                 if filters.get("max_ter",2.0) < 2.0:
                     e = e[e["ter"].fillna(999) <= filters["max_ter"]]
+            # Apply category filter using financedatabase if requested
+            cat = preset.get("category_group") or filters.get("category",[])
+            if cat:
+                fd_cats = universe[universe["type"]=="ETF"][["ticker","category_group"]]
+                e = e.merge(fd_cats, on="ticker", how="left")
+                e = e[e["category_group"].isin(cat)]
+        else:
+            # No justETF filters — use financedatabase universe + optional category filter
+            e = universe[universe["type"]=="ETF"].copy()
+            cat = preset.get("category_group") or filters.get("category",[])
+            if cat:
+                e = e[e["category_group"].isin(cat)]
+            # Apply preset domicile filter via justETF join
+            dom = preset.get("domicile",[])
+            if dom and not jetf_df.empty and "domicile" in jetf_df.columns:
+                e = e.merge(jetf_df[["ticker","domicile"]], on="ticker", how="inner")
+                e = e[e["domicile"].isin(dom)]
+
         parts.append(e)
 
     # Stock branch
@@ -1156,7 +1176,8 @@ def render_results(store_data, active_tab):
             ])
         )
 
-    df = pd.read_json(store_data, orient="split")
+    import io
+    df = pd.read_json(io.StringIO(store_data), orient="split")
 
     # KPIs
     kpis = dbc.Row([
@@ -1614,7 +1635,8 @@ def update_progress(_, is_scanning):
 def download_csv(n, store_data):
     if not store_data:
         return no_update
-    df = pd.read_json(store_data, orient="split")
+    import io
+    df = pd.read_json(io.StringIO(store_data), orient="split")
     return dcc.send_data_frame(df.to_csv, "scan_results.csv", index=False)
 
 import os
