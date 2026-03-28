@@ -25,6 +25,10 @@ try:
 except ImportError:
     JUSTETF_AVAILABLE = False
 
+APP_VERSION = "v10.2"
+from datetime import datetime as _datetime
+BUILD_TIME = _datetime.utcnow().strftime("%d %b %H:%M UTC")
+
 # ───────────────────────────────────────────────────────────────────
 # APP INIT
 # ───────────────────────────────────────────────────────────────────
@@ -526,7 +530,17 @@ def sidebar():
                           if c and c not in ("","nan","None")]) if not universe.empty else []
 
     return html.Div([
-        html.H5("📡 Market Decision Engine", className="text-white mb-3"),
+        html.Div([
+            html.Div([
+                html.Span("📡 Market Decision Engine",
+                          style={"color":"#fff","fontWeight":"bold","fontSize":"15px"}),
+                html.Span(f" {APP_VERSION}",
+                          style={"color":"#00bcd4","fontSize":"11px","marginLeft":"6px"}),
+            ]),
+            html.Small(f"deployed {BUILD_TIME}",
+                       style={"color":"#444","fontSize":"10px"}),
+            html.Div(id="cache-indicator"),
+        ], className="mb-3"),
         html.Hr(style={"borderColor":"#444"}),
 
         # ── Live indicators
@@ -760,6 +774,20 @@ app.layout = html.Div([
 # ───────────────────────────────────────────────────────────────────
 # CALLBACKS — Live data
 # ───────────────────────────────────────────────────────────────────
+
+@app.callback(
+    Output("cache-indicator","children"),
+    Input("live-interval","n_intervals"),
+)
+def update_cache_indicator(_):
+    n_tickers = sum(1 for k in _cache if str(k).startswith("tick_"))
+    n_meta    = sum(1 for k in _cache if str(k).startswith("meta_"))
+    if n_tickers == 0:
+        return html.Small("⚪ no cache yet",
+                          style={"color":"#444","fontSize":"10px"})
+    return html.Small(
+        f"🟢 {n_tickers:,} tickers · {n_meta:,} names cached",
+        style={"color":"#2e7d32","fontSize":"10px"})
 
 @app.callback(
     Output("vix-val","children"), Output("fg-val","children"),
