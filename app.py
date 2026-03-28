@@ -268,7 +268,10 @@ def fetch_ticker_data(ticker):
         df = flatten_df(yf.Ticker(ticker).history(period="1y", auto_adjust=True))
         # UCITS ETFs need exchange suffix — try common ones if bare ticker fails
         if df.empty or "Close" not in df.columns or len(df["Close"].dropna()) < 30:
-            for sfx in [".L",".DE",".MI",".PA",".AS",".SW",".F"]:
+            # Check if we already know the working suffix
+            known_sfx = cache_get(f"sfx_{ticker}")
+            suffixes = [known_sfx] if known_sfx else [".L",".DE",".MI",".PA",".AS",".SW",".F",".VI",".BR",".MC"]
+            for sfx in suffixes:
                 try:
                     df2 = flatten_df(yf.Ticker(ticker+sfx).history(period="1y", auto_adjust=True))
                     if not df2.empty and "Close" in df2.columns and len(df2["Close"].dropna()) >= 30:
@@ -323,10 +326,16 @@ def fetch_ticker_data(ticker):
     except Exception:
         return None
 
-def analyse_ticker(ticker, risk_mult):
-    raw = fetch_ticker_data(ticker)
+def analyse_ticker(ticker, risk_mult, isin=None):
+    # Try to resolve the correct yfinance symbol first
+    yf_sym = resolve_yf_ticker(ticker, isin)
+    if yf_sym is None:
+        return None
+    raw = fetch_ticker_data(yf_sym)
     if raw is None:
         return None
+    # Store original ticker in result for display
+    raw = dict(raw)
     dm, rsi, conf = raw["dist_ma"], raw["rsi"], raw["confidence"]
     macd_bull  = raw["macd"] > raw["macd_signal"]
     macd_accel = raw["macd_hist"] > 0
@@ -345,7 +354,8 @@ def analyse_ticker(ticker, risk_mult):
     score  = dist_s*0.30 + rsi_s2*0.25 + (0.20 if macd_bull else 0) + (0.10 if macd_accel else 0) + conf*0.15
     if action == "AVOID": score -= 2
     return {
-        "Ticker": ticker, "Price": round(raw["price"],2),
+        "Ticker": ticker,  # always show original ticker, not exchange-suffixed one
+        "Price": round(raw["price"],2),
         "MA200": round(raw["ma200"],2), "Dist%": round(dm,1),
         "52W%": round(raw["dist_52h"],1), "RSI": round(rsi,1),
         "RSI↗": "↗" if rsi_rising else "↘",
@@ -356,6 +366,45 @@ def analyse_ticker(ticker, risk_mult):
         "Knife": "⚠️" if (is_knife and not reversal) else ("✅Rev" if reversal else ""),
         "Score": round(score,4),
     }
+
+def resolve_yf_ticker(ticker, isin=None):
+    """Find the correct yfinance ticker symbol for a given ETF ticker/ISIN.
+    Returns the working yfinance symbol or None."""
+    # Check suffix cache first
+    sfx = cache_get(f"sfx_{ticker}")
+    if sfx:
+        return ticker + sfx
+
+    # Try bare ticker
+    try:
+        df = flatten_df(yf.Ticker(ticker).history(period="5d", auto_adjust=True))
+        if not df.empty and len(df["Close"].dropna()) >= 3:
+            return ticker
+    except Exception:
+        pass
+
+    # Try suffixes
+    for sfx in [".L",".DE",".MI",".PA",".AS",".SW",".F",".VI",".BR"]:
+        try:
+            df = flatten_df(yf.Ticker(ticker+sfx).history(period="5d", auto_adjust=True))
+            if not df.empty and len(df["Close"].dropna()) >= 3:
+                cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
+                return ticker + sfx
+        except Exception:
+            continue
+
+    # Last resort: search by ISIN
+    if isin:
+        try:
+            sr = yf.Search(isin, max_results=3)
+            if hasattr(sr,"quotes") and sr.quotes:
+                sym = sr.quotes[0]["symbol"]
+                cache_set(f"sfx_{ticker}", f"_resolved_{sym}", ttl=86400*7)
+                return sym
+        except Exception:
+            pass
+
+    return None
 
 def get_name_isin(ticker):
     """
@@ -1061,7 +1110,11 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
     cache_set(f"progress_{scan_id}", {"done": 0, "total": total, "valid": 0}, ttl=300)
 
     with ThreadPoolExecutor(max_workers=int(workers or 6)) as ex:
-        futs = {ex.submit(analyse_ticker, t, risk_mult): t for t in tickers}
+        # Build ISIN map for better ticker resolution
+        isin_map = {}
+        if not jetf_df.empty and "ticker" in jetf_df.columns and "isin" in jetf_df.columns:
+            isin_map = dict(zip(jetf_df["ticker"], jetf_df["isin"].fillna("")))
+        futs = {ex.submit(analyse_ticker, t, risk_mult, isin_map.get(t,"")): t for t in tickers}
         for fut in as_completed(futs):
             if cache_get("current_scan_id") != scan_id or not _active_scans.get(scan_id, True):
                 _active_scans.pop(scan_id, None)
@@ -1672,8 +1725,15 @@ def debug_info():
             if "domicile" in col.lower():
                 jetf_dom_vals = [(col, sample)]
 
+    # Sample justETF tickers for IE/LU domicile
+    jetf_sample = []
+    if not jetf_df.empty and "domicile" in jetf_df.columns:
+        sample = jetf_df[jetf_df["domicile"].isin(["Ireland","Luxembourg"])].head(20)
+        jetf_sample = sample[["ticker","isin","jname"]].to_dict("records") if not sample.empty else []
+
     info = {
         "universe_rows":     u_size,
+        "jetf_ie_lu_sample": jetf_sample,
         "etf_rows":          len(etf_u),
         "stock_rows":        len(stk_u),
         "justetf_rows":      j_size,
