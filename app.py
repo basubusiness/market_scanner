@@ -30,6 +30,8 @@ def load_universe():
         if df[col].dtype == object:
             df[col] = df[col].fillna("").astype(str).str.strip()
     df = df[df["ticker"].str.match(r"^[A-Z]{1,5}$")]
+    # Drop duplicate tickers — keep first occurrence per type
+    df = df.drop_duplicates(subset=["ticker", "type"], keep="first")
     return df
 
 universe = load_universe()
@@ -515,7 +517,7 @@ if stocks_selected:
     parts.append(s)
 
 filtered = pd.concat(parts) if parts else pd.DataFrame()
-tickers  = list(dict.fromkeys(filtered["ticker"].tolist()))
+tickers  = list(dict.fromkeys(filtered["ticker"].str.upper().str.strip().tolist()))
 
 MAX_TICKERS = 1000
 st.sidebar.caption(
@@ -528,7 +530,7 @@ if len(tickers) > MAX_TICKERS:
 
 baseline  = st.sidebar.number_input("Monthly Investment (EUR)", value=1000, min_value=100, step=100)
 fetch_pe  = st.sidebar.checkbox("Fetch PE + Market Cap (slower)", value=False,
-    help="Adds P/E and market cap. ~2s extra per ticker. Cached 24h.")
+    help="Adds P/E, Beta, Dividend Yield, Margin, Revenue Growth. ~2s extra per ticker. Cached 24h. Check this BEFORE running scan.")
 n_workers = st.sidebar.slider("Parallel workers", 4, 24, 12,
     help="More workers = faster scan. Reduce if you hit rate limits.")
 
@@ -943,7 +945,9 @@ with _tab_scanner:
         else:
             df = pd.DataFrame(results)
             df["Score"]     = compute_scores(df)
-            df              = df.sort_values("Score", ascending=False).reset_index(drop=True)
+            df              = df.sort_values("Score", ascending=False)
+            # Drop duplicate tickers (same symbol on multiple exchanges)
+            df              = df.drop_duplicates(subset=["Ticker"], keep="first").reset_index(drop=True)
             df["Rank"]      = df.index + 1
             df["Suggested"] = df.apply(
                 lambda r: allocation_label(r, baseline, fg_index, risk_mult), axis=1)
