@@ -580,34 +580,42 @@ def scanner_tab():
     return html.Div([
         # Scan controls
         dbc.Row([
-            dbc.Col(dbc.Button("🔄 Run Scan", id="run-btn", color="danger",
-                               size="lg", className="w-100"), width=10),
+            dbc.Col(dbc.Button(
+                [html.Span("🔄 Run Scan", id="run-btn-text"),
+                 dbc.Spinner(size="sm", spinner_style={"marginLeft":"8px"}, id="run-spinner",
+                             color="light", show_initially=False)],
+                id="run-btn", color="danger", size="lg", className="w-100"
+            ), width=10),
             dbc.Col(dbc.Button("🗑️ Clear", id="clear-btn", color="secondary",
                                size="lg", className="w-100"), width=2),
         ], className="mb-3"),
 
-        dbc.Progress(id="scan-progress", value=0, style={"height":"4px","marginBottom":"12px"}, color="danger"),
-        html.Div(id="scan-status", className="text-muted small mb-2"),
+        # Scan status bar
+        html.Div(id="scan-status-bar", children=[
+            dbc.Alert(id="scan-status-alert", color="info",
+                      className="py-2 px-3 mb-2", style={"display":"none"}),
+        ]),
 
-        # KPI row
-        dbc.Row(id="kpi-row", className="mb-3 g-2"),
-
-        # Top signals cards
-        html.Div(id="top-signals", className="mb-3"),
-
-        html.Hr(style={"borderColor":"#333"}),
-
-        # Signal filter tabs
-        dbc.Tabs([
-            dbc.Tab(label="All",       tab_id="all"),
-            dbc.Tab(label="🟢 BUY",   tab_id="BUY"),
-            dbc.Tab(label="👀 WATCH", tab_id="WATCH"),
-            dbc.Tab(label="⛔ AVOID", tab_id="AVOID"),
-            dbc.Tab(label="🔴 SELL",  tab_id="SELL"),
-            dbc.Tab(label="🟡 WAIT",  tab_id="WAIT"),
-        ], id="signal-tabs", active_tab="all", className="mb-2"),
-
-        html.Div(id="results-table"),
+        # Wrap all results in a Loading component
+        dcc.Loading(
+            id="results-loading",
+            type="circle",
+            color="#ff4444",
+            children=[
+                dbc.Row(id="kpi-row", className="mb-3 g-2"),
+                html.Div(id="top-signals", className="mb-3"),
+                html.Hr(style={"borderColor":"#333"}),
+                dbc.Tabs([
+                    dbc.Tab(label="All",       tab_id="all"),
+                    dbc.Tab(label="🟢 BUY",   tab_id="BUY"),
+                    dbc.Tab(label="👀 WATCH", tab_id="WATCH"),
+                    dbc.Tab(label="⛔ AVOID", tab_id="AVOID"),
+                    dbc.Tab(label="🔴 SELL",  tab_id="SELL"),
+                    dbc.Tab(label="🟡 WAIT",  tab_id="WAIT"),
+                ], id="signal-tabs", active_tab="all", className="mb-2"),
+                html.Div(id="results-table"),
+            ]
+        ),
 
         # Download
         html.Div([
@@ -697,8 +705,9 @@ def update_live(_):
     Input("preset-dd","value"),
     Input("filter-types","value"),
     Input("filter-country","value"),  # cascade: country narrows sector
+    Input("live-interval","n_intervals"),  # fires on page load too
 )
-def update_filter_sections(preset, types, selected_country):
+def update_filter_sections(preset, types, selected_country, _n):
     ptype   = PRESETS.get(preset,{}).get("type","ETF")
     custom  = ptype == "custom"
     etfs_on   = (custom and "ETF"   in (types or [])) or ptype == "ETF"
@@ -774,7 +783,9 @@ def update_scope(preset, types, domicile, dist, repl, strategy, category,
 
 @app.callback(
     Output("scan-store","data"),
-    Output("scan-status","children"),
+    Output("scan-status-alert","children"),
+    Output("scan-status-alert","style"),
+    Output("run-btn","disabled"),
     Input("run-btn","n_clicks"),
     Input("clear-btn","n_clicks"),
     State("preset-dd","value"),
@@ -798,14 +809,14 @@ def run_scan(run_clicks, clear_clicks, preset, types, domicile, dist,
              minsize, maxter, workers, fetch_pe, budget):
     ctx = callback_context
     if not ctx.triggered:
-        return no_update, no_update
+        return no_update, no_update, no_update, no_update
     triggered = ctx.triggered[0]["prop_id"]
 
     if "clear-btn" in triggered:
         return None, "Results cleared."
 
     if "run-btn" not in triggered:
-        return no_update, no_update
+        return no_update, no_update, no_update, no_update
 
     vix = get_live_vix()
     fg, _ = get_fg_index()
@@ -819,7 +830,7 @@ def run_scan(run_clicks, clear_clicks, preset, types, domicile, dist,
     )
     tickers = build_tickers(preset, filters)
     if not tickers:
-        return None, "⚠️ No tickers match filters."
+        return None, "⚠️ No tickers match filters.", {}, False
 
     # Parallel scan
     results = {}
@@ -835,7 +846,7 @@ def run_scan(run_clicks, clear_clicks, preset, types, domicile, dist,
 
     rows = [r for t in tickers if (r := results.get(t)) is not None]
     if not rows:
-        return None, "❌ No data returned."
+        return None, "❌ No data returned.", {}, False
 
     # Fetch names in parallel
     name_map = {}
@@ -899,7 +910,7 @@ def run_scan(run_clicks, clear_clicks, preset, types, domicile, dist,
               f"SELL:{(df['Action']=='SELL').sum()} "
               f"AVOID:{(df['Action']=='AVOID').sum()}")
 
-    return df.to_json(date_format="iso", orient="split"), status
+    return df.to_json(date_format="iso", orient="split"), status, {}, False
 
 # ───────────────────────────────────────────────────────────────────
 # CALLBACKS — Results display
@@ -1052,7 +1063,7 @@ def enable_dive_btn(selected_rows, store_data):
 )
 def open_deep_dive(n_clicks, selected_rows, store_data):
     if not n_clicks or not selected_rows or not store_data:
-        return no_update, no_update
+        return no_update, no_update, no_update, no_update
     df     = pd.read_json(store_data, orient="split")
     idx    = selected_rows[0]
     ticker = df.iloc[idx]["Ticker"]
