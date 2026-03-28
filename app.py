@@ -1,13 +1,18 @@
 import streamlit as st
 st.set_page_config(page_title="Market Scanner v8", layout="wide")
 
-APP_VERSION = "v8.0"
+APP_VERSION = "v8.1"
 
 import yfinance as yf
 import pandas as pd
 import numpy as np
 import financedatabase as fd
 import requests
+try:
+    import justetf_scraping
+    JUSTETF_AVAILABLE = True
+except ImportError:
+    JUSTETF_AVAILABLE = False
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ─────────────────────────────────────────────
@@ -30,11 +35,71 @@ def load_universe():
         if df[col].dtype == object:
             df[col] = df[col].fillna("").astype(str).str.strip()
     df = df[df["ticker"].str.match(r"^[A-Z]{1,5}$")]
-    # Drop duplicate tickers — keep first occurrence per type
     df = df.drop_duplicates(subset=["ticker", "type"], keep="first")
     return df
 
+@st.cache_data(show_spinner="Loading justETF data (3400+ ETFs)...", ttl=86400*7)
+def load_justetf_universe():
+    """
+    Fetch full ETF universe from justETF via justetf-scraping package.
+    Returns a DataFrame indexed by ticker with rich metadata:
+    domicile_country, ter, distribution_policy, fund_size_eur,
+    replication, strategy, isin, name, currency.
+    Cached for 7 days — ETF metadata rarely changes.
+    """
+    if not JUSTETF_AVAILABLE:
+        return pd.DataFrame()
+    try:
+        df = justetf_scraping.load_overview()   # ~3 HTTP requests, ~3400 ETFs
+        df = df.reset_index()                   # isin becomes a column
+        # Rename to match our schema
+        rename = {
+            "ticker":              "ticker",
+            "isin":                "jETF_isin",
+            "name":                "jETF_name",
+            "domicile_country":    "domicile",
+            "ter":                 "ter",
+            "distribution_policy": "dist_policy",
+            "fund_size_eur":       "fund_size_eur",
+            "replication":         "replication",
+            "strategy":            "strategy",
+            "currency":            "jETF_currency",
+            "index_name":          "index_name",
+        }
+        keep = {k: v for k, v in rename.items() if k in df.columns}
+        df = df[list(keep.keys())].rename(columns=keep)
+        df["ticker"] = df["ticker"].fillna("").astype(str).str.strip().str.upper()
+        df = df[df["ticker"].str.match(r"^[A-Z]{1,5}$")]
+        df = df.drop_duplicates(subset=["ticker"], keep="first")
+        return df
+    except Exception as e:
+        return pd.DataFrame()
+
 universe = load_universe()
+
+# ─────────────────────────────────────────────
+# justETF ENRICHMENT — loaded on demand, cached 7 days
+# ─────────────────────────────────────────────
+
+@st.cache_data(ttl=86400*7, show_spinner=False)
+def get_justetf_data():
+    return load_justetf_universe()
+
+def enrich_with_justetf(universe_df, jetf_df):
+    """Merge justETF metadata into universe on ticker. ETF rows only."""
+    if jetf_df.empty:
+        return universe_df
+    etf_mask = universe_df["type"] == "ETF"
+    merged   = universe_df.copy()
+    # Left join on ticker for ETF rows
+    etf_rows = universe_df[etf_mask].merge(
+        jetf_df, on="ticker", how="left"
+    )
+    merged.loc[etf_mask] = etf_rows.values
+    merged.columns = universe_df.columns.tolist() + [
+        c for c in etf_rows.columns if c not in universe_df.columns
+    ]
+    return merged
 
 # ─────────────────────────────────────────────
 # HELPERS
@@ -164,7 +229,7 @@ def get_fg_index():
 @st.cache_data(ttl=300)
 def get_live_vix():
     try:
-        d = flatten_df(yf.download("^VIX", period="2d", progress=False, auto_adjust=True))
+        d = flatten_df(yf.Ticker("^VIX").history(period="5d", auto_adjust=True))
         if not d.empty and "Close" in d.columns:
             return float(d["Close"].dropna().iloc[-1])
     except Exception:
@@ -204,7 +269,9 @@ def allocation_label(row, base, fg, risk_mult):
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_ticker_data(ticker):
     try:
-        df = flatten_df(yf.download(ticker, period="1y", progress=False, auto_adjust=True))
+        # Use Ticker.history(), NOT yf.download() — download() uses a shared
+        # global dict (_DFS) causing data collisions in parallel threads
+        df = flatten_df(yf.Ticker(ticker).history(period="1y", auto_adjust=True))
         if df.empty or "Close" not in df.columns:
             return None
         close = df["Close"].dropna()
@@ -350,6 +417,12 @@ def analyse_ticker(ticker, risk_mult, fetch_pe=False):
     return {
         "Ticker":     ticker,
         "Price":      round(raw["price"], 2),
+        # justETF fields populated post-scan via merge (placeholders here)
+        "Domicile":   "—",
+        "TER":        "—",
+        "Fund Size":  "—",
+        "Dist Policy":"—",
+        "Replication":"—",
         "MA50":       round(raw["ma50"], 2),
         "MA200":      round(raw["ma200"], 2),
         "Dist%":      round(dm, 1),
@@ -418,8 +491,33 @@ def compute_scores(df):
 # ─────────────────────────────────────────────
 
 st.sidebar.title(f"Config {APP_VERSION}")
-st.sidebar.subheader("Filters")
 
+# ── justETF enrichment toggle ──────────────────
+if JUSTETF_AVAILABLE:
+    use_justetf = st.sidebar.toggle(
+        "🇪🇺 Enrich ETFs with justETF data",
+        value=False,
+        help="Loads 3400+ ETFs from justETF with domicile, TER, fund size, "
+             "replication method, distribution policy. Cached for 7 days. "
+             "Adds ~5s on first load, instant thereafter."
+    )
+    if use_justetf:
+        with st.sidebar:
+            with st.spinner("Loading justETF data..."):
+                jetf_df = get_justetf_data()
+        if jetf_df.empty:
+            st.sidebar.warning("⚠️ justETF fetch failed — using base universe only.")
+            use_justetf = False
+        else:
+            st.sidebar.success(f"✅ justETF: {len(jetf_df):,} ETFs loaded")
+    else:
+        jetf_df = pd.DataFrame()
+else:
+    use_justetf = False
+    jetf_df     = pd.DataFrame()
+    st.sidebar.info("ℹ️ Install `justetf-scraping` for ETF enrichment.")
+
+st.sidebar.subheader("Filters")
 asset_type      = st.sidebar.multiselect("Asset Type", ["ETF","Stock"], default=["ETF"])
 stocks_selected = "Stock" in asset_type
 etfs_selected   = "ETF"   in asset_type
@@ -498,15 +596,64 @@ if stocks_selected:
     if opts:
         industry = st.sidebar.multiselect("Industry Group (empty=all)", opts)
 
+# ── justETF extra filters (shown only when enrichment is on)
+jetf_domicile   = []
+jetf_dist       = []
+jetf_replication= []
+jetf_min_size   = 0
+
+if etfs_selected and use_justetf and not jetf_df.empty:
+    st.sidebar.markdown("**🇪🇺 justETF Filters**")
+
+    def je_opts(col):
+        return sorted([v for v in jetf_df[col].dropna().unique() if str(v).strip()]) if col in jetf_df.columns else []
+
+    opts = je_opts("domicile")
+    if opts:
+        jetf_domicile = st.sidebar.multiselect(
+            "Domicile Country (empty=all)", opts,
+            help="Ireland / Luxembourg = UCITS. USA = US-domiciled.")
+
+    opts = je_opts("dist_policy")
+    if opts:
+        jetf_dist = st.sidebar.multiselect(
+            "Distribution Policy (empty=all)", opts,
+            help="Accumulating or Distributing")
+
+    opts = je_opts("replication")
+    if opts:
+        jetf_replication = st.sidebar.multiselect(
+            "Replication Method (empty=all)", opts,
+            help="Physical Full / Physical Sampling / Swap-based")
+
+    if "fund_size_eur" in jetf_df.columns:
+        jetf_min_size = st.sidebar.number_input(
+            "Min Fund Size (EUR m)", value=0, min_value=0, step=50,
+            help="Filter out tiny/illiquid ETFs. 100m+ = reasonable liquidity.")
+
 # Build filtered ticker list
 parts = []
 if etfs_selected:
     e = universe[universe["type"] == "ETF"].copy()
+    # financedatabase filters
     if etf_category_group: e = e[e["category_group"].isin(etf_category_group)]
     if etf_category:       e = e[e["category"].isin(etf_category)]
     if etf_currency:       e = e[e["currency"].isin(etf_currency)]
     if etf_exchange:       e = e[e["exchange"].isin(etf_exchange)]
     if etf_family:         e = e[e["family"].isin(etf_family)]
+
+    # justETF filters — merge then filter
+    if use_justetf and not jetf_df.empty:
+        e = e.merge(jetf_df, on="ticker", how="left")
+        if jetf_domicile:
+            e = e[e["domicile"].isin(jetf_domicile)]
+        if jetf_dist:
+            e = e[e["dist_policy"].isin(jetf_dist)]
+        if jetf_replication:
+            e = e[e["replication"].isin(jetf_replication)]
+        if jetf_min_size > 0 and "fund_size_eur" in e.columns:
+            e = e[e["fund_size_eur"].fillna(0) >= jetf_min_size]
+
     parts.append(e)
 
 if stocks_selected:
@@ -615,7 +762,7 @@ def run_deep_dive():
         # ── Download data
         with st.spinner(f"Fetching data for {ticker}…"):
             try:
-                raw_df = flatten_df(yf.download(ticker, period="2y", interval="1d", progress=False, auto_adjust=True))
+                raw_df = flatten_df(yf.Ticker(ticker).history(period="2y", auto_adjust=True))
             except Exception as e:
                 st.error(f"Download failed: {e}")
                 return
@@ -958,26 +1105,35 @@ with _tab_scanner:
         else:
             df = pd.DataFrame(results)
 
-            # ── Data collision filter ──────────────────────────────────────
-            # yfinance sometimes returns identical price data for multiple
-            # different tickers (parallel thread collision / wrong cache hit).
-            # Flag: if >3 tickers share the exact same Price+RSI+Dist%,
-            # it's almost certainly bad data — drop the whole group.
-            collision_key = df["Price"].astype(str) + "|" + df["RSI"].astype(str) + "|" + df["Dist%"].astype(str)
-            collision_counts = collision_key.map(collision_key.value_counts())
-            before = len(df)
-            df = df[collision_counts <= 3].copy()
-            collisions_dropped = before - len(df)
-            if collisions_dropped > 0:
-                st.warning(f"⚠️ Dropped {collisions_dropped} rows with suspected data collisions "
-                           f"(identical Price+RSI+Dist% across multiple tickers). "
-                           f"This is a yfinance parallel-fetch issue — re-running may resolve it.")
+            # Drop duplicate tickers (safety net)
+            df = df.drop_duplicates(subset=["Ticker"], keep="first")
 
-            # Drop duplicate tickers (same symbol on multiple exchanges)
-            df              = df.drop_duplicates(subset=["Ticker"], keep="first")
+            # Enrich with justETF metadata if available
+            if use_justetf and not jetf_df.empty:
+                jcols = {
+                    "ticker":      "Ticker",
+                    "domicile":    "Domicile",
+                    "ter":         "TER",
+                    "fund_size_eur":"Fund Size",
+                    "dist_policy": "Dist Policy",
+                    "replication": "Replication",
+                }
+                jcols = {k:v for k,v in jcols.items() if k in jetf_df.columns}
+                j = jetf_df[list(jcols.keys())].rename(columns=jcols).copy()
+                j["Ticker"] = j["Ticker"].str.upper()
+                j["TER"] = j["TER"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) and x else "—")
+                j["Fund Size"] = j["Fund Size"].apply(lambda x: f"€{x:,.0f}m" if pd.notna(x) and x else "—")
+                df = df.merge(j, on="Ticker", how="left", suffixes=("", "_jetf"))
+                # Fill placeholders with merged values
+                for col in ["Domicile","TER","Fund Size","Dist Policy","Replication"]:
+                    jetf_col = col + "_jetf"
+                    if jetf_col in df.columns:
+                        df[col] = df[jetf_col].fillna(df[col])
+                        df.drop(columns=[jetf_col], inplace=True)
+                    df[col] = df[col].fillna("—")
 
-            df["Score"]     = compute_scores(df)
-            df              = df.sort_values("Score", ascending=False).reset_index(drop=True)
+            df["Score"] = compute_scores(df)
+            df          = df.sort_values("Score", ascending=False).reset_index(drop=True)
             df["Rank"]      = df.index + 1
             df["Suggested"] = df.apply(
                 lambda r: allocation_label(r, baseline, fg_index, risk_mult), axis=1)
@@ -1000,6 +1156,7 @@ with _tab_scanner:
         COLS = ["Rank","Ticker","Price","MA50","MA200","Dist%","52W%","RSI","RSI↗",
                 "MACD","MACD Accel","Vol%","Confidence",
                 "PE","Beta","Div Yield","Margin","Rev Growth","Cap",
+                "Domicile","TER","Fund Size","Dist Policy","Replication",
                 "Signal","Knife","Suggested","Yahoo","etf.com","justETF"]
         COLS = [c for c in COLS if c in df.columns]
 
