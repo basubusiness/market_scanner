@@ -904,27 +904,16 @@ def scanner_tab():
             dbc.Col(dbc.Button(
                 "🔄 Run Scan",
                 id="run-btn", color="danger", size="lg", className="w-100"
-            ), width=8),
-            dbc.Col(dbc.Button("⏹ Stop", id="stop-btn", color="warning",
-                               size="lg", className="w-100", disabled=True),
-                    width=2),
+            ), width=10),
             dbc.Col(dbc.Button("🗑️", id="clear-btn", color="secondary",
-                               size="lg", className="w-100", title="Clear"),
+                               size="lg", className="w-100", title="Clear results"),
                     width=2),
         ], className="mb-2 g-1"),
+        # Hidden stop button (still needed for callback, triggered by overlay)
+        html.Div(dbc.Button(id="stop-btn", style={"display":"none"})),
 
-        # Scan status bar — always visible while scanning
+        # Scan status bar
         html.Div([
-            # Active scanning indicator
-            html.Div([
-                dbc.Progress(id="scan-progress-bar", value=0, max=100,
-                             label="⏳ Initialising…", striped=True, animated=True,
-                             color="danger",
-                             style={"height":"28px","fontSize":"13px","fontWeight":"bold"}),
-                html.Div(id="scan-progress-text",
-                         style={"fontSize":"11px","color":"#aaa","marginTop":"4px"}),
-            ], id="scanning-indicator", style={"display":"none","marginBottom":"8px"}),
-            # Completed status
             dbc.Alert(id="scan-status-alert", color="info",
                       className="py-2 px-3 mb-2", style={"display":"none"}),
         ], id="scan-status-bar"),
@@ -989,6 +978,29 @@ def deepdive_tab():
     ])
 
 app.layout = html.Div([
+    # Scanning overlay — shown while scan runs
+    html.Div([
+        html.Div([
+            dbc.Spinner(color="danger", size="lg"),
+            html.H4("Scanning…", className="text-white mt-3 mb-2"),
+            html.Div(id="overlay-progress-text",
+                     className="text-muted mb-3",
+                     style={"fontSize":"14px"}),
+            dbc.Progress(id="overlay-progress-bar", value=0, max=100,
+                         striped=True, animated=True, color="danger",
+                         style={"width":"300px","height":"20px","marginBottom":"20px"}),
+            dbc.Button("⏹ Stop Scan", id="overlay-stop-btn",
+                       color="warning", size="lg"),
+        ], style={
+            "display":"flex","flexDirection":"column","alignItems":"center",
+            "justifyContent":"center","height":"100%",
+        }),
+    ], id="scan-overlay", style={
+        "display":"none",
+        "position":"fixed","top":0,"left":0,"width":"100%","height":"100%",
+        "background":"rgba(0,0,0,0.85)","zIndex":9999,
+    }),
+
     # Main flex container
     html.Div([
         sidebar(),
@@ -1153,6 +1165,7 @@ def update_scope(preset, types, domicile, dist, repl, strategy, category,
     Input("run-btn","n_clicks"),
     Input("clear-btn","n_clicks"),
     Input("stop-btn","n_clicks"),
+    Input("overlay-stop-btn","n_clicks"),
     State("preset-dd","value"),
     State("filter-types","value"),
     State("filter-domicile","value"),
@@ -1169,7 +1182,7 @@ def update_scope(preset, types, domicile, dist, repl, strategy, category,
     State("budget-input","value"),
     prevent_initial_call=True,
 )
-def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dist,
+def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset, types, domicile, dist,
              repl, strategy, category, country, sector,
              minsize, maxter, workers, fetch_pe, budget):
     ctx = callback_context
@@ -1180,7 +1193,7 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
     if "clear-btn" in triggered:
         return None, "Results cleared.", {"display":"none"}, False, False
 
-    if "stop-btn" in triggered:
+    if "stop-btn" in triggered or "overlay-stop-btn" in triggered:
         for sid in list(_active_scans.keys()):
             _active_scans[sid] = False
         cache_set("current_scan_id", "stopped")
@@ -1751,44 +1764,45 @@ def update_run_btn_label(is_disabled):
     Output("filter-country","disabled"),
     Output("filter-sector","disabled"),
     Output("preset-dd","disabled"),
-    Output("stop-btn","disabled"),
     Input("run-btn","disabled"),
     prevent_initial_call=True,
 )
 def disable_filters_during_scan(btn_disabled):
-    return [btn_disabled]*8 + [not btn_disabled]
+    return [btn_disabled]*8
 
 @app.callback(
-    Output("scan-progress-bar","value"),
-    Output("scan-progress-bar","label"),
-    Output("scan-progress-text","children"),
-    Output("scanning-indicator","style"),
+    Output("scan-overlay","style"),
+    Output("overlay-progress-bar","value"),
+    Output("overlay-progress-text","children"),
     Input("progress-interval","n_intervals"),
-    prevent_initial_call=True,  # Don't fire on load
+    prevent_initial_call=True,
 )
-def update_progress(_):
-    scan_id = cache_get("current_scan_id")
+def update_overlay(_):
+    hidden  = {"display":"none"}
+    visible = {
+        "display":"flex","position":"fixed","top":0,"left":0,
+        "width":"100%","height":"100%",
+        "background":"rgba(0,0,0,0.85)","zIndex":9999,
+    }
 
-    # No active scan — hide everything, return no_update to avoid DOM churn
-    if not scan_id or scan_id in ("stopped", ""):
-        return no_update, no_update, no_update, {"display":"none"}
+    scan_id = cache_get("current_scan_id")
+    if not scan_id or scan_id in ("stopped",""):
+        return hidden, no_update, no_update
 
     prog = cache_get(f"progress_{scan_id}")
     if not prog:
-        return 0, "⏳ Starting…", "", {"display":"block","marginBottom":"8px"}
+        return visible, 0, "Starting…"
 
     pct   = prog.get("pct", 0)
     done  = prog.get("done", 0)
     total = prog.get("total", 1)
     valid = prog.get("valid", 0)
-    last  = prog.get("ticker", "")
 
     if pct >= 100:
-        return no_update, no_update, no_update, {"display":"none"}
+        return hidden, no_update, no_update
 
-    label = f"🔍 {pct}%  ·  {done:,}/{total:,} checked  ·  {valid} valid"
-    txt   = f"Last: {last}"
-    return pct, label, txt, {"display":"block","marginBottom":"8px"}
+    txt = f"{done:,} / {total:,} checked  ·  {valid} valid so far"
+    return visible, pct, txt
 
 @app.callback(
     Output("dl-csv","data"),
