@@ -1163,13 +1163,10 @@ def update_scope(preset, types, domicile, dist, repl, strategy, category,
 def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dist,
              repl, strategy, category, country, sector,
              minsize, maxter, workers, fetch_pe, budget):
-    print(f"[run_scan] triggered, clicks={run_clicks}", flush=True)
     ctx = callback_context
     if not ctx.triggered:
-        print("[run_scan] no trigger, returning no_update", flush=True)
         return no_update, no_update, no_update, no_update, no_update
     triggered = ctx.triggered[0]["prop_id"]
-    print(f"[run_scan] triggered by: {triggered}", flush=True)
 
     if "clear-btn" in triggered:
         return None, "Results cleared.", {"display":"none"}, False, False
@@ -1193,15 +1190,14 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
         country=country or [], sector=sector or [],
         min_size=minsize or 0, max_ter=maxter or 2.0,
     )
-    print(f"[run_scan] building tickers, preset={preset}, filters={filters}", flush=True)
     tickers = build_tickers(preset, filters)
-    print(f"[run_scan] {len(tickers)} tickers to scan", flush=True)
+    print(f"[scan] {len(tickers)} tickers, preset={preset}", flush=True)
     if not tickers:
         return None, "⚠️ No tickers match filters.", {}, False, False
 
     # Cap at 500 per scan to stay within Railway memory limits
     # justETF tickers are sorted by size so top ones are most liquid
-    MAX_PER_SCAN = 200
+    MAX_PER_SCAN = 500
     if len(tickers) > MAX_PER_SCAN:
         print(f"[run_scan] capping {len(tickers)} → {MAX_PER_SCAN}", flush=True)
         tickers = tickers[:MAX_PER_SCAN]
@@ -1217,15 +1213,11 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, preset, types, domicile, dis
     done  = 0
     cache_set(f"progress_{scan_id}", {"done": 0, "total": total, "valid": 0}, ttl=300)
 
-    print(f"[run_scan] starting ThreadPoolExecutor with {int(workers or 6)} workers", flush=True)
     with ThreadPoolExecutor(max_workers=int(workers or 6)) as ex:
-        # Build ISIN map for better ticker resolution
         isin_map = {}
         if not jetf_df.empty and "ticker" in jetf_df.columns and "isin" in jetf_df.columns:
             isin_map = dict(zip(jetf_df["ticker"], jetf_df["isin"].fillna("")))
-        print(f"[run_scan] isin_map size={len(isin_map)}, submitting futures", flush=True)
         futs = {ex.submit(analyse_ticker, t, risk_mult, isin_map.get(t,"")): t for t in tickers}
-        print(f"[run_scan] {len(futs)} futures submitted", flush=True)
         for fut in as_completed(futs):
             if cache_get("current_scan_id") != scan_id or not _active_scans.get(scan_id, True):
                 _active_scans.pop(scan_id, None)
