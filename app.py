@@ -1681,18 +1681,15 @@ def run_deep_dive(n_clicks, user_input, budget):
     Output("run-btn","children"),
     Output("progress-interval","disabled"),
     Output("scan-status-alert","style"),
-    Output("scanning-indicator","style", allow_duplicate=True),
     Input("run-btn","disabled"),
-    prevent_initial_call=True,
 )
 def update_run_btn_label(is_disabled):
     if is_disabled:
         return ([dbc.Spinner(size="sm", color="light",
                              style={"marginRight":"8px"}), "Scanning…"],
                 False,
-                {"display":"none"},           # hide old results alert
-                {"display":"block","marginBottom":"8px"})  # show progress bar
-    return "🔄 Run Scan", True, no_update, {"display":"none"}
+                {"display":"none"})
+    return "🔄 Run Scan", True, no_update
 
 @app.callback(
     Output("filter-domicile","disabled"),
@@ -1758,6 +1755,18 @@ def download_csv(n, store_data):
     return dcc.send_data_frame(df.to_csv, "scan_results.csv", index=False)
 
 import os
+
+@server.route("/scan-status")
+def scan_status():
+    """Live scan progress check."""
+    import json
+    scan_id = cache_get("current_scan_id")
+    prog = cache_get(f"progress_{scan_id}") if scan_id else None
+    failed_count = sum(1 for k in _cache if str(k).startswith("tick_")
+                       and cache_get(k) == "FAILED")
+    valid_count  = sum(1 for k in _cache if str(k).startswith("tick_")
+                       and cache_get(k) not in (None, "FAILED"))
+    return f"<pre>{json.dumps({'scan_id': scan_id, 'progress': prog, 'cached_valid': valid_count, 'cached_failed': failed_count}, indent=2)}</pre>"
 
 @server.route("/debug")
 def debug_info():
