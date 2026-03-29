@@ -362,7 +362,7 @@ def _fetch_stooq(symbol):
         elif symbol.endswith(".PA"): stooq_sym = symbol.replace(".PA", ".FR")
         elif symbol.endswith(".MI"): stooq_sym = symbol.replace(".MI", ".IT")
         elif symbol.endswith(".SW"): stooq_sym = symbol.replace(".SW", ".CH")
-        elif "." not in symbol:     stooq_sym = f"{symbol}.US"
+        elif "." not in symbol:     stooq_sym = symbol  # skip .US — let yfinance handle ambiguous tickers
         end   = pd.Timestamp.today()
         start = end - pd.Timedelta(days=400)
         df = pdr.get_data_stooq(stooq_sym, start=start, end=end)
@@ -1761,7 +1761,23 @@ def run_deep_dive(n_clicks, user_input, budget):
                 f"Could not resolve ISIN {isin} to a ticker. Try the ticker symbol directly.",
                 color="warning")
 
-    raw = fetch_ticker_data(ticker)
+    # Look up correct yf_symbol from universe.csv FIRST
+    resolved_yf = None
+    if not universe.empty and "yf_symbol" in universe.columns:
+        umatch = universe[universe["ticker"] == ticker]
+        if not umatch.empty:
+            sym = str(umatch.iloc[0].get("yf_symbol","")).strip()
+            if sym and sym not in ("","nan","None"):
+                resolved_yf = sym
+            if not isin:
+                isin = str(umatch.iloc[0].get("isin","")).strip() or None
+    # Also check justETF for ISIN
+    if not isin and not jetf_df.empty and "ticker" in jetf_df.columns:
+        jmatch = jetf_df[jetf_df["ticker"] == ticker]
+        if not jmatch.empty:
+            isin = str(jmatch.iloc[0].get("isin","")).strip() or None
+
+    raw = fetch_ticker_data(resolved_yf or ticker, isin=isin)
     if raw is None:
         try:
             sr = yf.Search(ticker, max_results=3)
