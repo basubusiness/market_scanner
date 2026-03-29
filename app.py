@@ -196,9 +196,18 @@ def load_signals():
         def _bad_ticker(t):
             t = str(t).strip()
             if len(t) < 2: return True
-            if t[-1] in ('W','U','R') and len(t) >= 4: return True
+            if t[-1] in ('W','U','R') and len(t) >= 4: return True  # warrants/units/rights
+            if t.endswith(('WS','WT','WI','WD')): return True        # more warrant formats
             return False
         df = df[~df["ticker"].apply(_bad_ticker)]
+        # Filter SPAC/shell names
+        if "name" in df.columns:
+            spac_keywords = ["acquisition corp","acquisition co","blank check",
+                             "special purpose","spac","shell company"]
+            def _is_spac(name):
+                n = str(name).lower()
+                return any(kw in n for kw in spac_keywords)
+            df = df[~df["name"].apply(_is_spac)]
         # Remove penny stocks (price < $0.50) — but keep momentum-only signals (price=NaN)
         if "price" in df.columns:
             df = df[(df["price"].isna()) | (df["price"] >= 0.50)]
@@ -1359,9 +1368,14 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
                     "MCap":    f"${mcap/1e9:.1f}B" if mcap else "—",
                 })
             result_df = pd.DataFrame(rows)
-            # Deduplicate — keep best score per ticker
-            result_df = (result_df.sort_values("Score", ascending=False)
+            # Penalise momentum-only signals — rank them below price-data signals
+            result_df["_sort_score"] = result_df.apply(
+                lambda r: r["Score"] if r.get("Source","") != "justetf_momentum" else r["Score"] - 10,
+                axis=1
+            )
+            result_df = (result_df.sort_values("_sort_score", ascending=False)
                                   .drop_duplicates(subset=["Ticker"], keep="first")
+                                  .drop(columns=["_sort_score"])
                                   .reset_index(drop=True))
             result_df.insert(0, "Rank", result_df.index+1)
             computed = sig["computed_at"].iloc[0] if "computed_at" in sig.columns else "unknown"
