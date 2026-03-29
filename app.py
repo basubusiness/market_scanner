@@ -180,6 +180,23 @@ def load_justetf():
 universe = load_base_universe()
 jetf_df  = load_justetf()
 
+def load_signals():
+    import os
+    path = os.path.join(os.path.dirname(__file__), "signals.csv")
+    if not os.path.exists(path):
+        print("[signals] signals.csv not found — using live yfinance scan", flush=True)
+        return pd.DataFrame()
+    try:
+        df = pd.read_csv(path)
+        date_str = df["computed_at"].iloc[0] if "computed_at" in df.columns else "unknown"
+        print(f"[signals] Loaded {len(df):,} pre-computed signals (computed: {date_str})", flush=True)
+        return df
+    except Exception as e:
+        print(f"[signals] Load error: {e}", flush=True)
+        return pd.DataFrame()
+
+signals_df = load_signals()
+
 # Pre-warm suffix cache for top justETF tickers in background
 def _prewarm_suffix_cache():
     if jetf_df.empty:
@@ -1227,9 +1244,57 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
     if not tickers:
         return None, "⚠️ No tickers match filters.", {}, False, False
 
-    # Cap at 500 per scan to stay within Railway memory limits
-    # justETF tickers are sorted by size so top ones are most liquid
-    # Smart cap based on asset type
+    # ── FAST PATH: use pre-computed signals.csv if available ──────────
+    if not signals_df.empty:
+        sig = signals_df[signals_df["ticker"].isin(tickers)].copy()
+        if len(sig) >= len(tickers) * 0.3:  # >30% coverage → use signals
+            print(f"[scan] Using pre-computed signals: {len(sig)}/{len(tickers)} covered", flush=True)
+            budget_val = budget or 1000
+            rows = []
+            for _, r in sig.iterrows():
+                action = r["action"]
+                conf   = float(r.get("conf", 0.5))
+                vol    = float(r.get("vol_pct", 2))
+                dm     = float(r.get("dist_ma200", 0))
+                rsi_v  = float(r.get("rsi", 50))
+                if action == "AVOID":  alloc = "⛔ Skip"
+                elif action == "WAIT": alloc = "—"
+                elif action == "WATCH":
+                    amt = budget_val * 0.25 * (0.5 + conf)
+                    alloc = f"👀 €{amt:,.0f}"
+                else:
+                    ctx_s = (40 if fg<35 else 20 if fg<50 else 0)/100
+                    sig_s = min(-dm/20,1)*0.5 + min((50-rsi_v)/50,1)*0.5 if dm<0 else 0
+                    amt   = budget_val*(ctx_s+sig_s)*(0.5+conf)*max(0.5,1-vol/20)*risk_mult
+                    amt   = max(budget_val*0.25, min(amt, budget_val*3))
+                    tier  = "🔥" if amt>=budget_val*1.5 else "⚖️" if amt>=budget_val*0.8 else "🔍"
+                    alloc = f"{tier} €{amt:,.0f}"
+                rows.append({
+                    "Ticker":  r["ticker"], "Name": r.get("name",""), "ISIN": r.get("isin",""),
+                    "Price":   r.get("price",0), "MA200": r.get("ma200",0),
+                    "Dist%":   r.get("dist_ma200",0), "52W%": r.get("dist_52w",0),
+                    "RSI":     r.get("rsi",50), "RSI↗": "↗" if r.get("rsi_rising",0) else "↘",
+                    "MACD":    "▲ Bull" if r.get("macd_bull",0) else "▼ Bear",
+                    "MACD⚡":  "⚡" if r.get("macd_accel",0) else "—",
+                    "Vol%":    r.get("vol_pct",0), "Conf": r.get("conf",0),
+                    "Action":  action,
+                    "Signal":  f"{action} ({'Strong' if conf>0.7 else 'Medium' if conf>0.4 else 'Weak'})",
+                    "Knife":   "⚠️" if r.get("is_knife",0) and not r.get("reversal",0) else "",
+                    "Score":   r.get("score",0), "Allocation": alloc,
+                    "PE":"—","Beta":"—","Div%":"—","MCap":"—",
+                })
+            result_df = pd.DataFrame(rows).sort_values("Score", ascending=False).reset_index(drop=True)
+            result_df.insert(0, "Rank", result_df.index+1)
+            computed = sig["computed_at"].iloc[0] if "computed_at" in sig.columns else "unknown"
+            status = (f"⚡ {len(result_df)} pre-computed signals · "
+                      f"BUY:{(result_df['Action']=='BUY').sum()} "
+                      f"WATCH:{(result_df['Action']=='WATCH').sum()} "
+                      f"SELL:{(result_df['Action']=='SELL').sum()} "
+                      f"AVOID:{(result_df['Action']=='AVOID').sum()} "
+                      f"· updated: {computed}")
+            return (result_df.to_json(date_format="iso", orient="split"),
+                    status, {"display":"block"}, False, False)
+    # ── END FAST PATH — fall through to live yfinance scan ────────────
     ptype = PRESETS.get(preset, {}).get("type", "ETF")
     if ptype == "Stock":
         MAX_PER_SCAN = 2000   # stocks resolve fast via country hints + cache
