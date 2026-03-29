@@ -200,14 +200,22 @@ def load_signals():
             if t.endswith(('WS','WT','WI','WD')): return True        # more warrant formats
             return False
         df = df[~df["ticker"].apply(_bad_ticker)]
-        # Filter SPAC/shell names
+        # Filter SPAC/shell names and leveraged/inverse ETPs
         if "name" in df.columns:
             spac_keywords = ["acquisition corp","acquisition co","blank check",
                              "special purpose","spac","shell company"]
+            leveraged_keywords = ["2x","3x","4x","5x","-1x","-2x","-3x",
+                                   "2x long","3x long","2x short","3x short",
+                                   "daily 2x","daily 3x","ultra short","ultrashort",
+                                   "leveraged","inverse daily","short daily"]
             def _is_spac(name):
                 n = str(name).lower()
                 return any(kw in n for kw in spac_keywords)
+            def _is_leveraged(name):
+                n = str(name).lower()
+                return any(kw in n for kw in leveraged_keywords)
             df = df[~df["name"].apply(_is_spac)]
+            df = df[~df["name"].apply(_is_leveraged)]
         # Remove penny stocks (price < $0.50) — but keep momentum-only signals (price=NaN)
         if "price" in df.columns:
             df = df[(df["price"].isna()) | (df["price"] >= 1.00)]
