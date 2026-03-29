@@ -1347,8 +1347,8 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
                     dist_display = r.get("ret_1m",0)
                 rows.append({
                     "Ticker":  r["ticker"], "Name": r.get("name",""), "ISIN": r.get("isin",""),
-                    "Price":   r.get("price") if pd.notna(r.get("price",None)) else "—",
-                    "MA200":   r.get("ma200") if pd.notna(r.get("ma200",None)) else "—",
+                    "Price":   round(float(r["price"]),2) if pd.notna(r.get("price",None)) else "—",
+                    "MA200":   round(float(r["ma200"]),2) if pd.notna(r.get("ma200",None)) else "—",
                     "Dist%":   dist_display if dist_display is not None else 0,
                     "52W%":    r.get("dist_52w",0) if pd.notna(r.get("dist_52w",None)) else "—",
                     "RSI":     rsi_display,
@@ -1369,13 +1369,16 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
                 })
             result_df = pd.DataFrame(rows)
             # Penalise momentum-only signals — rank them below price-data signals
-            # Sort: price-data signals first (within each action), momentum signals after
+            # Sort: by action priority, then price-data before momentum, then score
+            action_order = {"BUY":0,"WATCH":1,"SELL":2,"AVOID":3,"WAIT":4}
+            result_df["_action_n"]  = result_df["Action"].map(action_order).fillna(5)
             result_df["_has_price"] = result_df["Price"].apply(
                 lambda x: 0 if str(x) in ("—","nan","None","") or x is None else 1)
             result_df = (result_df.sort_values(
-                            ["_has_price","Score"], ascending=[False, False])
+                            ["_action_n","_has_price","Score"],
+                            ascending=[True, False, False])
                                   .drop_duplicates(subset=["Ticker"], keep="first")
-                                  .drop(columns=["_has_price"])
+                                  .drop(columns=["_action_n","_has_price"])
                                   .reset_index(drop=True))
             result_df.insert(0, "Rank", result_df.index+1)
             computed = sig["computed_at"].iloc[0] if "computed_at" in sig.columns else "unknown"
