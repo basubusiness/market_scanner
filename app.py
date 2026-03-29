@@ -35,7 +35,7 @@ BUILD_TIME = _datetime.utcnow().strftime("%d %b %H:%M UTC")
 
 app = dash.Dash(
     __name__,
-    external_stylesheets=[dbc.themes.DARKLY, dbc.icons.BOOTSTRAP],
+    external_stylesheets=[dbc.themes.FLATLY, dbc.icons.BOOTSTRAP],
     suppress_callback_exceptions=True,
     title="Market Decision Engine",
     index_string="""<!DOCTYPE html>
@@ -356,10 +356,22 @@ input[type="checkbox"] { accent-color: var(--blue-primary) !important; }
   border-radius: 3px !important;
 }
 
-/* Remove Bootstrap dark overrides */
-.bg-dark, [class*="bg-dark"] { background: var(--bg-surface) !important; color: var(--text-primary) !important; }
-.text-white { color: var(--text-primary) !important; }
-.border-secondary { border-color: var(--border) !important; }
+/* FLATLY overrides — keep everything light */
+.navbar-dark, .navbar-dark .navbar-brand, .navbar-dark .nav-link { color: var(--text-primary) !important; }
+.bg-primary { background: var(--blue-primary) !important; }
+.btn-warning { background: #f59e0b !important; border-color: #f59e0b !important; color: #fff !important; }
+.btn-secondary { background: #f1f4f9 !important; border-color: var(--border) !important; color: var(--text-secondary) !important; }
+.btn-secondary:hover { background: #e2e6ed !important; }
+.text-muted { color: var(--text-muted) !important; }
+.border { border-color: var(--border) !important; }
+/* Dash loading overlay */
+._dash-loading { background: rgba(248,249,252,0.8) !important; }
+/* Fix dropdown menus */
+.dropdown-menu { background: var(--bg-surface) !important; border: 1px solid var(--border) !important; box-shadow: var(--shadow-md) !important; }
+.dropdown-item { color: var(--text-primary) !important; font-size: 12px !important; }
+.dropdown-item:hover { background: var(--bg-hover) !important; }
+/* Spinner */
+.spinner-border { color: var(--blue-primary) !important; }
 </style>
 </head>
 <body>
