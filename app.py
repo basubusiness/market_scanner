@@ -123,8 +123,8 @@ a { color: var(--blue-primary) !important; }
   color: var(--text-muted) !important;
   font-size: 11px !important;
 }
-#sidebar label, #sidebar .form-label {
-  font-size: 12px !important;
+#sidebar label, #sidebar .form-label, #sidebar .small.fw-medium, #sidebar .fw-medium {
+  font-size: 11.5px !important;
   font-weight: 500 !important;
   color: #475569 !important;
   margin-bottom: 3px !important;
@@ -1306,9 +1306,9 @@ def sidebar():
         # ── Live indicators
         dbc.Row([
             dbc.Col([html.P("VIX",style={"color":"#94a3b8","marginBottom":"2px","fontSize":"12px"}),
-                     html.H4(id="vix-val", className="text-white")], width=6),
+                     html.H4(id="vix-val", className="")], width=6),
             dbc.Col([html.P("Fear & Greed",style={"color":"#94a3b8","marginBottom":"2px","fontSize":"12px"}),
-                     html.H4(id="fg-val", className="text-white")], width=6),
+                     html.H4(id="fg-val", className="")], width=6),
         ]),
         html.Small(id="fg-label", className="text-muted"),
         html.Div(id="regime-badge", className="mt-2 mb-3"),
@@ -1332,7 +1332,7 @@ def sidebar():
 
                 # Asset type (custom only)
                 html.Div([
-                    html.Label("Asset Type", className="text-white small"),
+                    html.Label("Asset Type", className="small fw-medium"),
                     dbc.Checklist(
                         id="filter-types",
                         options=[{"label":"ETF","value":"ETF"},{"label":"Stock","value":"Stock"}],
@@ -1344,25 +1344,25 @@ def sidebar():
                 # ETF filters
                 html.Div([
                     html.Label("📦 ETF Filters", className="text-info small fw-bold mt-2"),
-                    html.Label("Domicile", className="text-white small"),
+                    html.Label("Domicile", className="small fw-medium"),
                     dcc.Dropdown(id="filter-domicile", options=def_jcol("domicile"),
                         multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
-                    html.Label("Distribution", className="text-white small"),
+                    html.Label("Distribution", className="small fw-medium"),
                     dcc.Dropdown(id="filter-dist", options=def_jcol("dist_policy"),
                         multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
-                    html.Label("Replication", className="text-white small"),
+                    html.Label("Replication", className="small fw-medium"),
                     dcc.Dropdown(id="filter-replication", options=def_jcol("replication"),
                         multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
-                    html.Label("Strategy", className="text-white small"),
+                    html.Label("Strategy", className="small fw-medium"),
                     dcc.Dropdown(id="filter-strategy", options=def_jcol("strategy"),
                         multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
-                    html.Label("Asset Class", className="text-white small"),
+                    html.Label("Asset Class", className="small fw-medium"),
                     dcc.Dropdown(id="filter-category", options=[{"label":v,"value":v} for v in cat_opts],
                         multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
                     dbc.Row([
-                        dbc.Col([html.Label("Min Size €m", className="text-white small"),
+                        dbc.Col([html.Label("Min Size €m", className="small fw-medium"),
                                  dbc.Input(id="filter-minsize", type="number", value=0, min=0, step=50, size="sm")], width=6),
-                        dbc.Col([html.Label("Max TER %", className="text-white small"),
+                        dbc.Col([html.Label("Max TER %", className="small fw-medium"),
                                  dbc.Input(id="filter-maxter", type="number", value=2.0, min=0, max=5, step=0.05, size="sm")], width=6),
                     ], className="mb-2"),
                 ], id="etf-filters-row"),
@@ -1370,10 +1370,10 @@ def sidebar():
                 # Stock filters
                 html.Div([
                     html.Label("📈 Stock Filters", className="text-info small fw-bold mt-2"),
-                    html.Label("Country", className="text-white small"),
+                    html.Label("Country", className="small fw-medium"),
                     dcc.Dropdown(id="filter-country", options=[{"label":v,"value":v} for v in country_opts],
                         multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
-                    html.Label("Sector", className="text-white small"),
+                    html.Label("Sector", className="small fw-medium"),
                     dcc.Dropdown(id="filter-sector", options=[{"label":v,"value":v} for v in sector_opts],
                         multi=True, placeholder="Any", style=_DD, className="dash-dark-dd"),
                 ], id="stock-filters-row"),
@@ -1382,9 +1382,9 @@ def sidebar():
         ], start_collapsed=False, className="mb-3"),
 
         # ── Settings
-        html.Label("💰 Monthly Budget (EUR)", className="text-white small"),
+        html.Label("💰 Monthly Budget (EUR)", className="small fw-medium"),
         dbc.Input(id="budget-input", type="number", value=1000, min=100, step=100, className="mb-2", size="sm"),
-        html.Label("⚡ Parallel Workers", className="text-white small"),
+        html.Label("⚡ Parallel Workers", className="small fw-medium"),
         dcc.Slider(id="workers-slider", min=2, max=12, step=1, value=6,
                    marks={2:"2",6:"6",12:"12"},
                    tooltip={"placement":"bottom"}),
@@ -1487,12 +1487,12 @@ def deepdive_tab():
     return html.Div([
         dbc.Row([
             dbc.Col([
-                html.Label("Ticker or ISIN", className="text-white"),
+                html.Label("Ticker or ISIN", className=""),
                 dbc.Input(id="dd-input", placeholder="e.g. VWRA or IE00B3RBWM25",
                           type="text", className="mb-2"),
             ], width=8),
             dbc.Col([
-                html.Label("Budget (EUR)", className="text-white"),
+                html.Label("Budget (EUR)", className=""),
                 dbc.Input(id="dd-budget", type="number", value=1000, min=100, step=100),
             ], width=2),
             dbc.Col([
