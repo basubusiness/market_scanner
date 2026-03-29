@@ -210,7 +210,7 @@ def load_signals():
             df = df[~df["name"].apply(_is_spac)]
         # Remove penny stocks (price < $0.50) — but keep momentum-only signals (price=NaN)
         if "price" in df.columns:
-            df = df[(df["price"].isna()) | (df["price"] >= 0.50)]
+            df = df[(df["price"].isna()) | (df["price"] >= 1.00)]
         # Keep best signal per ticker
         if "score" in df.columns:
             df = df.sort_values("score", ascending=False).drop_duplicates(
@@ -1369,13 +1369,13 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
                 })
             result_df = pd.DataFrame(rows)
             # Penalise momentum-only signals — rank them below price-data signals
-            result_df["_sort_score"] = result_df.apply(
-                lambda r: r["Score"] if r.get("Source","") != "justetf_momentum" else r["Score"] - 10,
-                axis=1
-            )
-            result_df = (result_df.sort_values("_sort_score", ascending=False)
+            # Sort: price-data signals first (within each action), momentum signals after
+            result_df["_has_price"] = result_df["Price"].apply(
+                lambda x: 0 if str(x) in ("—","nan","None","") or x is None else 1)
+            result_df = (result_df.sort_values(
+                            ["_has_price","Score"], ascending=[False, False])
                                   .drop_duplicates(subset=["Ticker"], keep="first")
-                                  .drop(columns=["_sort_score"])
+                                  .drop(columns=["_has_price"])
                                   .reset_index(drop=True))
             result_df.insert(0, "Rank", result_df.index+1)
             computed = sig["computed_at"].iloc[0] if "computed_at" in sig.columns else "unknown"
