@@ -1381,6 +1381,8 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
                                   .drop(columns=["_action_n","_has_price"])
                                   .reset_index(drop=True))
             result_df.insert(0, "Rank", result_df.index+1)
+            # Pre-compute per-action rank for instant tab switching
+            result_df["ActionRank"] = result_df.groupby("Action").cumcount() + 1
             computed = sig["computed_at"].iloc[0] if "computed_at" in sig.columns else "unknown"
             status = (f"⚡ {len(result_df)} pre-computed signals · "
                       f"BUY:{(result_df['Action']=='BUY').sum()} "
@@ -1535,8 +1537,15 @@ def render_results(store_data, active_tab):
             ])
         )
 
-    import io
-    df = pd.read_json(io.StringIO(store_data), orient="split")
+    import io, hashlib
+    # Cache parsed df — tab switches reuse it without re-parsing 4000-row JSON
+    _ck = hashlib.md5(store_data[:500].encode()).hexdigest()
+    _cached = cache_get(f"render_{_ck}")
+    if _cached is not None:
+        df = _cached
+    else:
+        df = pd.read_json(io.StringIO(store_data), orient="split")
+        cache_set(f"render_{_ck}", df, ttl=300)
 
     # KPIs
     kpis = dbc.Row([
@@ -1573,17 +1582,26 @@ def render_results(store_data, active_tab):
         top_card("SELL",  "🔴 Top SELL",   "#ff1744"),
     ], className="g-2")
 
-    # Full table — re-rank 1-N within the filtered view
-    sub = df if active_tab == "all" else df[df["Action"]==active_tab].copy()
-    if active_tab != "all" and not sub.empty:
-        sub = sub.copy()
-        sub["Rank"] = range(1, len(sub)+1)
+    # Full table — use pre-computed ActionRank for instant tab switching
+    if active_tab == "all":
+        sub = df
+    else:
+        sub = df[df["Action"]==active_tab].copy()
+        if not sub.empty and "ActionRank" in sub.columns:
+            sub = sub.copy()
+            sub["Rank"] = sub["ActionRank"]
 
     SHOW_COLS = ["Rank","Ticker","Name","ISIN","Price","MA200","Dist%","52W%",
                  "RSI","RSI↗","MACD","MACD⚡","Vol%","Conf",
                  "PE","Beta","Div%","MCap",
                  "Signal","Knife","Allocation"]
     show_cols = [c for c in SHOW_COLS if c in sub.columns]
+
+    # Round floats to avoid 2.8200000000000003 display issues
+    sub = sub.copy()
+    for col in ["Price","MA200","Dist%","52W%","RSI","Vol%","Conf","Score"]:
+        if col in sub.columns:
+            sub[col] = pd.to_numeric(sub[col], errors="coerce").round(2)
 
     def style_signal(col_id, val):
         for action, color in SIGNAL_COLORS.items():
