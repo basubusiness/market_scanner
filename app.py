@@ -2065,10 +2065,11 @@ def render_results(store_data, active_tab):
             style_table={"overflowX":"auto"},
             style_cell={"background":"transparent","color":"#0f172a",
                        "border":"none","fontSize":"11px","padding":"3px 8px",
-                       "fontFamily":"DM Mono,monospace"},
+                       "fontFamily":"DM Mono,monospace","textAlign":"left"},
             style_header={"background":"transparent","color":"#94a3b8",
                          "fontWeight":"600","border":"none","fontSize":"9px",
-                         "textTransform":"uppercase","letterSpacing":"0.07em"},
+                         "textTransform":"uppercase","letterSpacing":"0.07em",
+                         "textAlign":"left"},
         )
         return dbc.Col(dbc.Card([
             dbc.CardHeader(label, style={"background":"transparent","color":ps["color"],
