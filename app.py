@@ -38,6 +38,163 @@ app = dash.Dash(
     external_stylesheets=[dbc.themes.DARKLY, dbc.icons.BOOTSTRAP],
     suppress_callback_exceptions=True,
     title="Market Decision Engine",
+    index_string="""<!DOCTYPE html>
+<html>
+<head>
+{%metas%}
+<title>{%title%}</title>
+{%favicon%}
+{%css%}
+<style>
+/* ── Market Decision Engine — Modern Fintech Theme ── */
+:root {
+  --bg-base:      #0a0e1a;
+  --bg-surface:   #111827;
+  --bg-card:      #141d2e;
+  --bg-elevated:  #1a2540;
+  --border:       rgba(255,255,255,0.07);
+  --border-light: rgba(255,255,255,0.04);
+
+  --text-primary:   #e8edf5;
+  --text-secondary: #8892a4;
+  --text-muted:     #4a5568;
+
+  --accent-blue:    #3b82f6;
+  --accent-blue-dim:#1d4ed8;
+
+  /* Signal colors — muted, purposeful */
+  --signal-buy:     #10b981;
+  --signal-buy-bg:  rgba(16,185,129,0.08);
+  --signal-watch:   #06b6d4;
+  --signal-watch-bg:rgba(6,182,212,0.08);
+  --signal-sell:    #f43f5e;
+  --signal-sell-bg: rgba(244,63,94,0.08);
+  --signal-avoid:   #f97316;
+  --signal-avoid-bg:rgba(249,115,22,0.08);
+  --signal-wait:    #eab308;
+  --signal-wait-bg: rgba(234,179,8,0.06);
+}
+
+/* Base */
+body, .dash-debug-menu { background: var(--bg-base) !important; }
+
+/* Sidebar */
+#sidebar { background: var(--bg-surface) !important; border-right: 1px solid var(--border) !important; }
+#sidebar .text-muted, #sidebar small { color: var(--text-secondary) !important; font-size: 11px !important; }
+
+/* Cards */
+.card, .dbc-card { 
+  background: var(--bg-card) !important; 
+  border: 1px solid var(--border) !important; 
+  border-radius: 6px !important;
+}
+
+/* Signal tabs — subtle underline style, not filled */
+#signal-tabs .nav-link {
+  color: var(--text-secondary) !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  padding: 8px 16px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  background: transparent !important;
+  transition: color 0.15s, border-color 0.15s !important;
+}
+#signal-tabs .nav-link:hover { color: var(--text-primary) !important; }
+#signal-tabs .nav-link.active {
+  color: var(--text-primary) !important;
+  border-bottom-color: var(--accent-blue) !important;
+  background: transparent !important;
+}
+
+/* Top summary cards — tone down */
+#summary-cards .card { background: var(--bg-elevated) !important; }
+#summary-cards .card h2, #summary-cards .card .display-4 { 
+  font-size: 1.8rem !important; font-weight: 600 !important; 
+}
+
+/* Top BUY/WATCH/SELL panels */
+#top-buy-panel   { background: var(--signal-buy-bg)   !important; border: 1px solid rgba(16,185,129,0.2)  !important; border-radius: 6px !important; }
+#top-watch-panel { background: var(--signal-watch-bg) !important; border: 1px solid rgba(6,182,212,0.2)   !important; border-radius: 6px !important; }
+#top-sell-panel  { background: var(--signal-sell-bg)  !important; border: 1px solid rgba(244,63,94,0.2)   !important; border-radius: 6px !important; }
+
+/* Status bar */
+.alert-info { 
+  background: var(--bg-elevated) !important; 
+  border: 1px solid var(--border) !important; 
+  color: var(--text-secondary) !important;
+  border-radius: 4px !important;
+}
+
+/* Table */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+  background: var(--bg-surface) !important;
+  color: var(--text-secondary) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  border-bottom: 1px solid var(--border) !important;
+  font-weight: 500 !important;
+}
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td {
+  background: var(--bg-base) !important;
+  color: var(--text-primary) !important;
+  border-bottom: 1px solid var(--border-light) !important;
+  font-size: 12.5px !important;
+}
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover td {
+  background: var(--bg-card) !important;
+}
+
+/* Dropdown filters */
+.Select-control, .Select-menu-outer, .VirtualizedSelectOption {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+.Select-placeholder, .Select-value-label { color: var(--text-secondary) !important; }
+
+/* Run Scan button */
+#run-btn { 
+  background: var(--accent-blue) !important; 
+  border-color: var(--accent-blue) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.03em !important;
+  transition: background 0.15s !important;
+}
+#run-btn:hover { background: var(--accent-blue-dim) !important; }
+
+/* Scan overlay */
+#scan-overlay { backdrop-filter: blur(4px) !important; }
+
+/* Accordion */
+.accordion-button, .accordion-body { 
+  background: var(--bg-surface) !important; 
+  color: var(--text-primary) !important; 
+}
+.accordion-button:not(.collapsed) { background: var(--bg-elevated) !important; }
+
+/* VIX/FG badges */
+.badge { font-weight: 500 !important; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+{%app_entry%}
+<footer>
+{%config%}
+{%scripts%}
+{%renderer%}
+</footer>
+</body>
+</html>""",
 )
 server = app.server  # expose Flask server for gunicorn
 
@@ -856,35 +1013,43 @@ def build_tickers(preset_key, filters):
 # ───────────────────────────────────────────────────────────────────
 
 SIGNAL_COLORS = {
-    "BUY":   "#00e676", "WATCH": "#00bcd4",
-    "AVOID": "#ff6d00", "SELL":  "#ff1744", "WAIT": "#ffd600",
+    "BUY":   "#10b981", "WATCH": "#06b6d4",
+    "AVOID": "#f97316", "SELL":  "#f43f5e", "WAIT": "#eab308",
+}
+SIGNAL_BG = {
+    "BUY":   "rgba(16,185,129,0.12)", "WATCH": "rgba(6,182,212,0.12)",
+    "AVOID": "rgba(249,115,22,0.12)", "SELL":  "rgba(244,63,94,0.12)",
+    "WAIT":  "rgba(234,179,8,0.10)",
 }
 
 def badge(action):
-    color = SIGNAL_COLORS.get(action, "#888")
+    color = SIGNAL_COLORS.get(action, "#4a5568")
+    bg    = SIGNAL_BG.get(action, "rgba(255,255,255,0.06)")
     return html.Span(action, style={
-        "background": color, "color": "#000", "fontWeight": "bold",
-        "padding": "2px 8px", "borderRadius": "4px", "fontSize": "12px"
+        "background": bg, "color": color, "fontWeight": "600",
+        "padding": "2px 10px", "borderRadius": "3px", "fontSize": "11px",
+        "letterSpacing": "0.05em", "border": f"1px solid {color}22",
     })
 
-def kpi_card(title, value, color="#fff"):
+def kpi_card(title, value, color="#e8edf5"):
     return dbc.Card(dbc.CardBody([
-        html.P(title, className="mb-0", style={"fontSize":"12px","color":"#aaa"}),
-        html.H4(value, style={"color": color, "marginBottom":0}),
-    ]), style={"background":"#1e1e2e","border":"1px solid #333"})
+        html.P(title, className="mb-0", style={"fontSize":"10px","color":"#4a5568",
+                                                "textTransform":"uppercase","letterSpacing":"0.08em"}),
+        html.H4(value, style={"color": color, "marginBottom":0, "fontWeight":"700"}),
+    ]), style={"background":"#141d2e","border":"1px solid rgba(255,255,255,0.06)","borderRadius":"6px"})
 
 # ───────────────────────────────────────────────────────────────────
 # LAYOUT
 # ───────────────────────────────────────────────────────────────────
 
 # Dark theme style for all Dropdown components
-_DD = {"backgroundColor":"#1e1e2e","color":"#fff","border":"1px solid #555","marginBottom":"6px"}
-_DD_STYLE = {"option":{"backgroundColor":"#1e1e2e","color":"#fff"},
-             "control":{"backgroundColor":"#1e1e2e","borderColor":"#555","color":"#fff"},
-             "singleValue":{"color":"#fff"},"placeholder":{"color":"#aaa"},
-             "menu":{"backgroundColor":"#1e1e2e"},"input":{"color":"#fff"},
-             "multiValue":{"backgroundColor":"#333"},
-             "multiValueLabel":{"color":"#fff"}}
+_DD = {"backgroundColor":"#1a2540","color":"#c8d0dc","border":"1px solid rgba(255,255,255,0.08)","marginBottom":"6px"}
+_DD_STYLE = {"option":{"backgroundColor":"#1a2540","color":"#c8d0dc"},
+             "control":{"backgroundColor":"#1a2540","borderColor":"rgba(255,255,255,0.08)","color":"#c8d0dc"},
+             "singleValue":{"color":"#c8d0dc"},"placeholder":{"color":"#4a5568"},
+             "menu":{"backgroundColor":"#1a2540"},"input":{"color":"#c8d0dc"},
+             "multiValue":{"backgroundColor":"#111827"},
+             "multiValueLabel":{"color":"#c8d0dc"}}
 
 def _get_jcol_opts(col):
     """Get options from justETF df — with hard fallbacks."""
@@ -1046,7 +1211,7 @@ def sidebar():
         ], title="📖 VIX & F&G Guide")], start_collapsed=True),
 
     ], style={
-        "width":"280px","minWidth":"280px","background":"#12121f",
+        "width":"280px","minWidth":"280px","background":"#0a0e1a",
         "padding":"16px","height":"100vh","overflowY":"auto",
         "borderRight":"1px solid #333","flexShrink":0,
     })
@@ -1164,9 +1329,9 @@ app.layout = html.Div([
                 dbc.Tab(scanner_tab(), label="🔭 Market Scanner", tab_id="scanner"),
                 dbc.Tab(deepdive_tab(), label="🔬 Deep Dive",     tab_id="deepdive"),
             ], id="main-tabs", active_tab="scanner"),
-        ], style={"flex":"1","padding":"20px","overflowY":"auto","background":"#0d0d1a"}),
+        ], style={"flex":"1","padding":"20px","overflowY":"auto","background":"#0a0e1a"}),
     ], style={"display":"flex","height":"100vh","overflow":"hidden"}),
-], style={"fontFamily":"'Segoe UI', sans-serif","background":"#0d0d1a","color":"#fff"})
+], style={"fontFamily":"'Segoe UI', sans-serif","background":"#0a0e1a","color":"#fff"})
 
 # ───────────────────────────────────────────────────────────────────
 # CALLBACKS — Live data
@@ -1628,28 +1793,47 @@ def render_results(store_data, active_tab):
     ], className="g-2")
 
     # Top signals
-    def top_card(action, label, color):
-        sub = df[df["Action"]==action][["Rank","Ticker","Name","Dist%","RSI","Conf"]].head(8)
+    PANEL_STYLES = {
+        "BUY":   {"color": "#10b981", "bg": "rgba(16,185,129,0.06)",  "border": "rgba(16,185,129,0.2)"},
+        "WATCH": {"color": "#06b6d4", "bg": "rgba(6,182,212,0.06)",   "border": "rgba(6,182,212,0.2)"},
+        "SELL":  {"color": "#f43f5e", "bg": "rgba(244,63,94,0.06)",   "border": "rgba(244,63,94,0.2)"},
+    }
+    PANEL_LABELS = {"BUY": "● Top BUY", "WATCH": "◎ WATCH", "SELL": "● Top SELL"}
+
+    def top_card(action):
+        ps    = PANEL_STYLES[action]
+        label = PANEL_LABELS[action]
+        sub   = df[df["Action"]==action][["Rank","Ticker","Name","Dist%","RSI","Conf"]].head(8)
         if sub.empty:
-            return dbc.Col(dbc.Card([dbc.CardHeader(label, style={"background":color,"color":"#000","fontWeight":"bold"}),
-                                     dbc.CardBody(html.P("No signals", className="text-muted mb-0"))],
-                                    style={"background":"#1e1e2e","border":f"1px solid {color}"}), width=4)
+            return dbc.Col(dbc.Card([
+                dbc.CardHeader(label, style={"background":"transparent","color":ps["color"],
+                                             "fontWeight":"600","fontSize":"11px",
+                                             "letterSpacing":"0.08em","textTransform":"uppercase",
+                                             "borderBottom":f"1px solid {ps['border']}","padding":"10px 14px"}),
+                dbc.CardBody(html.P("No signals", className="text-muted mb-0", style={"fontSize":"12px"}))],
+                style={"background":ps["bg"],"border":f"1px solid {ps['border']}","borderRadius":"6px"}), width=4)
         tbl = dash_table.DataTable(
             data=sub.round(2).to_dict("records"),
             columns=[{"name":c,"id":c} for c in sub.columns],
             style_table={"overflowX":"auto"},
-            style_cell={"background":"#1e1e2e","color":"#fff","border":"none","fontSize":"12px","padding":"4px 8px"},
-            style_header={"background":"#12121f","color":"#aaa","fontWeight":"bold","border":"none"},
+            style_cell={"background":"transparent","color":"#c8d0dc",
+                       "border":"none","fontSize":"12px","padding":"4px 10px"},
+            style_header={"background":"transparent","color":"#4a5568",
+                         "fontWeight":"500","border":"none","fontSize":"10px",
+                         "textTransform":"uppercase","letterSpacing":"0.05em"},
         )
         return dbc.Col(dbc.Card([
-            dbc.CardHeader(label, style={"background":color,"color":"#000","fontWeight":"bold"}),
+            dbc.CardHeader(label, style={"background":"transparent","color":ps["color"],
+                                         "fontWeight":"600","fontSize":"11px",
+                                         "letterSpacing":"0.08em","textTransform":"uppercase",
+                                         "borderBottom":f"1px solid {ps['border']}","padding":"10px 14px"}),
             dbc.CardBody(tbl, className="p-0"),
-        ], style={"background":"#1e1e2e","border":f"1px solid {color}"}), width=4)
+        ], style={"background":ps["bg"],"border":f"1px solid {ps['border']}","borderRadius":"6px"}), width=4)
 
     top = dbc.Row([
-        top_card("BUY",   "🟢 Top BUY",   "#00e676"),
-        top_card("WATCH", "👀 WATCH",      "#00bcd4"),
-        top_card("SELL",  "🔴 Top SELL",   "#ff1744"),
+        top_card("BUY"),
+        top_card("WATCH"),
+        top_card("SELL"),
     ], className="g-2")
 
     # Full table — global rank, no re-ranking on tab switch
@@ -1705,7 +1889,7 @@ def render_results(store_data, active_tab):
             {"if":{"column_id":"Allocation"},"maxWidth":"140px"},
         ],
         style_header={
-            "background":"#12121f","color":"#00bcd4",
+            "background":"#0a0e1a","color":"#00bcd4",
             "fontWeight":"bold","border":"1px solid #2a2a3e",
         },
         style_data_conditional=[
@@ -2025,7 +2209,7 @@ def run_deep_dive(n_clicks, user_input, budget):
                  if isin else f"https://www.justetf.com/en/search.html?query={ticker}",
             target="_blank", color="link", size="sm"),
         *([ html.Code(isin, style={"marginLeft":"8px","color":"#aaa","fontSize":"11px",
-            "background":"#1e1e2e","padding":"2px 6px","borderRadius":"4px"})
+            "background":"#141d2e","padding":"2px 6px","borderRadius":"4px"})
            ] if isin else []),
     ], className="mb-2")
 
@@ -2046,7 +2230,7 @@ def run_deep_dive(n_clicks, user_input, budget):
         columns=[{"name":c,"id":c} for c in detail_df.columns],
         style_table={"overflowX":"auto"},
         style_cell={"background":"#1a1a2e","color":"#fff","border":"1px solid #2a2a3e","fontSize":"12px","padding":"6px"},
-        style_header={"background":"#12121f","color":"#00bcd4","fontWeight":"bold","border":"1px solid #2a2a3e"},
+        style_header={"background":"#0a0e1a","color":"#00bcd4","fontWeight":"bold","border":"1px solid #2a2a3e"},
     )
 
     return html.Div([
