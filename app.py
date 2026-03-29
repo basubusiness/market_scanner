@@ -1573,8 +1573,11 @@ def render_results(store_data, active_tab):
         top_card("SELL",  "🔴 Top SELL",   "#ff1744"),
     ], className="g-2")
 
-    # Full table
-    sub = df if active_tab == "all" else df[df["Action"]==active_tab]
+    # Full table — re-rank 1-N within the filtered view
+    sub = df if active_tab == "all" else df[df["Action"]==active_tab].copy()
+    if active_tab != "all" and not sub.empty:
+        sub = sub.copy()
+        sub["Rank"] = range(1, len(sub)+1)
 
     SHOW_COLS = ["Rank","Ticker","Name","ISIN","Price","MA200","Dist%","52W%",
                  "RSI","RSI↗","MACD","MACD⚡","Vol%","Conf",
