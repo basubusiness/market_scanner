@@ -1213,8 +1213,6 @@ def update_filter_sections(preset, types, selected_country):
 
 @app.callback(
     Output("scope-label","children"),
-    Output("scan-store","data", allow_duplicate=True),
-    Output("scan-status-alert","style", allow_duplicate=True),
     Input("preset-dd","value"),
     Input("filter-types","value"),
     Input("filter-domicile","value"),
@@ -1243,7 +1241,7 @@ def update_scope(preset, types, domicile, dist, repl, strategy, category,
     if active:
         label += " · " + " · ".join(active)
     # Clear previous scan results when preset/filters change
-    return label, None, {"display":"none"}
+    return label
 
 # ───────────────────────────────────────────────────────────────────
 # CALLBACKS — Scan
