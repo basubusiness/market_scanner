@@ -116,6 +116,13 @@ html, body {
   color: var(--text-muted) !important;
   font-size: 11px !important;
 }
+#sidebar label, #sidebar .form-label {
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: var(--text-label) !important;
+  margin-bottom: 3px !important;
+  display: block !important;
+}
 
 /* ── Navbar / App title ── */
 .navbar, [class*="navbar"] {
@@ -173,9 +180,11 @@ html, body {
   font-size: 11.5px !important;
 }
 .alert-info {
-  background: var(--blue-light) !important;
-  border-color: #bfdbfe !important;
-  color: #1e40af !important;
+  background: #f0f9ff !important;
+  border-color: #bae6fd !important;
+  color: #0369a1 !important;
+  font-size: 11px !important;
+  padding: 6px 12px !important;
 }
 
 /* ── Run Scan button ── */
@@ -1995,10 +2004,11 @@ def render_results(store_data, active_tab):
         sub   = df[df["Action"]==action][["Rank","Ticker","Name","Dist%","RSI","Conf"]].head(8)
         if sub.empty:
             return dbc.Col(dbc.Card([
-                dbc.CardHeader(label, style={"background":"transparent","color":ps["color"],
-                                             "fontWeight":"600","fontSize":"11px",
-                                             "letterSpacing":"0.08em","textTransform":"uppercase",
-                                             "borderBottom":f"1px solid {ps['border']}","padding":"10px 14px"}),
+                dbc.CardHeader(label, style={"background":ps["bg"],"color":ps["color"],
+                                             "fontWeight":"700","fontSize":"10px",
+                                             "letterSpacing":"0.1em","textTransform":"uppercase",
+                                             "borderBottom":f"1px solid {ps['border']}",
+                                             "padding":"8px 12px"}),
                 dbc.CardBody(html.P("No signals", className="text-muted mb-0", style={"fontSize":"12px"}))],
                 style={"background":ps["bg"],"border":f"1px solid {ps['border']}","borderRadius":"6px"}), width=4)
         tbl = dash_table.DataTable(
