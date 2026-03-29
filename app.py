@@ -95,9 +95,16 @@ html, body {
   background: var(--bg-base) !important;
   color: var(--text-primary) !important;
   font-family: 'DM Sans', -apple-system, sans-serif !important;
-  font-size: 13px !important;
+  font-size: 14px !important;
   -webkit-font-smoothing: antialiased;
 }
+/* Force all text visible on light bg */
+*, *::before, *::after { color: inherit; }
+p, span, div, label, h1, h2, h3, h4, h5, h6, small, a {
+  color: var(--text-primary) !important;
+}
+.text-muted, .text-secondary { color: var(--text-muted) !important; }
+a { color: var(--blue-primary) !important; }
 
 /* ── Sidebar ── */
 #sidebar {
@@ -117,12 +124,17 @@ html, body {
   font-size: 11px !important;
 }
 #sidebar label, #sidebar .form-label {
-  font-size: 11px !important;
+  font-size: 12px !important;
   font-weight: 500 !important;
-  color: var(--text-label) !important;
+  color: #475569 !important;
   margin-bottom: 3px !important;
   display: block !important;
 }
+/* Nuclear option — force all sidebar text to be dark */
+#sidebar * { color: #0f172a !important; }
+#sidebar .text-muted, #sidebar small, #sidebar .text-secondary { color: #64748b !important; }
+#sidebar .btn { color: #ffffff !important; }
+#sidebar .accordion-button { color: #1a56db !important; }
 
 /* ── Navbar / App title ── */
 .navbar, [class*="navbar"] {
@@ -153,11 +165,11 @@ html, body {
   border: none !important;
   border-bottom: 2px solid transparent !important;
   border-radius: 0 !important;
-  padding: 8px 14px !important;
+  padding: 9px 16px !important;
   margin-bottom: -1px !important;
-  font-size: 11px !important;
+  font-size: 12px !important;
   font-weight: 500 !important;
-  letter-spacing: 0.06em !important;
+  letter-spacing: 0.04em !important;
   text-transform: uppercase !important;
   background: transparent !important;
   transition: all 0.15s ease !important;
@@ -209,21 +221,21 @@ html, body {
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
   background: #f8f9fc !important;
   color: var(--text-label) !important;
-  font-size: 10px !important;
+  font-size: 11px !important;
   font-weight: 600 !important;
-  letter-spacing: 0.07em !important;
+  letter-spacing: 0.05em !important;
   text-transform: uppercase !important;
   border-bottom: 1px solid var(--border) !important;
   border-right: none !important;
-  padding: 6px 10px !important;
+  padding: 7px 10px !important;
 }
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td {
   background: var(--bg-surface) !important;
   color: var(--text-primary) !important;
   border-bottom: 1px solid var(--border-light) !important;
   border-right: none !important;
-  font-size: 12px !important;
-  padding: 5px 10px !important;
+  font-size: 13px !important;
+  padding: 6px 10px !important;
   font-family: 'DM Mono', monospace !important;
 }
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover td {
@@ -334,9 +346,9 @@ input[type="number"], .form-control {
 /* ── Main tabs (Market Scanner / Deep Dive) ── */
 #main-tabs .nav-link {
   color: var(--text-secondary) !important;
-  font-size: 12px !important;
+  font-size: 13px !important;
   font-weight: 500 !important;
-  padding: 8px 16px !important;
+  padding: 10px 18px !important;
   border: none !important;
   border-bottom: 2px solid transparent !important;
   border-radius: 0 !important;
@@ -1795,10 +1807,10 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
                     "Knife":   "⚠️" if r.get("is_knife",0) and not r.get("reversal",0) else "",
                     "Score":   r.get("score",0), "Allocation": alloc,
                     "Source":  src,
-                    "PE":      f"{pe:.1f}" if pe else "—",
-                    "Beta":    f"{beta:.2f}" if beta else "—",
-                    "Div%":    f"{div*100:.1f}%" if div else "—",
-                    "MCap":    f"${mcap/1e9:.1f}B" if mcap else "—",
+                    "PE":      f"{pe:.1f}" if pe and str(pe) != 'nan' else "—",
+                    "Beta":    f"{beta:.2f}" if beta and str(beta) != 'nan' else "—",
+                    "Div%":    f"{div*100:.1f}%" if div and str(div) != 'nan' else "—",
+                    "MCap":    f"${mcap/1e9:.1f}B" if mcap and str(mcap) != 'nan' else "—",
                 })
             result_df = pd.DataFrame(rows)
             # Penalise momentum-only signals — rank them below price-data signals
@@ -2050,6 +2062,11 @@ def render_results(store_data, active_tab):
     for col in ["Price","MA200","Dist%","52W%","RSI","Vol%","Conf","Score"]:
         if col in sub.columns:
             sub[col] = pd.to_numeric(sub[col], errors="coerce").round(2)
+    # Replace NaN strings with clean dash
+    for col in ["PE","Beta","Div%","MCap"]:
+        if col in sub.columns:
+            sub[col] = sub[col].replace({"nan%":"—","$nanB":"—","nan":"—",float("nan"):"—"})
+            sub[col] = sub[col].fillna("—")
 
     def style_signal(col_id, val):
         for action, color in SIGNAL_COLORS.items():
