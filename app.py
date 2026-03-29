@@ -1213,6 +1213,8 @@ def update_filter_sections(preset, types, selected_country):
 
 @app.callback(
     Output("scope-label","children"),
+    Output("scan-store","data", allow_duplicate=True),
+    Output("scan-status-alert","style", allow_duplicate=True),
     Input("preset-dd","value"),
     Input("filter-types","value"),
     Input("filter-domicile","value"),
@@ -1240,7 +1242,8 @@ def update_scope(preset, types, domicile, dist, repl, strategy, category,
     label = f"{len(tickers):,} tickers in scope"
     if active:
         label += " · " + " · ".join(active)
-    return label
+    # Clear previous scan results when preset/filters change
+    return label, None, {"display":"none"}
 
 # ───────────────────────────────────────────────────────────────────
 # CALLBACKS — Scan
@@ -2011,6 +2014,17 @@ def download_csv(n, store_data):
     return dcc.send_data_frame(df.to_csv, "scan_results.csv", index=False)
 
 import os
+
+@server.route("/clear-cache")
+def clear_cache():
+    """Manually clear all scan caches — call from browser to reset."""
+    import json
+    with _cache_lock:
+        keys_cleared = [k for k in list(_cache.keys()) 
+                       if str(k).startswith(("tick_","sfx_","resolved_","progress_","current_scan"))]
+        for k in keys_cleared:
+            _cache.pop(k, None)
+    return f"<pre>Cleared {len(keys_cleared)} cache keys. Refresh the app now.</pre>"
 
 @server.route("/scan-status")
 def scan_status():
