@@ -458,7 +458,7 @@ def fetch_ticker_data(ticker, isin=None):
         # Determine the symbol to use
         target_sym = resolved_sym or (ticker + known_sfx if known_sfx is not None else ticker)
 
-        # Try Stooq first — faster, no rate limits
+        # Try Stooq first — fast, no rate limits
         df = _fetch_stooq(target_sym)
 
         # Fall back to yfinance if Stooq fails
@@ -494,12 +494,26 @@ def fetch_ticker_data(ticker, isin=None):
                 except Exception:
                     pass
         if df.empty or "Close" not in df.columns:
-            cache_set(key, "FAILED", ttl=3600)  # cache failure for 1h
-            return None
+            # For ETFs with ISIN — try justETF chart as last resort
+            if isin and len(str(isin)) == 12:
+                df = fetch_justetf_chart(isin)
+                if df.empty or "Close" not in df.columns:
+                    cache_set(key, "FAILED", ttl=3600)
+                    return None
+            else:
+                cache_set(key, "FAILED", ttl=3600)
+                return None
         close = df["Close"].dropna()
         if len(close) < 30:
             cache_set(key, "FAILED", ttl=3600)
             return None
+        # Sanity: if data looks like wrong ticker, try justETF for ETFs
+        _ma_check = float(close.rolling(200).mean().iloc[-1])
+        if _ma_check > 0 and (float(close.iloc[-1]) / _ma_check) > 10 and isin:
+            df_j = fetch_justetf_chart(isin)
+            if not df_j.empty and len(df_j["Close"].dropna()) >= 30:
+                df    = df_j
+                close = df["Close"].dropna()
         price = float(close.iloc[-1])
         if price < 0.10:  # only filter near-zero prices
             return None
