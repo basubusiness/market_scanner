@@ -189,7 +189,10 @@ def load_signals():
     try:
         df = pd.read_csv(path)
         date_str = df["computed_at"].iloc[0] if "computed_at" in df.columns else "unknown"
-        print(f"[signals] Loaded {len(df):,} pre-computed signals (computed: {date_str})", flush=True)
+        actions = df["action"].value_counts().to_dict() if "action" in df.columns else {}
+        print(f"[signals] Loaded {len(df):,} signals (computed: {date_str}) — "
+              f"BUY:{actions.get('BUY',0)} WATCH:{actions.get('WATCH',0)} "
+              f"SELL:{actions.get('SELL',0)} AVOID:{actions.get('AVOID',0)}", flush=True)
         return df
     except Exception as e:
         print(f"[signals] Load error: {e}", flush=True)
@@ -320,6 +323,32 @@ def get_live_vix():
 # TICKER ANALYSIS
 # ───────────────────────────────────────────────────────────────────
 
+def _fetch_stooq(symbol):
+    """Try Stooq as first data source — fast, no rate limits."""
+    try:
+        import pandas_datareader as pdr
+        from datetime import timedelta
+        # Convert yfinance suffix to Stooq format
+        stooq_sym = symbol
+        if symbol.endswith(".L"):   stooq_sym = symbol.replace(".L", ".UK")
+        elif symbol.endswith(".AS"): stooq_sym = symbol.replace(".AS", ".NL")
+        elif symbol.endswith(".PA"): stooq_sym = symbol.replace(".PA", ".FR")
+        elif symbol.endswith(".MI"): stooq_sym = symbol.replace(".MI", ".IT")
+        elif symbol.endswith(".SW"): stooq_sym = symbol.replace(".SW", ".CH")
+        elif "." not in symbol:     stooq_sym = f"{symbol}.US"
+        end   = pd.Timestamp.today()
+        start = end - pd.Timedelta(days=400)
+        df = pdr.get_data_stooq(stooq_sym, start=start, end=end)
+        if df.empty or "Close" not in df.columns:
+            return pd.DataFrame()
+        df = df.sort_index()
+        if len(df["Close"].dropna()) >= 30:
+            return flatten_df(df)
+    except Exception:
+        pass
+    return pd.DataFrame()
+
+
 def fetch_ticker_data(ticker, isin=None):
     # Quick reject obvious invalid tickers before any API call
     if not ticker or ticker.startswith("$") or len(ticker) < 2:
@@ -361,19 +390,26 @@ def fetch_ticker_data(ticker, isin=None):
             return (not df.empty and "Close" in df.columns
                     and len(df["Close"].dropna()) >= 30)
 
-        if resolved_sym:
-            df = _fetch_history(resolved_sym)
-        elif known_sfx is not None:
-            df = _fetch_history(ticker + known_sfx)
-        else:
-            df = _fetch_history(ticker)
-            if not _valid(df):
-                # Limit to top 3 exchanges during bulk scan — full search only in deep dive
-                _sfx_list = [".DE",".L",".AS"] if isin else [".DE",".L",".AS",".PA",".MI",".SW",".F",".VI",".BR"]
-                for sfx in _sfx_list:
-                    df2 = _fetch_history(ticker + sfx)
-                    if _valid(df2):
-                        df = df2
+        # Determine the symbol to use
+        target_sym = resolved_sym or (ticker + known_sfx if known_sfx is not None else ticker)
+
+        # Try Stooq first — faster, no rate limits
+        df = _fetch_stooq(target_sym)
+
+        # Fall back to yfinance if Stooq fails
+        if not _valid(df):
+            if resolved_sym:
+                df = _fetch_history(resolved_sym)
+            elif known_sfx is not None:
+                df = _fetch_history(ticker + known_sfx)
+            else:
+                df = _fetch_history(ticker)
+                if not _valid(df):
+                    _sfx_list = [".DE",".L",".AS"] if isin else [".DE",".L",".AS",".PA",".MI",".SW",".F",".VI",".BR"]
+                    for sfx in _sfx_list:
+                        df2 = _fetch_history(ticker + sfx)
+                        if _valid(df2):
+                            df = df2
                         cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
                         break
             # Cache negative result for tickers that failed all suffixes
@@ -1269,19 +1305,40 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
                     amt   = max(budget_val*0.25, min(amt, budget_val*3))
                     tier  = "🔥" if amt>=budget_val*1.5 else "⚖️" if amt>=budget_val*0.8 else "🔍"
                     alloc = f"{tier} €{amt:,.0f}"
+                # Fundamentals from signals.csv (pre-computed by OpenBB)
+                pe   = r.get("pe_ratio")
+                div  = r.get("div_yield")
+                mcap = r.get("market_cap")
+                beta = r.get("beta")
+                src  = r.get("data_source","")
+                # Format momentum returns if price data unavailable
+                rsi_display  = r.get("rsi",50)  if pd.notna(r.get("rsi",None)) else "—"
+                macd_display = ("▲ Bull" if r.get("macd_bull",0) else "▼ Bear") if pd.notna(r.get("macd_bull",None)) else "—"
+                dist_display = r.get("dist_ma200",0) if pd.notna(r.get("dist_ma200",None)) else None
+                # For justETF momentum signals, use ret_1m as proxy
+                if dist_display is None and pd.notna(r.get("ret_1m",None)):
+                    dist_display = r.get("ret_1m",0)
                 rows.append({
                     "Ticker":  r["ticker"], "Name": r.get("name",""), "ISIN": r.get("isin",""),
-                    "Price":   r.get("price",0), "MA200": r.get("ma200",0),
-                    "Dist%":   r.get("dist_ma200",0), "52W%": r.get("dist_52w",0),
-                    "RSI":     r.get("rsi",50), "RSI↗": "↗" if r.get("rsi_rising",0) else "↘",
-                    "MACD":    "▲ Bull" if r.get("macd_bull",0) else "▼ Bear",
+                    "Price":   r.get("price") if pd.notna(r.get("price",None)) else "—",
+                    "MA200":   r.get("ma200") if pd.notna(r.get("ma200",None)) else "—",
+                    "Dist%":   dist_display if dist_display is not None else 0,
+                    "52W%":    r.get("dist_52w",0) if pd.notna(r.get("dist_52w",None)) else "—",
+                    "RSI":     rsi_display,
+                    "RSI↗":   "↗" if r.get("rsi_rising",0) else "↘",
+                    "MACD":    macd_display,
                     "MACD⚡":  "⚡" if r.get("macd_accel",0) else "—",
-                    "Vol%":    r.get("vol_pct",0), "Conf": r.get("conf",0),
+                    "Vol%":    r.get("vol_pct",0) if pd.notna(r.get("vol_pct",None)) else "—",
+                    "Conf":    r.get("conf",0),
                     "Action":  action,
                     "Signal":  f"{action} ({'Strong' if conf>0.7 else 'Medium' if conf>0.4 else 'Weak'})",
                     "Knife":   "⚠️" if r.get("is_knife",0) and not r.get("reversal",0) else "",
                     "Score":   r.get("score",0), "Allocation": alloc,
-                    "PE":"—","Beta":"—","Div%":"—","MCap":"—",
+                    "Source":  src,
+                    "PE":      f"{pe:.1f}" if pe else "—",
+                    "Beta":    f"{beta:.2f}" if beta else "—",
+                    "Div%":    f"{div*100:.1f}%" if div else "—",
+                    "MCap":    f"${mcap/1e9:.1f}B" if mcap else "—",
                 })
             result_df = pd.DataFrame(rows).sort_values("Score", ascending=False).reset_index(drop=True)
             result_df.insert(0, "Rank", result_df.index+1)
