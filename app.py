@@ -1282,6 +1282,11 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
     triggered = ctx.triggered[0]["prop_id"]
 
     if "clear-btn" in triggered:
+        # Clear render cache too
+        with _cache_lock:
+            render_keys = [k for k in list(_cache.keys()) if str(k).startswith("render_")]
+            for k in render_keys:
+                _cache.pop(k, None)
         return None, "Results cleared.", {"display":"none"}, False, False
 
     if "stop-btn" in triggered or "overlay-stop-btn" in triggered:
@@ -1540,7 +1545,7 @@ def render_results(store_data, active_tab):
 
     import io, hashlib
     # Cache parsed df — tab switches reuse it without re-parsing 4000-row JSON
-    _ck = hashlib.md5(store_data[:500].encode()).hexdigest()
+    _ck = hashlib.md5(store_data.encode()).hexdigest()
     _cached = cache_get(f"render_{_ck}")
     if _cached is not None:
         df = _cached
