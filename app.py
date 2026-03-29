@@ -930,6 +930,29 @@ def fetch_ticker_data(ticker, isin=None):
             rsi_s=rsi_s, macd_l=macd_l, macd_sig=macd_sig, macd_h=macd_h,
         )
         cache_set(key, result, ttl=3600)
+        # Write fresh signal back to in-memory signals_df
+        global signals_df
+        try:
+            from datetime import date
+            new_row = {
+                "ticker": ticker, "data_source": "live_scan",
+                "price": result.get("price"), "ma200": result.get("ma200"),
+                "dist_ma200": result.get("dist_ma"), "rsi": result.get("rsi"),
+                "rsi_rising": int(result.get("rsi_slope",0) > 0),
+                "macd_bull": int(result.get("macd",0) > result.get("macd_signal",0)),
+                "macd_accel": int(result.get("macd_hist",0) > 0),
+                "vol_pct": result.get("vol"), "conf": result.get("confidence"),
+                "action": result.get("action","WAIT"), "score": result.get("score",0),
+                "is_knife": int(result.get("is_knife",False)),
+                "reversal": int(result.get("reversal",False)),
+                "computed_at": date.today().isoformat(),
+            }
+            if not signals_df.empty and "ticker" in signals_df.columns:
+                signals_df = signals_df[signals_df["ticker"] != ticker]
+                signals_df = pd.concat(
+                    [pd.DataFrame([new_row]), signals_df], ignore_index=True)
+        except Exception:
+            pass
         return result
     except Exception:
         return None
@@ -2320,6 +2343,43 @@ def run_deep_dive(n_clicks, user_input, budget):
     ma200_now  = raw["ma200"]
     vix        = get_live_vix()
     fg, fg_lbl = get_fg_index()
+
+    # ── Write fresh signal back to in-memory signals_df ──────────────
+    # This keeps scanner results consistent with Deep Dive live data
+    global signals_df
+    try:
+        from datetime import date
+        knife_thr2 = max(-25, -15)
+        is_knife2  = dist_ma < knife_thr2 and rsi_val < 30 and raw["trend_down_strong"]
+        reversal2  = is_knife2 and macd_bull and rsi_rising
+        if is_knife2 and not reversal2:       action2 = "AVOID"
+        elif dist_ma < -10 and rsi_val < 45 and macd_bull and macd_accel: action2 = "BUY"
+        elif dist_ma < -10 and rsi_val < 45 and (macd_bull or rsi_rising): action2 = "WATCH"
+        elif dist_ma < -5  and rsi_val < 35: action2 = "WATCH"
+        elif dist_ma > 10  and rsi_val > 70: action2 = "SELL"
+        else:                                action2 = "WAIT"
+        dist_s2 = min(-dist_ma/30, 1) if dist_ma < 0 else 0
+        score2   = (dist_s2*0.30 + max((50-rsi_val)/50,0)*0.25 +
+                   (0.20 if macd_bull else 0) + (0.10 if macd_accel else 0) + conf*0.15)
+        new_row = {
+            "ticker": ticker, "yf_symbol": resolved_yf or ticker,
+            "data_source": "live_deepdive", "price": round(cur_p, 4),
+            "ma200": round(ma200_now, 4), "dist_ma200": round(dist_ma, 2),
+            "rsi": round(rsi_val, 2), "rsi_rising": int(rsi_rising),
+            "macd_bull": int(macd_bull), "macd_accel": int(macd_accel),
+            "vol_pct": round(vol, 4), "conf": round(conf, 4),
+            "action": action2, "score": round(score2, 4),
+            "is_knife": int(is_knife2), "reversal": int(reversal2),
+            "computed_at": date.today().isoformat(),
+        }
+        if not signals_df.empty and "ticker" in signals_df.columns:
+            signals_df = signals_df[signals_df["ticker"] != ticker]
+            signals_df = pd.concat(
+                [pd.DataFrame([new_row]), signals_df], ignore_index=True)
+            print(f"[deepdive] Updated {ticker} in signals_df: {action2} score={score2:.3f}", flush=True)
+    except Exception as e:
+        print(f"[deepdive] Signal writeback failed: {e}", flush=True)
+    # ── End writeback ─────────────────────────────────────────────────
 
     # Buy/sell scores
     buy_score  = (40 if fg<35 else 0)+(30 if rsi_val<40 else 0)+(30 if dist_ma<0 else 0)
