@@ -1219,9 +1219,16 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
 
     # Cap at 500 per scan to stay within Railway memory limits
     # justETF tickers are sorted by size so top ones are most liquid
-    MAX_PER_SCAN = 500
+    # Smart cap based on asset type
+    ptype = PRESETS.get(preset, {}).get("type", "ETF")
+    if ptype == "Stock":
+        MAX_PER_SCAN = 2000   # stocks resolve fast via country hints + cache
+    elif ptype == "ETF":
+        MAX_PER_SCAN = 500    # ETFs still need suffix discovery
+    else:
+        MAX_PER_SCAN = 1000   # custom mix
     if len(tickers) > MAX_PER_SCAN:
-        print(f"[run_scan] capping {len(tickers)} → {MAX_PER_SCAN}", flush=True)
+        print(f"[scan] capping {len(tickers)} → {MAX_PER_SCAN} ({ptype})", flush=True)
         tickers = tickers[:MAX_PER_SCAN]
 
     # Parallel scan
