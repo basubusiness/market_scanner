@@ -1608,7 +1608,8 @@ def update_live(_):
     Output("types-row","style"),
     Output("etf-filters-row","style"),
     Output("stock-filters-row","style"),
-    Output("filter-sector","options"),   # only sector cascades dynamically
+    Output("filter-sector","options"),
+    Output("filter-country","options"),
     Input("preset-dd","value"),
     Input("filter-types","value"),
     Input("filter-country","value"),
@@ -1623,8 +1624,7 @@ def update_filter_sections(preset, types, selected_country):
     etf_style   = {} if etfs_on   else {"display":"none"}
     stock_style = {} if stocks_on else {"display":"none"}
 
-    # Use module-level jetf_df directly — capture at call time
-    _jdf = jetf_df
+    _jdf  = jetf_df
     _univ = universe
 
     def jcol_opts(col):
@@ -1651,7 +1651,6 @@ def update_filter_sections(preset, types, selected_country):
     repl_opts  = jcol_opts("replication")
     strat_opts = jcol_opts("strategy")
 
-    # Hard fallbacks for when package doesn't return these fields
     if not dist_opts:
         dist_opts = [{"label":"Accumulating","value":"Accumulating"},
                      {"label":"Distributing", "value":"Distributing"}]
@@ -1662,16 +1661,30 @@ def update_filter_sections(preset, types, selected_country):
         repl_opts = [{"label":v,"value":v} for v in
                      ["Physical (Full)","Physical (Sampling)","Swap-based"]]
 
-    cat_opts  = uopts("category_group", "ETF")
+    cat_opts = uopts("category_group", "ETF")
     if not cat_opts:
         cat_opts = [{"label":v,"value":v} for v in [
             "Equities","Fixed Income","Commodities","Real Estate",
             "Alternatives","Cash","Currencies","Derivatives"]]
 
-    ctry_opts = uopts("country", "Stock")
+    # Smart country options — filter by preset's country hint if available
+    preset_country = PRESETS.get(preset, {}).get("country", [])
+    if preset_country:
+        # Only show countries relevant to this preset
+        ctry_opts = [{"label":v,"value":v} for v in preset_country]
+    else:
+        # Show all countries that actually have signals in signals_df
+        if not signals_df.empty and "country" in signals_df.columns:
+            sig_countries = sorted([v for v in signals_df["country"].dropna().unique()
+                                    if v and v not in ("","nan","None")])
+            ctry_opts = [{"label":v,"value":v} for v in sig_countries]
+        else:
+            ctry_opts = uopts("country", "Stock")
+
+    # Sector options cascade from selected country
     sect_opts = uopts("sector", "Stock", selected_country)
 
-    return types_style, etf_style, stock_style, sect_opts
+    return types_style, etf_style, stock_style, sect_opts, ctry_opts
 
 @app.callback(
     Output("scope-label","children"),
@@ -2122,24 +2135,32 @@ def render_results(store_data, active_tab):
             "textOverflow":"ellipsis","maxWidth":"180px",
         },
         style_cell_conditional=[
-            {"if":{"column_id":"Name"},  "maxWidth":"160px","minWidth":"120px"},
-            {"if":{"column_id":"ISIN"},  "maxWidth":"110px","fontFamily":"monospace"},
-            {"if":{"column_id":"Ticker"},"maxWidth":"70px","fontWeight":"bold"},
-            {"if":{"column_id":"Signal"},"maxWidth":"130px"},
-            {"if":{"column_id":"Allocation"},"maxWidth":"140px"},
+            {"if":{"column_id":"Name"},   "maxWidth":"180px","minWidth":"120px",
+             "textAlign":"left","overflow":"hidden","textOverflow":"ellipsis"},
+            {"if":{"column_id":"Ticker"}, "maxWidth":"72px","fontWeight":"700",
+             "textAlign":"left","color":"#0f172a"},
+            {"if":{"column_id":"Signal"}, "maxWidth":"130px","textAlign":"left"},
+            {"if":{"column_id":"ISIN"},   "maxWidth":"115px","fontFamily":"'DM Mono',monospace",
+             "fontSize":"11px","textAlign":"left"},
+            {"if":{"column_id":"Allocation"},"maxWidth":"140px","textAlign":"left"},
+            {"if":{"column_id":"MACD"},   "textAlign":"left"},
         ],
         style_header={
-            "background":"#f8f9fc","color":"#00bcd4",
-            "fontWeight":"bold","border":"1px solid #2a2a3e",
+            "background":"#f8f9fc","color":"#64748b",
+            "fontWeight":"600","border":"none",
+            "borderBottom":"1px solid #e2e6ed",
         },
         style_data_conditional=[
-            {"if":{"row_index":"odd"},"background":"#161626"},
+            {"if":{"row_index":"odd"},"background":"#fafbfc"},
             *cond_styles,
-            {"if":{"column_id":"Dist%","filter_query":"{Dist%} < 0"},"color":"#00e676"},
-            {"if":{"column_id":"Dist%","filter_query":"{Dist%} > 0"},"color":"#ff6d00"},
-            {"if":{"state":"selected"},"background":"#2a2a4e","border":"1px solid #00bcd4"},
+            {"if":{"column_id":"Dist%","filter_query":"{Dist%} < 0"},"color":"#0d9488","fontWeight":"600"},
+            {"if":{"column_id":"Dist%","filter_query":"{Dist%} > 0"},"color":"#d97706","fontWeight":"600"},
+            {"if":{"column_id":"RSI","filter_query":"{RSI} < 35"},"color":"#0d9488","fontWeight":"600"},
+            {"if":{"column_id":"RSI","filter_query":"{RSI} > 65"},"color":"#dc2626","fontWeight":"600"},
+            {"if":{"state":"selected"},"background":"#e8f0fe","border":"1px solid #1a56db"},
         ],
-        style_filter={"background":"#1a1a2e","color":"#0f172a","border":"1px solid #333"},
+        style_filter={"background":"#f8f9fc","color":"#0f172a",
+                      "border":"none","borderBottom":"1px solid #e2e6ed"},
         tooltip_data=[{
             "Ticker": {"value": f"Click row then click 🔬 to deep dive", "type":"markdown"},
         } for _ in range(len(sub))],
