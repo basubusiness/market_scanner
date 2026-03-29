@@ -2043,11 +2043,13 @@ def clear_cache():
     """Manually clear all scan caches — call from browser to reset."""
     import json
     with _cache_lock:
-        keys_cleared = [k for k in list(_cache.keys()) 
-                       if str(k).startswith(("tick_","sfx_","resolved_","progress_","current_scan"))]
+        keys_cleared = [k for k in list(_cache.keys())
+                       if str(k).startswith(("tick_","sfx_","resolved_",
+                                             "progress_","current_scan",
+                                             "render_","dd_"))]
         for k in keys_cleared:
             _cache.pop(k, None)
-    return f"<pre>Cleared {len(keys_cleared)} cache keys. Refresh the app now.</pre>"
+    return f"<pre>Cleared {len(keys_cleared)} keys. Refresh app now.</pre>"
 
 @server.route("/scan-status")
 def scan_status():
