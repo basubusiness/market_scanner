@@ -376,6 +376,44 @@ def _fetch_stooq(symbol):
     return pd.DataFrame()
 
 
+def fetch_justetf_chart(isin):
+    """
+    Fetch full price history from justETF by ISIN.
+    Returns DataFrame with Close column, or empty DataFrame.
+    This is the most reliable source for UCITS ETFs.
+    """
+    if not isin or len(str(isin)) != 12:
+        return pd.DataFrame()
+    try:
+        import justetf_scraping
+        df = justetf_scraping.load_chart(str(isin), unclosed=True)
+        if df is None or df.empty:
+            return pd.DataFrame()
+        # Rename quote → Close for compatibility
+        if "quote" in df.columns:
+            df = df.rename(columns={"quote": "Close"})
+        elif "quote_with_dividends" in df.columns:
+            df = df.rename(columns={"quote_with_dividends": "Close"})
+        if "Close" not in df.columns:
+            return pd.DataFrame()
+        # Convert index to DatetimeIndex if needed
+        if not isinstance(df.index, pd.DatetimeIndex):
+            df.index = pd.to_datetime(df.index)
+        df = df.sort_index()
+        # Keep last 1 year
+        cutoff = pd.Timestamp.today() - pd.Timedelta(days=400)
+        df = df[df.index >= cutoff]
+        close = df["Close"].dropna()
+        if len(close) < 30:
+            return pd.DataFrame()
+        print(f"[justETF] chart loaded for {isin}: {len(df)} days, "
+              f"latest={close.iloc[-1]:.2f}", flush=True)
+        return df
+    except Exception as e:
+        print(f"[justETF] chart error for {isin}: {e}", flush=True)
+        return pd.DataFrame()
+
+
 def fetch_ticker_data(ticker, isin=None):
     # Quick reject obvious invalid tickers before any API call
     if not ticker or ticker.startswith("$") or len(ticker) < 2:
@@ -1781,7 +1819,52 @@ def run_deep_dive(n_clicks, user_input, budget):
         if not jmatch.empty:
             isin = str(jmatch.iloc[0].get("isin","")).strip() or None
 
-    raw = fetch_ticker_data(resolved_yf or ticker, isin=isin)
+    # For ETFs with ISIN: use justETF chart as primary source (reliable EUR prices)
+    # For stocks or ETFs without ISIN: fall back to yfinance via fetch_ticker_data
+    raw = None
+    is_etf = False
+    if isin:
+        # Check if this is an ETF (has justETF entry)
+        if not jetf_df.empty and "isin" in jetf_df.columns:
+            is_etf = not jetf_df[jetf_df["isin"] == isin].empty
+        if is_etf:
+            jetf_chart = fetch_justetf_chart(isin)
+            if not jetf_chart.empty:
+                # Convert justETF chart to same format as fetch_ticker_data output
+                close   = jetf_chart["Close"].dropna()
+                price   = float(close.iloc[-1])
+                ma50_s  = close.rolling(50).mean()
+                ma200_s = close.rolling(200).mean()
+                ma200   = float(ma200_s.iloc[-1])
+                dist_ma = ((price - ma200) / ma200) * 100
+                delta   = close.diff()
+                gain    = delta.where(delta>0,0).rolling(14).mean()
+                loss    = (-delta.where(delta<0,0)).rolling(14).mean()
+                rs      = gain / loss.replace(0,0.001)
+                rsi_s   = 100 - (100/(1+rs))
+                rsi_val2= float(rsi_s.iloc[-1])
+                ema12   = close.ewm(span=12,adjust=False).mean()
+                ema26   = close.ewm(span=26,adjust=False).mean()
+                macd_l2 = ema12 - ema26
+                macd_sig2 = macd_l2.ewm(span=9,adjust=False).mean()
+                macd_h2 = macd_l2 - macd_sig2
+                vol2    = float(close.pct_change().rolling(20).std().iloc[-1]*100)
+                h52w    = float(close.tail(252).max())
+                raw = {
+                    "close": close, "ma50_s": ma50_s, "ma200_s": ma200_s,
+                    "rsi_s": rsi_s, "macd_l": macd_l2, "macd_sig": macd_sig2,
+                    "macd_h": macd_h2, "price": price, "dist_ma": dist_ma,
+                    "rsi": rsi_val2, "rsi_slope": float(rsi_s.iloc[-1]-rsi_s.iloc[-2]),
+                    "macd": float(macd_l2.iloc[-1]), "macd_signal": float(macd_sig2.iloc[-1]),
+                    "macd_hist": float(macd_h2.iloc[-1]),
+                    "confidence": min(abs(dist_ma)/20,1)*0.5 + min(abs(50-rsi_val2)/50,1)*0.5,
+                    "vol": vol2, "dist_52h": ((price-h52w)/h52w)*100,
+                    "ma200": ma200, "trend_down_strong": False,
+                    "source": "justETF",
+                }
+
+    if raw is None:
+        raw = fetch_ticker_data(resolved_yf or ticker, isin=isin)
     if raw is None:
         try:
             sr = yf.Search(ticker, max_results=3)
