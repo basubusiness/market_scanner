@@ -1247,7 +1247,7 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
     # ── FAST PATH: use pre-computed signals.csv if available ──────────
     if not signals_df.empty:
         sig = signals_df[signals_df["ticker"].isin(tickers)].copy()
-        if len(sig) >= len(tickers) * 0.3:  # >30% coverage → use signals
+        if len(sig) >= 10:  # any meaningful coverage → use signals
             print(f"[scan] Using pre-computed signals: {len(sig)}/{len(tickers)} covered", flush=True)
             budget_val = budget or 1000
             rows = []
@@ -1297,7 +1297,7 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
     # ── END FAST PATH — fall through to live yfinance scan ────────────
     ptype = PRESETS.get(preset, {}).get("type", "ETF")
     if ptype == "Stock":
-        MAX_PER_SCAN = 2000   # stocks resolve fast via country hints + cache
+        MAX_PER_SCAN = 500    # stocks: signals.csv is primary, live is fallback
     elif ptype == "ETF":
         MAX_PER_SCAN = 500    # ETFs still need suffix discovery
     else:
