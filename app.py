@@ -189,8 +189,26 @@ def load_signals():
     try:
         df = pd.read_csv(path)
         date_str = df["computed_at"].iloc[0] if "computed_at" in df.columns else "unknown"
+
+        # Clean up — deduplicate tickers, remove warrants/SPACs/penny stocks
+        orig_len = len(df)
+        # Filter bad tickers
+        def _bad_ticker(t):
+            t = str(t).strip()
+            if len(t) < 2: return True
+            if t[-1] in ('W','U','R') and len(t) >= 4: return True
+            return False
+        df = df[~df["ticker"].apply(_bad_ticker)]
+        # Remove penny stocks (price < $0.50) — but keep momentum-only signals (price=NaN)
+        if "price" in df.columns:
+            df = df[(df["price"].isna()) | (df["price"] >= 0.50)]
+        # Keep best signal per ticker
+        if "score" in df.columns:
+            df = df.sort_values("score", ascending=False).drop_duplicates(
+                subset=["ticker"], keep="first").reset_index(drop=True)
+
         actions = df["action"].value_counts().to_dict() if "action" in df.columns else {}
-        print(f"[signals] Loaded {len(df):,} signals (computed: {date_str}) — "
+        print(f"[signals] Loaded {len(df):,} signals (was {orig_len:,}, computed: {date_str}) — "
               f"BUY:{actions.get('BUY',0)} WATCH:{actions.get('WATCH',0)} "
               f"SELL:{actions.get('SELL',0)} AVOID:{actions.get('AVOID',0)}", flush=True)
         return df
@@ -1340,7 +1358,11 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
                     "Div%":    f"{div*100:.1f}%" if div else "—",
                     "MCap":    f"${mcap/1e9:.1f}B" if mcap else "—",
                 })
-            result_df = pd.DataFrame(rows).sort_values("Score", ascending=False).reset_index(drop=True)
+            result_df = pd.DataFrame(rows)
+            # Deduplicate — keep best score per ticker
+            result_df = (result_df.sort_values("Score", ascending=False)
+                                  .drop_duplicates(subset=["Ticker"], keep="first")
+                                  .reset_index(drop=True))
             result_df.insert(0, "Rank", result_df.index+1)
             computed = sig["computed_at"].iloc[0] if "computed_at" in sig.columns else "unknown"
             status = (f"⚡ {len(result_df)} pre-computed signals · "
