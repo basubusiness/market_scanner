@@ -432,7 +432,7 @@ def fetch_ticker_data(ticker, isin=None):
             else:
                 df = _fetch_history(ticker)
                 if not _valid(df):
-                    _sfx_list = [".DE",".L",".AS"] if isin else [".DE",".L",".AS",".PA",".MI",".SW",".F",".VI",".BR"]
+                    _sfx_list = [".DE",".DU",".L",".AS",".SG"] if isin else [".DE",".DU",".L",".AS",".PA",".MI",".SW",".SG",".F",".VI",".BR"]
                     for sfx in _sfx_list:
                         df2 = _fetch_history(ticker + sfx)
                         if _valid(df2):
@@ -464,6 +464,10 @@ def fetch_ticker_data(ticker, isin=None):
             return None
         price = float(close.iloc[-1])
         if price < 0.10:  # only filter near-zero prices
+            return None
+        # Sanity: if price is >10x MA200, likely wrong ticker (e.g. SXRN.US vs SXRN.DE)
+        _ma200c = float(close.rolling(200).mean().iloc[-1])
+        if _ma200c > 0 and (price / _ma200c) > 10:
             return None
         if "Volume" in df.columns:
             avg_vol = df["Volume"].dropna().tail(20).mean()
@@ -578,7 +582,7 @@ def resolve_yf_ticker(ticker, isin=None):
         return ticker
 
     # Try suffixes — .DE first since justETF uses Xetra tickers
-    for sfx in [".DE",".L",".AS",".PA",".MI",".SW",".F",".VI",".BR"]:
+    for sfx in [".DE",".DU",".L",".AS",".PA",".MI",".SW",".SG",".F",".VI",".BR"]:
         if _has_price(ticker + sfx):
             cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
             return ticker + sfx
