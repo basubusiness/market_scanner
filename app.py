@@ -1582,14 +1582,8 @@ def render_results(store_data, active_tab):
         top_card("SELL",  "🔴 Top SELL",   "#ff1744"),
     ], className="g-2")
 
-    # Full table — use pre-computed ActionRank for instant tab switching
-    if active_tab == "all":
-        sub = df
-    else:
-        sub = df[df["Action"]==active_tab].copy()
-        if not sub.empty and "ActionRank" in sub.columns:
-            sub = sub.copy()
-            sub["Rank"] = sub["ActionRank"]
+    # Full table — global rank, no re-ranking on tab switch
+    sub = df if active_tab == "all" else df[df["Action"]==active_tab]
 
     SHOW_COLS = ["Rank","Ticker","Name","ISIN","Price","MA200","Dist%","52W%",
                  "RSI","RSI↗","MACD","MACD⚡","Vol%","Conf",
