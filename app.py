@@ -45,145 +45,321 @@ app = dash.Dash(
 <title>{%title%}</title>
 {%favicon%}
 {%css%}
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-/* ── Market Decision Engine — Modern Fintech Theme ── */
+/* ── Market Decision Engine — Precision Light Theme ── */
 :root {
-  --bg-base:      #0a0e1a;
-  --bg-surface:   #111827;
-  --bg-card:      #141d2e;
-  --bg-elevated:  #1a2540;
-  --border:       rgba(255,255,255,0.07);
-  --border-light: rgba(255,255,255,0.04);
+  --bg-base:       #f8f9fc;
+  --bg-surface:    #ffffff;
+  --bg-card:       #ffffff;
+  --bg-hover:      #f1f4f9;
+  --bg-selected:   #e8f0fe;
 
-  --text-primary:   #e8edf5;
-  --text-secondary: #8892a4;
-  --text-muted:     #4a5568;
+  --border:        #e2e6ed;
+  --border-light:  #eef1f6;
+  --border-focus:  #1a56db;
 
-  --accent-blue:    #3b82f6;
-  --accent-blue-dim:#1d4ed8;
+  --text-primary:  #0f172a;
+  --text-secondary:#475569;
+  --text-muted:    #94a3b8;
+  --text-label:    #64748b;
 
-  /* Signal colors — muted, purposeful */
-  --signal-buy:     #10b981;
-  --signal-buy-bg:  rgba(16,185,129,0.08);
-  --signal-watch:   #06b6d4;
-  --signal-watch-bg:rgba(6,182,212,0.08);
-  --signal-sell:    #f43f5e;
-  --signal-sell-bg: rgba(244,63,94,0.08);
-  --signal-avoid:   #f97316;
-  --signal-avoid-bg:rgba(249,115,22,0.08);
-  --signal-wait:    #eab308;
-  --signal-wait-bg: rgba(234,179,8,0.06);
+  --blue-primary:  #1a56db;
+  --blue-light:    #dbeafe;
+  --blue-mid:      #3b82f6;
+
+  /* Signal — only for data values */
+  --sig-buy:       #0d9488;
+  --sig-buy-bg:    #f0fdfa;
+  --sig-buy-border:#99f6e4;
+  --sig-watch:     #0284c7;
+  --sig-watch-bg:  #f0f9ff;
+  --sig-watch-border:#bae6fd;
+  --sig-sell:      #dc2626;
+  --sig-sell-bg:   #fff5f5;
+  --sig-sell-border:#fecaca;
+  --sig-avoid:     #d97706;
+  --sig-avoid-bg:  #fffbeb;
+  --sig-avoid-border:#fde68a;
+  --sig-wait:      #64748b;
+
+  --shadow-sm:     0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+  --shadow-md:     0 4px 12px rgba(15,23,42,0.08), 0 2px 6px rgba(15,23,42,0.05);
+  --radius:        6px;
+  --radius-sm:     4px;
 }
 
-/* Base */
-body, .dash-debug-menu { background: var(--bg-base) !important; }
-
-/* Sidebar */
-#sidebar { background: var(--bg-surface) !important; border-right: 1px solid var(--border) !important; }
-#sidebar .text-muted, #sidebar small { color: var(--text-secondary) !important; font-size: 11px !important; }
-
-/* Cards */
-.card, .dbc-card { 
-  background: var(--bg-card) !important; 
-  border: 1px solid var(--border) !important; 
-  border-radius: 6px !important;
+/* ── Base ── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body {
+  background: var(--bg-base) !important;
+  color: var(--text-primary) !important;
+  font-family: 'DM Sans', -apple-system, sans-serif !important;
+  font-size: 13px !important;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Signal tabs — subtle underline style, not filled */
+/* ── Sidebar ── */
+#sidebar {
+  background: var(--bg-surface) !important;
+  border-right: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+#sidebar h6, #sidebar .fw-bold {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: var(--text-muted) !important;
+}
+#sidebar .text-muted, #sidebar small {
+  color: var(--text-muted) !important;
+  font-size: 11px !important;
+}
+
+/* ── Navbar / App title ── */
+.navbar, [class*="navbar"] {
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+/* ── Cards ── */
+.card {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+.card-header {
+  background: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border-light) !important;
+  padding: 10px 14px !important;
+}
+
+/* ── Signal tabs — clean underline ── */
+#signal-tabs {
+  border-bottom: 1px solid var(--border) !important;
+  background: var(--bg-surface) !important;
+}
 #signal-tabs .nav-link {
-  color: var(--text-secondary) !important;
+  color: var(--text-muted) !important;
   border: none !important;
   border-bottom: 2px solid transparent !important;
   border-radius: 0 !important;
-  padding: 8px 16px !important;
-  font-size: 12px !important;
-  font-weight: 500 !important;
-  letter-spacing: 0.04em !important;
-  text-transform: uppercase !important;
-  background: transparent !important;
-  transition: color 0.15s, border-color 0.15s !important;
-}
-#signal-tabs .nav-link:hover { color: var(--text-primary) !important; }
-#signal-tabs .nav-link.active {
-  color: var(--text-primary) !important;
-  border-bottom-color: var(--accent-blue) !important;
-  background: transparent !important;
-}
-
-/* Top summary cards — tone down */
-#summary-cards .card { background: var(--bg-elevated) !important; }
-#summary-cards .card h2, #summary-cards .card .display-4 { 
-  font-size: 1.8rem !important; font-weight: 600 !important; 
-}
-
-/* Top BUY/WATCH/SELL panels */
-#top-buy-panel   { background: var(--signal-buy-bg)   !important; border: 1px solid rgba(16,185,129,0.2)  !important; border-radius: 6px !important; }
-#top-watch-panel { background: var(--signal-watch-bg) !important; border: 1px solid rgba(6,182,212,0.2)   !important; border-radius: 6px !important; }
-#top-sell-panel  { background: var(--signal-sell-bg)  !important; border: 1px solid rgba(244,63,94,0.2)   !important; border-radius: 6px !important; }
-
-/* Status bar */
-.alert-info { 
-  background: var(--bg-elevated) !important; 
-  border: 1px solid var(--border) !important; 
-  color: var(--text-secondary) !important;
-  border-radius: 4px !important;
-}
-
-/* Table */
-.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
-  background: var(--bg-surface) !important;
-  color: var(--text-secondary) !important;
+  padding: 8px 14px !important;
+  margin-bottom: -1px !important;
   font-size: 11px !important;
+  font-weight: 500 !important;
   letter-spacing: 0.06em !important;
   text-transform: uppercase !important;
+  background: transparent !important;
+  transition: all 0.15s ease !important;
+}
+#signal-tabs .nav-link:hover {
+  color: var(--text-primary) !important;
+  background: var(--bg-hover) !important;
+}
+#signal-tabs .nav-link.active {
+  color: var(--blue-primary) !important;
+  border-bottom-color: var(--blue-primary) !important;
+  background: transparent !important;
+  font-weight: 600 !important;
+}
+
+/* ── Status alert ── */
+.alert {
+  border-radius: var(--radius) !important;
+  border: 1px solid var(--border) !important;
+  font-size: 11.5px !important;
+}
+.alert-info {
+  background: var(--blue-light) !important;
+  border-color: #bfdbfe !important;
+  color: #1e40af !important;
+}
+
+/* ── Run Scan button ── */
+#run-btn {
+  background: var(--blue-primary) !important;
+  border-color: var(--blue-primary) !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  letter-spacing: 0.02em !important;
+  border-radius: var(--radius) !important;
+  transition: all 0.15s ease !important;
+  box-shadow: 0 1px 4px rgba(26,86,219,0.25) !important;
+}
+#run-btn:hover {
+  background: #1447c0 !important;
+  border-color: #1447c0 !important;
+  box-shadow: 0 2px 8px rgba(26,86,219,0.35) !important;
+}
+
+/* ── Table ── */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+  background: #f8f9fc !important;
+  color: var(--text-label) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.07em !important;
+  text-transform: uppercase !important;
   border-bottom: 1px solid var(--border) !important;
-  font-weight: 500 !important;
+  border-right: none !important;
+  padding: 6px 10px !important;
 }
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td {
-  background: var(--bg-base) !important;
+  background: var(--bg-surface) !important;
   color: var(--text-primary) !important;
   border-bottom: 1px solid var(--border-light) !important;
-  font-size: 12.5px !important;
+  border-right: none !important;
+  font-size: 12px !important;
+  padding: 5px 10px !important;
+  font-family: 'DM Mono', monospace !important;
 }
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:hover td {
-  background: var(--bg-card) !important;
+  background: var(--bg-hover) !important;
 }
-
-/* Dropdown filters */
-.Select-control, .Select-menu-outer, .VirtualizedSelectOption {
-  background: var(--bg-elevated) !important;
-  border-color: var(--border) !important;
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr.selected td {
+  background: var(--bg-selected) !important;
+}
+/* Filter row */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner .dash-filter input {
+  background: #f8f9fc !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 3px !important;
   color: var(--text-primary) !important;
+  font-size: 11px !important;
+  padding: 2px 6px !important;
 }
-.Select-placeholder, .Select-value-label { color: var(--text-secondary) !important; }
 
-/* Run Scan button */
-#run-btn { 
-  background: var(--accent-blue) !important; 
-  border-color: var(--accent-blue) !important;
+/* ── Dropdowns ── */
+.Select-control {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text-primary) !important;
+  min-height: 30px !important;
+  font-size: 12px !important;
+}
+.Select-control:hover { border-color: var(--blue-mid) !important; }
+.Select-menu-outer {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.Select-option { color: var(--text-primary) !important; font-size: 12px !important; }
+.Select-option.is-focused { background: var(--bg-hover) !important; }
+.Select-option.is-selected { background: var(--blue-light) !important; color: var(--blue-primary) !important; }
+.Select-placeholder { color: var(--text-muted) !important; font-size: 12px !important; }
+.Select-value-label { color: var(--text-primary) !important; font-size: 12px !important; }
+.Select-multi-value-wrapper { padding: 2px !important; }
+
+/* ── Accordion (Optional Filters) ── */
+.accordion-button {
+  background: var(--bg-surface) !important;
+  color: var(--blue-primary) !important;
+  font-size: 12px !important;
   font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
+  padding: 8px 12px !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.accordion-button:not(.collapsed) {
+  background: var(--bg-hover) !important;
+}
+.accordion-body {
+  background: var(--bg-surface) !important;
+  padding: 10px 12px !important;
+}
+.accordion-item { border: 1px solid var(--border) !important; border-radius: var(--radius) !important; }
+
+/* ── Progress bar (scan overlay) ── */
+.progress { background: var(--border) !important; border-radius: 3px !important; }
+.progress-bar { background: var(--blue-primary) !important; }
+
+/* ── Overlay ── */
+#scan-overlay { backdrop-filter: blur(6px) !important; background: rgba(248,249,252,0.92) !important; }
+#scan-overlay h4 { color: var(--text-primary) !important; }
+#scan-overlay .text-muted { color: var(--text-secondary) !important; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #c1c9d6; }
+
+/* ── Number formatting — signal colors for data only ── */
+.sig-buy   { color: var(--sig-buy)   !important; }
+.sig-sell  { color: var(--sig-sell)  !important; }
+.sig-watch { color: var(--sig-watch) !important; }
+.sig-avoid { color: var(--sig-avoid) !important; }
+.sig-wait  { color: var(--sig-wait)  !important; }
+
+/* ── Inputs ── */
+input[type="number"], .form-control {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
+  font-size: 12px !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+/* ── Badges ── */
+.badge {
+  font-family: 'DM Mono', monospace !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
   letter-spacing: 0.03em !important;
-  transition: background 0.15s !important;
 }
-#run-btn:hover { background: var(--accent-blue-dim) !important; }
 
-/* Scan overlay */
-#scan-overlay { backdrop-filter: blur(4px) !important; }
-
-/* Accordion */
-.accordion-button, .accordion-body { 
-  background: var(--bg-surface) !important; 
-  color: var(--text-primary) !important; 
+/* ── Deep Dive metric cards ── */
+.metric-card {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  padding: 12px 16px !important;
 }
-.accordion-button:not(.collapsed) { background: var(--bg-elevated) !important; }
 
-/* VIX/FG badges */
-.badge { font-weight: 500 !important; }
+/* ── Main tabs (Market Scanner / Deep Dive) ── */
+#main-tabs .nav-link {
+  color: var(--text-secondary) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  padding: 8px 16px !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+#main-tabs .nav-link.active {
+  color: var(--blue-primary) !important;
+  border-bottom-color: var(--blue-primary) !important;
+  background: transparent !important;
+  font-weight: 600 !important;
+}
+#main-tabs { border-bottom: 1px solid var(--border) !important; }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+/* ── Slider ── */
+.rc-slider-track { background: var(--blue-primary) !important; }
+.rc-slider-handle { border-color: var(--blue-primary) !important; }
+
+/* ── Checkbox ── */
+input[type="checkbox"] { accent-color: var(--blue-primary) !important; }
+
+/* ── Regime badge (Extreme Fear etc) ── */
+.regime-badge {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 3px 10px !important;
+  border-radius: 3px !important;
+}
+
+/* Remove Bootstrap dark overrides */
+.bg-dark, [class*="bg-dark"] { background: var(--bg-surface) !important; color: var(--text-primary) !important; }
+.text-white { color: var(--text-primary) !important; }
+.border-secondary { border-color: var(--border) !important; }
 </style>
 </head>
 <body>
@@ -196,6 +372,7 @@ body, .dash-debug-menu { background: var(--bg-base) !important; }
 </body>
 </html>""",
 )
+
 server = app.server  # expose Flask server for gunicorn
 
 # ───────────────────────────────────────────────────────────────────
@@ -1013,13 +1190,13 @@ def build_tickers(preset_key, filters):
 # ───────────────────────────────────────────────────────────────────
 
 SIGNAL_COLORS = {
-    "BUY":   "#10b981", "WATCH": "#06b6d4",
-    "AVOID": "#f97316", "SELL":  "#f43f5e", "WAIT": "#eab308",
+    "BUY":   "#0d9488", "WATCH": "#0284c7",
+    "AVOID": "#d97706", "SELL":  "#dc2626", "WAIT": "#64748b",
 }
 SIGNAL_BG = {
-    "BUY":   "rgba(16,185,129,0.12)", "WATCH": "rgba(6,182,212,0.12)",
-    "AVOID": "rgba(249,115,22,0.12)", "SELL":  "rgba(244,63,94,0.12)",
-    "WAIT":  "rgba(234,179,8,0.10)",
+    "BUY":   "#f0fdfa", "WATCH": "#f0f9ff",
+    "AVOID": "#fffbeb", "SELL":  "#fef2f2",
+    "WAIT":  "#f8fafc",
 }
 
 def badge(action):
@@ -1033,23 +1210,23 @@ def badge(action):
 
 def kpi_card(title, value, color="#e8edf5"):
     return dbc.Card(dbc.CardBody([
-        html.P(title, className="mb-0", style={"fontSize":"10px","color":"#4a5568",
+        html.P(title, className="mb-0", style={"fontSize":"10px","color":"#94a3b8",
                                                 "textTransform":"uppercase","letterSpacing":"0.08em"}),
         html.H4(value, style={"color": color, "marginBottom":0, "fontWeight":"700"}),
-    ]), style={"background":"#141d2e","border":"1px solid rgba(255,255,255,0.06)","borderRadius":"6px"})
+    ]), style={"background":"#ffffff","border":"1px solid #e2e6ed","borderRadius":"6px"})
 
 # ───────────────────────────────────────────────────────────────────
 # LAYOUT
 # ───────────────────────────────────────────────────────────────────
 
 # Dark theme style for all Dropdown components
-_DD = {"backgroundColor":"#1a2540","color":"#c8d0dc","border":"1px solid rgba(255,255,255,0.08)","marginBottom":"6px"}
-_DD_STYLE = {"option":{"backgroundColor":"#1a2540","color":"#c8d0dc"},
-             "control":{"backgroundColor":"#1a2540","borderColor":"rgba(255,255,255,0.08)","color":"#c8d0dc"},
-             "singleValue":{"color":"#c8d0dc"},"placeholder":{"color":"#4a5568"},
-             "menu":{"backgroundColor":"#1a2540"},"input":{"color":"#c8d0dc"},
+_DD = {"backgroundColor":"#f8f9fc","color":"#0f172a","border":"1px solid rgba(255,255,255,0.08)","marginBottom":"6px"}
+_DD_STYLE = {"option":{"backgroundColor":"#f8f9fc","color":"#0f172a"},
+             "control":{"backgroundColor":"#f8f9fc","borderColor":"rgba(255,255,255,0.08)","color":"#0f172a"},
+             "singleValue":{"color":"#0f172a"},"placeholder":{"color":"#94a3b8"},
+             "menu":{"backgroundColor":"#f8f9fc"},"input":{"color":"#0f172a"},
              "multiValue":{"backgroundColor":"#111827"},
-             "multiValueLabel":{"color":"#c8d0dc"}}
+             "multiValueLabel":{"color":"#0f172a"}}
 
 def _get_jcol_opts(col):
     """Get options from justETF df — with hard fallbacks."""
@@ -1083,7 +1260,7 @@ def sidebar():
         html.Div([
             html.Div([
                 html.Span("📡 Market Decision Engine",
-                          style={"color":"#fff","fontWeight":"bold","fontSize":"15px"}),
+                          style={"color":"#0f172a","fontWeight":"bold","fontSize":"15px"}),
                 html.Span(f" {APP_VERSION}",
                           style={"color":"#00bcd4","fontSize":"11px","marginLeft":"6px"}),
             ]),
@@ -1095,9 +1272,9 @@ def sidebar():
 
         # ── Live indicators
         dbc.Row([
-            dbc.Col([html.P("VIX",style={"color":"#aaa","marginBottom":"2px","fontSize":"12px"}),
+            dbc.Col([html.P("VIX",style={"color":"#94a3b8","marginBottom":"2px","fontSize":"12px"}),
                      html.H4(id="vix-val", className="text-white")], width=6),
-            dbc.Col([html.P("Fear & Greed",style={"color":"#aaa","marginBottom":"2px","fontSize":"12px"}),
+            dbc.Col([html.P("Fear & Greed",style={"color":"#94a3b8","marginBottom":"2px","fontSize":"12px"}),
                      html.H4(id="fg-val", className="text-white")], width=6),
         ]),
         html.Small(id="fg-label", className="text-muted"),
@@ -1127,7 +1304,7 @@ def sidebar():
                         id="filter-types",
                         options=[{"label":"ETF","value":"ETF"},{"label":"Stock","value":"Stock"}],
                         value=["ETF"], inline=True,
-                        style={"color":"#fff"},
+                        style={"color":"#0f172a"},
                     ),
                 ], id="types-row", style={"display":"none"}, className="mb-2"),
 
@@ -1211,7 +1388,7 @@ def sidebar():
         ], title="📖 VIX & F&G Guide")], start_collapsed=True),
 
     ], style={
-        "width":"280px","minWidth":"280px","background":"#0a0e1a",
+        "width":"280px","minWidth":"280px","background":"#f8f9fc",
         "padding":"16px","height":"100vh","overflowY":"auto",
         "borderRight":"1px solid #333","flexShrink":0,
     })
@@ -1329,9 +1506,9 @@ app.layout = html.Div([
                 dbc.Tab(scanner_tab(), label="🔭 Market Scanner", tab_id="scanner"),
                 dbc.Tab(deepdive_tab(), label="🔬 Deep Dive",     tab_id="deepdive"),
             ], id="main-tabs", active_tab="scanner"),
-        ], style={"flex":"1","padding":"20px","overflowY":"auto","background":"#0a0e1a"}),
+        ], style={"flex":"1","padding":"20px","overflowY":"auto","background":"#f8f9fc"}),
     ], style={"display":"flex","height":"100vh","overflow":"hidden"}),
-], style={"fontFamily":"'Segoe UI', sans-serif","background":"#0a0e1a","color":"#fff"})
+], style={"fontFamily":"'Segoe UI', sans-serif","background":"#f8f9fc","color":"#0f172a"})
 
 # ───────────────────────────────────────────────────────────────────
 # CALLBACKS — Live data
@@ -1794,9 +1971,9 @@ def render_results(store_data, active_tab):
 
     # Top signals
     PANEL_STYLES = {
-        "BUY":   {"color": "#10b981", "bg": "rgba(16,185,129,0.06)",  "border": "rgba(16,185,129,0.2)"},
-        "WATCH": {"color": "#06b6d4", "bg": "rgba(6,182,212,0.06)",   "border": "rgba(6,182,212,0.2)"},
-        "SELL":  {"color": "#f43f5e", "bg": "rgba(244,63,94,0.06)",   "border": "rgba(244,63,94,0.2)"},
+        "BUY":   {"color": "#0d9488", "bg": "#f0fdfa",  "border": "#99f6e4"},
+        "WATCH": {"color": "#0284c7", "bg": "#f0f9ff",  "border": "#bae6fd"},
+        "SELL":  {"color": "#dc2626", "bg": "#fef2f2",  "border": "#fecaca"},
     }
     PANEL_LABELS = {"BUY": "● Top BUY", "WATCH": "◎ WATCH", "SELL": "● Top SELL"}
 
@@ -1816,11 +1993,12 @@ def render_results(store_data, active_tab):
             data=sub.round(2).to_dict("records"),
             columns=[{"name":c,"id":c} for c in sub.columns],
             style_table={"overflowX":"auto"},
-            style_cell={"background":"transparent","color":"#c8d0dc",
-                       "border":"none","fontSize":"12px","padding":"4px 10px"},
-            style_header={"background":"transparent","color":"#4a5568",
-                         "fontWeight":"500","border":"none","fontSize":"10px",
-                         "textTransform":"uppercase","letterSpacing":"0.05em"},
+            style_cell={"background":"transparent","color":"#0f172a",
+                       "border":"none","fontSize":"11px","padding":"3px 8px",
+                       "fontFamily":"DM Mono,monospace"},
+            style_header={"background":"transparent","color":"#94a3b8",
+                         "fontWeight":"600","border":"none","fontSize":"9px",
+                         "textTransform":"uppercase","letterSpacing":"0.07em"},
         )
         return dbc.Col(dbc.Card([
             dbc.CardHeader(label, style={"background":"transparent","color":ps["color"],
@@ -1875,7 +2053,7 @@ def render_results(store_data, active_tab):
         page_size=25,
         style_table={"overflowX":"auto"},
         style_cell={
-            "background":"#1a1a2e","color":"#fff",
+            "background":"#1a1a2e","color":"#0f172a",
             "border":"1px solid #2a2a3e",
             "fontSize":"12px","padding":"6px 10px",
             "whiteSpace":"nowrap","overflow":"hidden",
@@ -1889,7 +2067,7 @@ def render_results(store_data, active_tab):
             {"if":{"column_id":"Allocation"},"maxWidth":"140px"},
         ],
         style_header={
-            "background":"#0a0e1a","color":"#00bcd4",
+            "background":"#f8f9fc","color":"#00bcd4",
             "fontWeight":"bold","border":"1px solid #2a2a3e",
         },
         style_data_conditional=[
@@ -1899,7 +2077,7 @@ def render_results(store_data, active_tab):
             {"if":{"column_id":"Dist%","filter_query":"{Dist%} > 0"},"color":"#ff6d00"},
             {"if":{"state":"selected"},"background":"#2a2a4e","border":"1px solid #00bcd4"},
         ],
-        style_filter={"background":"#1a1a2e","color":"#fff","border":"1px solid #333"},
+        style_filter={"background":"#1a1a2e","color":"#0f172a","border":"1px solid #333"},
         tooltip_data=[{
             "Ticker": {"value": f"Click row then click 🔬 to deep dive", "type":"markdown"},
         } for _ in range(len(sub))],
@@ -2208,8 +2386,8 @@ def run_deep_dive(n_clicks, user_input, budget):
             href=f"https://www.justetf.com/en/etf-profile.html?isin={isin}"
                  if isin else f"https://www.justetf.com/en/search.html?query={ticker}",
             target="_blank", color="link", size="sm"),
-        *([ html.Code(isin, style={"marginLeft":"8px","color":"#aaa","fontSize":"11px",
-            "background":"#141d2e","padding":"2px 6px","borderRadius":"4px"})
+        *([ html.Code(isin, style={"marginLeft":"8px","color":"#94a3b8","fontSize":"11px",
+            "background":"#ffffff","padding":"2px 6px","borderRadius":"4px"})
            ] if isin else []),
     ], className="mb-2")
 
@@ -2229,8 +2407,8 @@ def run_deep_dive(n_clicks, user_input, budget):
         data=detail_df.to_dict("records"),
         columns=[{"name":c,"id":c} for c in detail_df.columns],
         style_table={"overflowX":"auto"},
-        style_cell={"background":"#1a1a2e","color":"#fff","border":"1px solid #2a2a3e","fontSize":"12px","padding":"6px"},
-        style_header={"background":"#0a0e1a","color":"#00bcd4","fontWeight":"bold","border":"1px solid #2a2a3e"},
+        style_cell={"background":"#1a1a2e","color":"#0f172a","border":"1px solid #2a2a3e","fontSize":"12px","padding":"6px"},
+        style_header={"background":"#f8f9fc","color":"#00bcd4","fontWeight":"bold","border":"1px solid #2a2a3e"},
     )
 
     return html.Div([
