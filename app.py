@@ -90,6 +90,11 @@ def load_base_universe():
                     df[col] = df[col].fillna("").astype(str).str.strip()
             df = df[df["ticker"].str.match(r"^[A-Z0-9]{2,6}$")]
             df = df.drop_duplicates(subset=["ticker","type"], keep="first")
+            # Clean up mangled → symbols in yf_suffix (ISIN-resolved tickers)
+            # These get handled via resolved_ cache, not suffix concatenation
+            if "yf_suffix" in df.columns:
+                df.loc[df["yf_suffix"].astype(str).str.startswith("→"), "yf_suffix"] = df.loc[
+                    df["yf_suffix"].astype(str).str.startswith("→"), "yf_suffix"]  # keep as-is, handled in fetch
             cache_set("universe", df)
             return df
         except Exception as e:
@@ -690,6 +695,11 @@ def build_tickers(preset_key, filters):
         country = preset.get("country") or filters.get("country",[])
         if country: s = s[s["country"].isin(country)]
         if filters.get("sector"): s = s[s["sector"].isin(filters["sector"])]
+        # Filter out SPACs, warrants, units (tickers ending in U, W, R, +, =)
+        s = s[~s["ticker"].str.match(r"^[A-Z]{2,4}[UWR]$")]
+        # Sort: shorter tickers first (more likely to be real companies)
+        # then alphabetically within same length
+        s = s.iloc[s["ticker"].str.len().argsort(kind="stable")]
         parts.append(s)
 
     if not parts:
