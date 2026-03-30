@@ -586,6 +586,9 @@ def load_signals():
         # Remove penny stocks (price < $0.50) — but keep momentum-only signals (price=NaN)
         if "price" in df.columns:
             df = df[(df["price"].isna()) | (df["price"] >= 1.00)]
+        # Filter extreme dist_ma200 — likely bad data (>95% below MA200 is almost impossible)
+        if "dist_ma200" in df.columns:
+            df = df[(df["dist_ma200"].isna()) | (df["dist_ma200"] > -95)]
         # Keep best signal per ticker
         if "score" in df.columns:
             df = df.sort_values("score", ascending=False).drop_duplicates(
