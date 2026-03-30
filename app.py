@@ -1118,29 +1118,116 @@ def get_name_isin_full(ticker):
     except Exception:
         return ticker, ""
 
+# ── FMP API helper ────────────────────────────────────────────────
+import os as _os
+_FMP_KEY = _os.environ.get("FMP_API_KEY", "")
+
+def _fmp_get(path, params=None):
+    """Call FMP API. Returns JSON or None. Cached 1h."""
+    if not _FMP_KEY:
+        return None
+    cache_key = f"fmp_{path}_{str(params)}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        import requests as _req
+        base = "https://financialmodelingprep.com/api/v3"
+        p = dict(apikey=_FMP_KEY, **(params or {}))
+        r = _req.get(f"{base}/{path}", params=p, timeout=6)
+        if r.status_code == 200:
+            data = r.json()
+            cache_set(cache_key, data, ttl=3600)
+            return data
+    except Exception:
+        pass
+    return None
+
+def fetch_fmp_fundamentals(ticker):
+    """
+    Fetch FMP second-opinion fundamentals for a ticker.
+    Returns dict with valuation, analyst targets, earnings date.
+    """
+    result = {}
+    base_ticker = ticker.split(".")[0]  # strip exchange suffix
+
+    # Quote / key metrics
+    data = _fmp_get(f"quote/{base_ticker}")
+    if data and isinstance(data, list) and data:
+        q = data[0]
+        def _f(v):
+            try: return float(v) if v is not None else None
+            except: return None
+        result["fmp_price"]       = _f(q.get("price"))
+        result["fmp_pe"]          = _f(q.get("pe"))
+        result["fmp_eps"]         = _f(q.get("eps"))
+        result["fmp_target"]      = _f(q.get("priceAvg50"))
+        result["fmp_mcap"]        = _f(q.get("marketCap"))
+        result["fmp_volume"]      = _f(q.get("volume"))
+        result["fmp_52w_high"]    = _f(q.get("yearHigh"))
+        result["fmp_52w_low"]     = _f(q.get("yearLow"))
+
+    # Key metrics (PE, dividend, debt/equity etc)
+    km = _fmp_get(f"key-metrics-ttm/{base_ticker}")
+    if km and isinstance(km, list) and km:
+        k = km[0]
+        def _f(v):
+            try: return float(v) if v is not None else None
+            except: return None
+        result["fmp_pe_ttm"]       = _f(k.get("peRatioTTM"))
+        result["fmp_fwd_pe"]       = _f(k.get("priceToEarningsRatioTTM"))
+        result["fmp_pb"]           = _f(k.get("pbRatioTTM"))
+        result["fmp_div_yield"]    = _f(k.get("dividendYieldTTM"))
+        result["fmp_debt_eq"]      = _f(k.get("debtToEquityTTM"))
+        result["fmp_fcf_yield"]    = _f(k.get("freeCashFlowYieldTTM"))
+        result["fmp_roe"]          = _f(k.get("roeTTM"))
+        result["fmp_ev_ebitda"]    = _f(k.get("enterpriseValueOverEBITDATTM"))
+
+    # Analyst estimates / price target
+    pt = _fmp_get(f"price-target-consensus/{base_ticker}")
+    if pt and isinstance(pt, list) and pt:
+        p = pt[0]
+        def _f(v):
+            try: return float(v) if v is not None else None
+            except: return None
+        result["fmp_target_high"]  = _f(p.get("targetHigh"))
+        result["fmp_target_low"]   = _f(p.get("targetLow"))
+        result["fmp_target_mean"]  = _f(p.get("targetConsensus"))
+        result["fmp_target_med"]   = _f(p.get("targetMedian"))
+
+    # Earnings calendar
+    ec = _fmp_get(f"earning_calendar/{base_ticker}")
+    if ec and isinstance(ec, list):
+        upcoming = [e for e in ec if e.get("date","") >= str(pd.Timestamp.today().date())]
+        if upcoming:
+            result["fmp_next_earnings"] = upcoming[0].get("date","")
+
+    return result
+
+
 def fetch_pe_data(ticker):
     key = f"pe_{ticker}"
     cached = cache_get(key)
     if cached is not None:
         return cached
     try:
-        info = yf.Ticker(ticker).info
-        pe   = None
-        for f in ["trailingPE","forwardPE"]:
-            v = info.get(f)
-            if v and 0 < float(v) < 2000:
-                pe = round(float(v),1)
-                break
-        mcap = info.get("marketCap")
-        beta = info.get("beta")
-        div  = info.get("dividendYield")
+        info = yf.Ticker(ticker).info or {}
+        def _safe(v, mn=0, mx=5000):
+            try:
+                f = float(v)
+                return f if mn < f < mx else None
+            except: return None
+        pe   = _safe(info.get("trailingPE"), 0, 2000) or _safe(info.get("forwardPE"), 0, 2000)
+        mcap = _safe(info.get("marketCap"), 0, 1e15)
+        beta = _safe(info.get("beta"), -5, 10)
+        div  = _safe(info.get("dividendYield"), 0, 1)
         result = {
-            "PE":    pe or "—",
-            "Beta":  round(float(beta),2) if beta else "—",
+            "PE":    round(pe,1) if pe else "—",
+            "Beta":  round(beta,2) if beta else "—",
             "Div%":  f"{div*100:.2f}%" if div else "—",
-            "MCap":  (f"${mcap/1e9:.1f}B" if mcap > 1e9 else f"${mcap/1e6:.0f}M") if mcap else "—",
+            "MCap":  (f"${mcap/1e9:.1f}B" if mcap >= 1e9 else f"${mcap/1e6:.0f}M") if mcap else "—",
         }
-        cache_set(key, result, ttl=86400)
+        cache_set(key, result, ttl=3600)
         return result
     except Exception:
         return {"PE":"—","Beta":"—","Div%":"—","MCap":"—"}
@@ -2435,8 +2522,11 @@ def run_deep_dive(n_clicks, user_input, budget):
     if not jetf_df.empty and ticker in jetf_df["ticker"].values:
         jetf_meta = jetf_df[jetf_df["ticker"]==ticker].iloc[0].to_dict()
 
-    # PE data
-    pe_data = fetch_pe_data(ticker)
+    # PE data (yfinance primary)
+    pe_data = fetch_pe_data(resolved_yf or ticker)
+
+    # FMP second opinion — async-style: fetch in background, show if available
+    fmp_data = fetch_fmp_fundamentals(resolved_yf or ticker) if _FMP_KEY else {}
 
     # ── Price chart
     fig_price = go.Figure()
@@ -2501,12 +2591,126 @@ def run_deep_dive(n_clicks, user_input, budget):
     if jetf_meta.get("replication"):  meta_parts.append(f"🔄 {jetf_meta['replication']}")
     meta_strip = html.P("  ·  ".join(meta_parts), className="text-muted small") if meta_parts else None
 
-    # Fundamentals strip
-    fund_parts = []
-    for k, v in pe_data.items():
-        if v and v != "—":
-            fund_parts.append(f"{k}: {v}")
-    fund_strip = html.P("  ·  ".join(fund_parts), className="text-muted small") if fund_parts else None
+    # ── Fundamentals: yfinance primary + FMP second opinion ──────────
+    def _fmt_pct(v, mult=100):
+        try: return f"{float(v)*mult:.1f}%"
+        except: return "—"
+    def _fmt_x(v):
+        try: return f"{float(v):.1f}x"
+        except: return "—"
+    def _fmt_money(v):
+        try:
+            f = float(v)
+            return f"${f/1e9:.1f}B" if f>=1e9 else f"${f/1e6:.0f}M"
+        except: return "—"
+    def _fmt_num(v, dec=1):
+        try: return f"{float(v):.{dec}f}"
+        except: return "—"
+
+    # Primary fundamentals row (yfinance)
+    pe_val   = pe_data.get("PE","—")
+    beta_val = pe_data.get("Beta","—")
+    div_val  = pe_data.get("Div%","—")
+    mcap_val = pe_data.get("MCap","—")
+
+    fund_row = dbc.Row([
+        dbc.Col([html.Div("PE", style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600",
+                                       "textTransform":"uppercase","letterSpacing":"0.08em"}),
+                 html.Div(str(pe_val), style={"fontSize":"14px","fontWeight":"700","color":"#0f172a",
+                                              "fontFamily":"'DM Mono',monospace"})],
+                width="auto", className="me-3"),
+        dbc.Col([html.Div("Beta", style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600",
+                                         "textTransform":"uppercase","letterSpacing":"0.08em"}),
+                 html.Div(str(beta_val), style={"fontSize":"14px","fontWeight":"700","color":"#0f172a",
+                                                "fontFamily":"'DM Mono',monospace"})],
+                width="auto", className="me-3"),
+        dbc.Col([html.Div("Div%", style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600",
+                                          "textTransform":"uppercase","letterSpacing":"0.08em"}),
+                 html.Div(str(div_val), style={"fontSize":"14px","fontWeight":"700","color":"#0f172a",
+                                               "fontFamily":"'DM Mono',monospace"})],
+                width="auto", className="me-3"),
+        dbc.Col([html.Div("MCap", style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600",
+                                          "textTransform":"uppercase","letterSpacing":"0.08em"}),
+                 html.Div(str(mcap_val), style={"fontSize":"14px","fontWeight":"700","color":"#0f172a",
+                                                "fontFamily":"'DM Mono',monospace"})],
+                width="auto"),
+    ], className="mb-2 align-items-end")
+
+    # FMP second opinion section
+    fmp_section = None
+    if fmp_data:
+        fmp_items = []
+
+        # Valuation block
+        val_items = []
+        if fmp_data.get("fmp_pe_ttm"):
+            val_items.append(("Trailing PE", _fmt_num(fmp_data["fmp_pe_ttm"])))
+        if fmp_data.get("fmp_pb"):
+            val_items.append(("P/B", _fmt_num(fmp_data["fmp_pb"])))
+        if fmp_data.get("fmp_ev_ebitda"):
+            val_items.append(("EV/EBITDA", _fmt_num(fmp_data["fmp_ev_ebitda"])))
+        if fmp_data.get("fmp_div_yield"):
+            val_items.append(("Div Yield", _fmt_pct(fmp_data["fmp_div_yield"])))
+        if fmp_data.get("fmp_debt_eq"):
+            val_items.append(("Debt/Eq", _fmt_num(fmp_data["fmp_debt_eq"])))
+        if fmp_data.get("fmp_roe"):
+            val_items.append(("ROE", _fmt_pct(fmp_data["fmp_roe"])))
+        if fmp_data.get("fmp_fcf_yield"):
+            val_items.append(("FCF Yield", _fmt_pct(fmp_data["fmp_fcf_yield"])))
+
+        # Analyst target block
+        target_items = []
+        target_mean = fmp_data.get("fmp_target_mean") or fmp_data.get("fmp_target_med")
+        if target_mean:
+            upside = ((float(target_mean) - cur_p) / cur_p * 100) if cur_p else 0
+            color  = "#0d9488" if upside > 0 else "#dc2626"
+            target_items.append(html.Span([
+                html.Span("Analyst Target  ", style={"fontSize":"11px","color":"#64748b"}),
+                html.Span(f"${float(target_mean):.2f}", style={"fontWeight":"700","color":"#0f172a",
+                                                                 "fontFamily":"'DM Mono',monospace"}),
+                html.Span(f"  {upside:+.1f}%", style={"color":color,"fontWeight":"600",
+                                                        "marginLeft":"4px","fontFamily":"'DM Mono',monospace"}),
+            ]))
+            if fmp_data.get("fmp_target_low") and fmp_data.get("fmp_target_high"):
+                target_items.append(html.Span(
+                    f"  Range ${float(fmp_data['fmp_target_low']):.2f}–${float(fmp_data['fmp_target_high']):.2f}",
+                    style={"fontSize":"11px","color":"#94a3b8","fontFamily":"'DM Mono',monospace"}
+                ))
+
+        # Earnings date
+        if fmp_data.get("fmp_next_earnings"):
+            target_items.append(html.Span([
+                html.Span("  ·  Next Earnings  ", style={"fontSize":"11px","color":"#64748b"}),
+                html.Span(fmp_data["fmp_next_earnings"],
+                         style={"fontWeight":"600","color":"#0284c7",
+                                "fontFamily":"'DM Mono',monospace","fontSize":"12px"}),
+            ]))
+
+        # Build the section
+        if val_items or target_items:
+            val_cols = [
+                dbc.Col([
+                    html.Div(label, style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600",
+                                          "textTransform":"uppercase","letterSpacing":"0.07em"}),
+                    html.Div(val, style={"fontSize":"13px","fontWeight":"700","color":"#0f172a",
+                                         "fontFamily":"'DM Mono',monospace"}),
+                ], width="auto", className="me-3")
+                for label, val in val_items
+            ]
+
+            fmp_section = html.Div([
+                html.Div([
+                    html.Span("📊 Second Opinion  ", style={"fontSize":"10px","fontWeight":"700",
+                                                             "color":"#1a56db","letterSpacing":"0.06em",
+                                                             "textTransform":"uppercase"}),
+                    html.Span("via Financial Modeling Prep", style={"fontSize":"10px","color":"#94a3b8"}),
+                ], className="mb-2"),
+                dbc.Row(val_cols, className="mb-1 align-items-end") if val_cols else None,
+                html.Div(target_items, className="mb-1") if target_items else None,
+            ], style={"background":"#f0f9ff","border":"1px solid #bae6fd",
+                      "borderRadius":"6px","padding":"10px 14px","marginBottom":"10px"})
+
+    fund_strip = None  # replaced by fund_row above
 
     links = html.Div([
         dbc.Button("📈 Yahoo Finance",
@@ -2549,7 +2753,8 @@ def run_deep_dive(n_clicks, user_input, budget):
         metrics,
         links,
         meta_strip,
-        fund_strip,
+        fund_row,
+        fmp_section,
         dbc.Row([
             dbc.Col([html.H6("📥 Buy Signal"), buy_el], width=6),
             dbc.Col([html.H6("📤 Sell Signal"), sell_el], width=6),
