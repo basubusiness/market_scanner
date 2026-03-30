@@ -1431,7 +1431,7 @@ def sidebar():
 - > 30 → Fear
 - > 40 → Crisis
 
-<a href="https://finance.yahoo.com/quote/%5EVIX/" target="_blank" style="color:#1a56db;font-size:11px">📈 Live VIX</a>
+[📈 Live VIX ↗](https://finance.yahoo.com/quote/%5EVIX/)
 
 ---
 
@@ -1442,9 +1442,9 @@ def sidebar():
 - 55–75 → Greed 🟢
 - 75–100 → Extreme Greed 💚 *(caution)*
 
-<a href="https://edition.cnn.com/markets/fear-and-greed" target="_blank" style="color:#1a56db;font-size:11px">🧠 CNN F&G</a>
+[🧠 CNN F&G ↗](https://edition.cnn.com/markets/fear-and-greed)
             """, className="text-muted", style={"fontSize":"12px"},
-                dangerously_allow_html=True),
+                link_target="_blank"),
         ], title="📖 VIX & F&G Guide")], start_collapsed=True),
 
     ], style={
