@@ -1443,13 +1443,14 @@ def sidebar():
 - 75–100 → Extreme Greed 💚 *(caution)*
 
 <a href="https://edition.cnn.com/markets/fear-and-greed" target="_blank" style="color:#1a56db;font-size:11px">🧠 CNN F&G</a>
-            """, className="text-muted", style={"fontSize":"12px"}),
+            """, className="text-muted", style={"fontSize":"12px"},
+                dangerously_allow_html=True),
         ], title="📖 VIX & F&G Guide")], start_collapsed=True),
 
     ], style={
         "width":"280px","minWidth":"280px","background":"#f8f9fc",
         "padding":"16px","height":"100vh","overflowY":"auto",
-        "borderRight":"1px solid #333","flexShrink":0,
+        "borderRight":"1px solid #e2e6ed","flexShrink":0,
     })
 
 def scanner_tab():
