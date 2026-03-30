@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-# Market Decision Engine v10.3 — Dash + Railway
+# Market Decision Engine v10.0 — Dash + Railway
 # ═══════════════════════════════════════════════════════════════════
 
 import dash
@@ -25,7 +25,7 @@ try:
 except ImportError:
     JUSTETF_AVAILABLE = False
 
-APP_VERSION = "v10.3"
+APP_VERSION = "v10.2"
 from datetime import datetime as _datetime
 BUILD_TIME = _datetime.utcnow().strftime("%d %b %H:%M UTC")
 
@@ -2339,24 +2339,6 @@ def show_scanner_context(ticker, tab):
     State("dd-budget","value"),
     prevent_initial_call=True,
 )
-def _price_currency(yf_sym):
-    """Infer currency symbol from yfinance ticker suffix."""
-    s = str(yf_sym or "")
-    eur_sfx = (".DE", ".L", ".AS", ".PA", ".MI", ".BR", ".VI",
-               ".LS", ".ST", ".CO", ".HE", ".OL", ".MC", ".WA")
-    if any(s.endswith(sfx) for sfx in eur_sfx):
-        return "€"
-    if s.endswith(".SW"):
-        return "CHF "
-    if s.endswith(".AX"):
-        return "A$"
-    if s.endswith(".HK"):
-        return "HK$"
-    if s.endswith(".T"):
-        return "¥"
-    return "$"
-
-
 def run_deep_dive(n_clicks, user_input, budget):
     if not n_clicks or not user_input:
         return ""
@@ -2469,7 +2451,6 @@ def run_deep_dive(n_clicks, user_input, budget):
     macd_h   = raw["macd_h"]
 
     cur_p      = raw["price"]
-    curr_sym   = _price_currency(resolved_yf or ticker)
     dist_ma    = raw["dist_ma"]
     rsi_val    = raw["rsi"]
     rsi_rising = raw["rsi_slope"] > 0
@@ -2593,7 +2574,7 @@ def run_deep_dive(n_clicks, user_input, budget):
 
     # ── Metrics
     metrics = dbc.Row([
-        dbc.Col(kpi_card("Price",      f"{curr_sym}{cur_p:.2f}"), width=2),
+        dbc.Col(kpi_card("Price",      f"${cur_p:.2f}"), width=2),
         dbc.Col(kpi_card("vs MA200",   f"{dist_ma:+.1f}%",  "#00e676" if dist_ma<0 else "#ff6d00"), width=2),
         dbc.Col(kpi_card("RSI",        f"{rsi_val:.1f} {'↗' if rsi_rising else '↘'}"), width=2),
         dbc.Col(kpi_card("MACD",       "▲ Bull" if macd_bull else "▼ Bear", "#00e676" if macd_bull else "#ff6d00"), width=2),
@@ -2685,14 +2666,14 @@ def run_deep_dive(n_clicks, user_input, budget):
             color  = "#0d9488" if upside > 0 else "#dc2626"
             target_items.append(html.Span([
                 html.Span("Analyst Target  ", style={"fontSize":"11px","color":"#64748b"}),
-                html.Span(f"{curr_sym}{float(target_mean):.2f}", style={"fontWeight":"700","color":"#0f172a",
+                html.Span(f"${float(target_mean):.2f}", style={"fontWeight":"700","color":"#0f172a",
                                                                  "fontFamily":"'DM Mono',monospace"}),
                 html.Span(f"  {upside:+.1f}%", style={"color":color,"fontWeight":"600",
                                                         "marginLeft":"4px","fontFamily":"'DM Mono',monospace"}),
             ]))
             if fmp_data.get("fmp_target_low") and fmp_data.get("fmp_target_high"):
                 target_items.append(html.Span(
-                    f"  Range {curr_sym}{float(fmp_data['fmp_target_low']):.2f}–{curr_sym}{float(fmp_data['fmp_target_high']):.2f}",
+                    f"  Range ${float(fmp_data['fmp_target_low']):.2f}–${float(fmp_data['fmp_target_high']):.2f}",
                     style={"fontSize":"11px","color":"#94a3b8","fontFamily":"'DM Mono',monospace"}
                 ))
 
