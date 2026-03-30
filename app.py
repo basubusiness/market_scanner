@@ -1428,7 +1428,7 @@ def sidebar():
 - > 30 → Fear
 - > 40 → Crisis
 
-[📈 Live VIX](https://finance.yahoo.com/quote/%5EVIX/)
+<a href="https://finance.yahoo.com/quote/%5EVIX/" target="_blank" style="color:#1a56db;font-size:11px">📈 Live VIX</a>
 
 ---
 
@@ -1439,7 +1439,7 @@ def sidebar():
 - 55–75 → Greed 🟢
 - 75–100 → Extreme Greed 💚 *(caution)*
 
-[🧠 CNN F&G](https://edition.cnn.com/markets/fear-and-greed)
+<a href="https://edition.cnn.com/markets/fear-and-greed" target="_blank" style="color:#1a56db;font-size:11px">🧠 CNN F&G</a>
             """, className="text-muted", style={"fontSize":"12px"}),
         ], title="📖 VIX & F&G Guide")], start_collapsed=True),
 
@@ -2190,15 +2190,19 @@ def render_results(store_data, active_tab):
     Output("goto-dive-btn","children"),
     Input("main-table","selected_rows"),
     State("scan-store","data"),
+    State("signal-tabs","active_tab"),
 )
-def enable_dive_btn(selected_rows, store_data):
+def enable_dive_btn(selected_rows, store_data, active_tab):
     if not selected_rows or not store_data:
         return True, "🔬 Deep Dive selected ticker →"
-    df  = pd.read_json(store_data, orient="split")
+    import io
+    df  = pd.read_json(io.StringIO(store_data), orient="split")
+    # Filter to active tab first — same as render_results does
+    sub = df if active_tab == "all" or not active_tab else df[df["Action"]==active_tab]
     idx = selected_rows[0]
-    if idx >= len(df):
+    if idx >= len(sub):
         return True, "🔬 Deep Dive selected ticker →"
-    ticker = df.iloc[idx]["Ticker"]
+    ticker = sub.iloc[idx]["Ticker"]
     return False, f"🔬 Deep Dive: {ticker} →"
 
 @app.callback(
@@ -2207,15 +2211,19 @@ def enable_dive_btn(selected_rows, store_data):
     Input("goto-dive-btn","n_clicks"),
     State("main-table","selected_rows"),
     State("scan-store","data"),
+    State("signal-tabs","active_tab"),
     prevent_initial_call=True,
 )
-def open_deep_dive(n_clicks, selected_rows, store_data):
+def open_deep_dive(n_clicks, selected_rows, store_data, active_tab):
     if not n_clicks or not selected_rows or not store_data:
         return no_update, no_update
     import io
-    df     = pd.read_json(io.StringIO(store_data), orient="split")
-    idx    = selected_rows[0]
-    ticker = df.iloc[idx]["Ticker"]
+    df  = pd.read_json(io.StringIO(store_data), orient="split")
+    sub = df if active_tab == "all" or not active_tab else df[df["Action"]==active_tab]
+    idx = selected_rows[0]
+    if idx >= len(sub):
+        return no_update, no_update
+    ticker = sub.iloc[idx]["Ticker"]
     return "deepdive", ticker
 
 @app.callback(
