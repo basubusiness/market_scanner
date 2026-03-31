@@ -1135,9 +1135,14 @@ def get_name_isin_full(ticker):
 import os as _os
 _FMP_KEY = _os.environ.get("FMP_API_KEY", "")
 
+def _get_fmp_key():
+    """Always read from env — picks up Railway variable without restart."""
+    return _os.environ.get("FMP_API_KEY", "") or _FMP_KEY
+
 def _fmp_get(path, params=None):
     """Call FMP API. Returns JSON or None. Cached 1h."""
-    if not _FMP_KEY:
+    key = _get_fmp_key()
+    if not key:
         return None
     cache_key = f"fmp_{path}_{str(params)}"
     cached = cache_get(cache_key)
@@ -1146,7 +1151,7 @@ def _fmp_get(path, params=None):
     try:
         import requests as _req
         base = "https://financialmodelingprep.com/api/v3"
-        p = dict(apikey=_FMP_KEY, **(params or {}))
+        p = dict(apikey=key, **(params or {}))
         r = _req.get(f"{base}/{path}", params=p, timeout=6)
         if r.status_code == 200:
             data = r.json()
@@ -1370,7 +1375,7 @@ def fetch_fmp_value_batch(tickers, max_workers=8):
     Returns dict: {ticker: fmp_data}
     Rate-limited to avoid hammering the API.
     """
-    if not _FMP_KEY:
+    if not _get_fmp_key():
         return {}
     results = {}
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
@@ -2957,7 +2962,7 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
     pe_data = pe_data_early  # already fetched above for score writeback
 
     # FMP second opinion — async-style: fetch in background, show if available
-    fmp_data    = fetch_fmp_fundamentals(resolved_yf or ticker) if _FMP_KEY else {}
+    fmp_data    = fetch_fmp_fundamentals(resolved_yf or ticker) if _get_fmp_key() else {}
     value_score, value_grade, value_bdown = compute_value_score(fmp_data)
     value_available = value_score > 0 and not is_etf
 
@@ -3538,7 +3543,7 @@ def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
                if t.strip()]
     tickers = list(dict.fromkeys(tickers))[:100]  # dedupe, max 100
 
-    if not _FMP_KEY:
+    if not _get_fmp_key():
         return dbc.Alert(
             "⚠️ FMP_API_KEY not set. Add it to Railway environment variables to use Value Screen.",
             color="warning"), ""
