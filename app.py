@@ -1904,6 +1904,12 @@ def value_screener_tab():
                 html.Span(id="vs-candidate-info",
                           className="small text-muted",
                           style={"fontFamily":"'DM Mono',monospace"}),
+                html.Span(id="vs-fmp-status",
+                          className="small ms-3",
+                          style={"fontFamily":"'DM Mono',monospace"}),
+                dbc.Button("🔑 Test FMP key", id="vs-test-fmp-btn",
+                           color="outline-secondary", size="sm",
+                           className="ms-2"),
             ], width=12),
         ], className="mb-2"),
 
@@ -3868,3 +3874,48 @@ def load_vs_candidates(cand_clicks, preset_clicks):
             f"dist MA200 -5% to -40%  ·  RSI 25–55")
 
     return ", ".join(tickers), info
+
+# ───────────────────────────────────────────────────────────────────
+# CALLBACK — FMP key test
+# ───────────────────────────────────────────────────────────────────
+
+@app.callback(
+    Output("vs-fmp-status", "children"),
+    Input("vs-test-fmp-btn", "n_clicks"),
+    prevent_initial_call=True,
+)
+def test_fmp_key(n):
+    key = _get_fmp_key()
+    if not key:
+        return html.Span("❌ FMP_API_KEY not found in environment",
+                         style={"color":"#dc2626"})
+    # Try a single lightweight call
+    try:
+        import requests as _req
+        r = _req.get(
+            "https://financialmodelingprep.com/api/v3/quote/AAPL",
+            params={"apikey": key}, timeout=6
+        )
+        if r.status_code == 200:
+            data = r.json()
+            if data and isinstance(data, list) and data[0].get("price"):
+                price = data[0]["price"]
+                return html.Span(
+                    f"✅ FMP key works — AAPL ${price:.2f}",
+                    style={"color":"#0d9488","fontWeight":"600"})
+            else:
+                return html.Span(
+                    f"⚠️ Key accepted but empty response — check plan limits",
+                    style={"color":"#d97706"})
+        elif r.status_code == 401:
+            return html.Span("❌ Invalid API key (401)",
+                             style={"color":"#dc2626"})
+        elif r.status_code == 403:
+            return html.Span("❌ Key rejected or plan limit reached (403)",
+                             style={"color":"#dc2626"})
+        else:
+            return html.Span(f"⚠️ HTTP {r.status_code}",
+                             style={"color":"#d97706"})
+    except Exception as e:
+        return html.Span(f"❌ Request failed: {str(e)[:60]}",
+                         style={"color":"#dc2626"})
