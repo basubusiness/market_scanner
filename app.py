@@ -3914,17 +3914,31 @@ def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
                if t.strip()]
     tickers = list(dict.fromkeys(tickers))[:100]
 
-    # ── Data source: FMP if available, yfinance fallback ─────────────
-    use_fmp    = bool(_get_fmp_key())
+    # ── Data source: FMP if key set, yfinance fallback ──────────────
+    # Even with a key, FMP free tier blocks key-metrics-ttm (403).
+    # Test with a sample ticker — if coverage=0, fall back to yfinance.
     timed_out  = []
+    fmp_works  = False
 
-    if use_fmp:
-        fund_batch     = fetch_fmp_value_batch(tickers, max_workers=10)
+    if _get_fmp_key():
+        test_sample = fetch_fmp_value_batch(tickers[:2], max_workers=2)
+        test_scores = [compute_value_score(v)[3]   # coverage count
+                       for v in test_sample.values()]
+        fmp_works = any(c > 0 for c in test_scores)
+
+    if fmp_works:
+        # Fetch remaining tickers (first 2 already done)
+        rest = [t for t in tickers if t not in test_sample]
+        if rest:
+            rest_batch = fetch_fmp_value_batch(rest, max_workers=10)
+            fund_batch = {**test_sample, **rest_batch}
+        else:
+            fund_batch = test_sample
         data_src_label = "FMP"
     else:
         fund_batch, timed_out = fetch_yf_fundamentals_batch(
             tickers, max_workers=8, timeout=5)
-        data_src_label = "yfinance"
+        data_src_label = "yfinance" + (" (FMP key set but plan restricts fundamentals)" if _get_fmp_key() else "")
 
     # Tech signal from scanner cache
     tech_map = {}
