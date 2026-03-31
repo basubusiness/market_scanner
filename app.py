@@ -416,6 +416,37 @@ _cache = {}
 _cache_lock = threading.Lock()
 _active_scans = {}  # scan_id -> bool, False = cancelled
 
+# Disk cache for FMP data — survives Railway restarts, preserves quota
+import os as _os_cache, json as _json_cache
+_DISK_CACHE_FILE = "/tmp/mde_fmp_cache.json"
+
+def _load_disk_cache():
+    """Load persisted FMP cache from disk on startup."""
+    try:
+        if _os_cache.path.exists(_DISK_CACHE_FILE):
+            with open(_DISK_CACHE_FILE, "r") as f:
+                data = _json_cache.load(f)
+            now = time.time()
+            loaded = 0
+            for k, (v, exp) in data.items():
+                if exp is None or exp > now:   # skip expired
+                    _cache[k] = (v, exp)
+                    loaded += 1
+            print(f"[cache] Loaded {loaded} FMP entries from disk", flush=True)
+    except Exception as e:
+        print(f"[cache] Disk load failed: {e}", flush=True)
+
+def _save_disk_cache():
+    """Persist FMP cache entries to disk (fmp_ prefix only)."""
+    try:
+        with _cache_lock:
+            fmp_entries = {k: v for k, v in _cache.items()
+                           if str(k).startswith("fmp_")}
+        with open(_DISK_CACHE_FILE, "w") as f:
+            _json_cache.dump(fmp_entries, f)
+    except Exception as e:
+        print(f"[cache] Disk save failed: {e}", flush=True)
+
 def cache_get(key):
     with _cache_lock:
         entry = _cache.get(key)
@@ -431,6 +462,12 @@ def cache_set(key, val, ttl=None):
     with _cache_lock:
         expires = (time.time() + ttl) if ttl else None
         _cache[key] = (val, expires)
+    # Persist FMP entries to disk immediately
+    if str(key).startswith("fmp_"):
+        threading.Thread(target=_save_disk_cache, daemon=True).start()
+
+# Load disk cache at startup
+_load_disk_cache()
 
 # ───────────────────────────────────────────────────────────────────
 # UNIVERSE LOADERS
@@ -1155,7 +1192,8 @@ def _fmp_get(path, params=None):
         r = _req.get(f"{base}/{path}", params=p, timeout=6)
         if r.status_code == 200:
             data = r.json()
-            cache_set(cache_key, data, ttl=3600)
+            # 24h TTL — fundamentals don't change intraday, preserves quota
+            cache_set(cache_key, data, ttl=86400)
             return data
     except Exception:
         pass
@@ -1372,20 +1410,40 @@ def compute_value_score(fmp):
 def fetch_fmp_value_batch(tickers, max_workers=8):
     """
     Fetch FMP fundamentals for a list of tickers in parallel.
+    Skips tickers already in cache — preserves daily quota.
     Returns dict: {ticker: fmp_data}
-    Rate-limited to avoid hammering the API.
     """
     if not _get_fmp_key():
         return {}
+
     results = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futs = {ex.submit(fetch_fmp_fundamentals, t): t for t in tickers}
-        for fut in as_completed(futs):
-            t = futs[fut]
-            try:
-                results[t] = fut.result()
-            except Exception:
-                results[t] = {}
+    to_fetch = []
+
+    for t in tickers:
+        # Check if quote endpoint is already cached for this ticker
+        base = t.split(".")[0]
+        cached_quote = cache_get(f"fmp_quote/{base}_None")
+        if cached_quote is not None:
+            # Already cached — reconstruct via fetch (hits cache, no API call)
+            results[t] = fetch_fmp_fundamentals(t)
+        else:
+            to_fetch.append(t)
+
+    cache_hits = len(tickers) - len(to_fetch)
+    if cache_hits:
+        print(f"[FMP batch] {cache_hits} cache hits, "
+              f"{len(to_fetch)} need fresh fetch", flush=True)
+
+    if to_fetch:
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futs = {ex.submit(fetch_fmp_fundamentals, t): t for t in to_fetch}
+            for fut in as_completed(futs):
+                t = futs[fut]
+                try:
+                    results[t] = fut.result()
+                except Exception:
+                    results[t] = {}
+
     return results
 
 
@@ -3691,11 +3749,16 @@ def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
 
     n_a  = sum(1 for r in rows if r["Grade"]=="A")
     n_b  = sum(1 for r in rows if r["Grade"]=="B")
+    fmp_cached = sum(1 for k in _cache if str(k).startswith("fmp_"))
     status_out = dbc.Alert(
         [html.Strong(f"✅ {len(rows)} tickers screened  "),
          html.Span(f"Grade A: {n_a}  ·  Grade B: {n_b}  ·  "
                    f"Sorted by Value Score  ·  Hover Score for breakdown",
-                   style={"fontSize":"12px","color":"#64748b"})],
+                   style={"fontSize":"12px","color":"#64748b"}),
+         html.Span(f"  ·  💾 {fmp_cached} FMP responses cached (24h)",
+                   style={"fontSize":"11px","color":"#94a3b8",
+                          "fontFamily":"'DM Mono',monospace"}),
+        ],
         color="success", className="py-2")
 
     return html.Div([table]), status_out
