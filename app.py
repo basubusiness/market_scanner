@@ -742,7 +742,7 @@ def _fetch_stooq(symbol):
         elif symbol.endswith(".SW"): stooq_sym = symbol.replace(".SW", ".CH")
         elif "." not in symbol:     stooq_sym = symbol  # skip .US — let yfinance handle ambiguous tickers
         end   = pd.Timestamp.today()
-        start = end - pd.Timedelta(days=400)
+        start = end - pd.Timedelta(days=800)
         df = pdr.get_data_stooq(stooq_sym, start=start, end=end)
         if df.empty or "Close" not in df.columns:
             return pd.DataFrame()
@@ -779,7 +779,7 @@ def fetch_justetf_chart(isin):
             df.index = pd.to_datetime(df.index)
         df = df.sort_index()
         # Keep last 1 year
-        cutoff = pd.Timestamp.today() - pd.Timedelta(days=400)
+        cutoff = pd.Timestamp.today() - pd.Timedelta(days=800)
         df = df[df.index >= cutoff]
         close = df["Close"].dropna()
         if len(close) < 30:
@@ -918,6 +918,18 @@ def fetch_ticker_data(ticker, isin=None):
         price_slope = linear_slope(close, window=10)
         conf  = min(abs(dist_ma)/20,1)*0.5 + min(abs(50-rsi)/50,1)*0.5
         conf *= 1 - min(vol_pct/5, 0.5)
+        ma200_s_full = close.rolling(200).mean()
+        # MA200 slope: normalised linear slope over last 60 bars
+        # > +0.001 = rising trend, < -0.001 = falling trend, < -0.003 = steep decline
+        _ma200_tail = ma200_s_full.dropna().tail(60)
+        if len(_ma200_tail) >= 20:
+            _y = _ma200_tail.values
+            _x = np.arange(len(_y))
+            _slope_raw = np.polyfit(_x, _y, 1)[0]
+            ma200_slope = float(_slope_raw / (abs(_y.mean()) + 1e-9))
+        else:
+            ma200_slope = 0.0
+
         result = dict(
             price=price, ma50=ma50, ma200=ma200,
             rsi=rsi, rsi_slope=rsi_slope,
@@ -927,9 +939,10 @@ def fetch_ticker_data(ticker, isin=None):
             vol=vol_pct, price_slope=price_slope,
             trend_down_strong=(price_slope < -0.003),
             confidence=conf,
+            ma200_slope=ma200_slope,
             # store full series for deep dive charts
             close=close, ma50_s=close.rolling(50).mean(),
-            ma200_s=close.rolling(200).mean(),
+            ma200_s=ma200_s_full,
             rsi_s=rsi_s, macd_l=macd_l, macd_sig=macd_sig, macd_h=macd_h,
         )
         cache_set(key, result, ttl=3600)
@@ -2530,6 +2543,15 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
                 macd_h2 = macd_l2 - macd_sig2
                 vol2    = float(close.pct_change().rolling(20).std().iloc[-1]*100)
                 h52w    = float(close.tail(252).max())
+                # MA200 slope for justETF path
+                _ma200_tail2 = ma200_s.dropna().tail(60)
+                if len(_ma200_tail2) >= 20:
+                    _y2 = _ma200_tail2.values
+                    _x2 = np.arange(len(_y2))
+                    _sr2 = np.polyfit(_x2, _y2, 1)[0]
+                    _ma200_slope2 = float(_sr2 / (abs(_y2.mean()) + 1e-9))
+                else:
+                    _ma200_slope2 = 0.0
                 raw = {
                     "close": close, "ma50_s": ma50_s, "ma200_s": ma200_s,
                     "rsi_s": rsi_s, "macd_l": macd_l2, "macd_sig": macd_sig2,
@@ -2540,6 +2562,7 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
                     "confidence": min(abs(dist_ma)/20,1)*0.5 + min(abs(50-rsi_val2)/50,1)*0.5,
                     "vol": vol2, "dist_52h": ((price-h52w)/h52w)*100,
                     "ma200": ma200, "trend_down_strong": False,
+                    "ma200_slope": _ma200_slope2,
                     "source": "justETF",
                 }
 
@@ -2563,19 +2586,46 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
     macd_sig = raw["macd_sig"]
     macd_h   = raw["macd_h"]
 
-    cur_p      = raw["price"]
-    curr_sym   = _price_currency(resolved_yf or ticker)
-    dist_ma    = raw["dist_ma"]
-    rsi_val    = raw["rsi"]
-    rsi_rising = raw["rsi_slope"] > 0
-    macd_bull  = raw["macd"] > raw["macd_signal"]
-    macd_accel = raw["macd_hist"] > 0
-    conf       = raw["confidence"]
-    vol        = raw["vol"]
-    dist_52h   = raw["dist_52h"]
-    is_knife   = raw["dist_ma"] < -15 and rsi_val < 35 and raw["trend_down_strong"]
-    reversal   = is_knife and macd_bull and rsi_rising
-    ma200_now  = raw["ma200"]
+    cur_p       = raw["price"]
+    curr_sym    = _price_currency(resolved_yf or ticker)
+    dist_ma     = raw["dist_ma"]
+    rsi_val     = raw["rsi"]
+    rsi_rising  = raw["rsi_slope"] > 0
+    macd_bull   = raw["macd"] > raw["macd_signal"]
+    macd_accel  = raw["macd_hist"] > 0
+    conf        = raw["confidence"]
+    vol         = raw["vol"]
+    dist_52h    = raw["dist_52h"]
+    is_knife    = raw["dist_ma"] < -15 and rsi_val < 35 and raw["trend_down_strong"]
+    reversal    = is_knife and macd_bull and rsi_rising
+    ma200_now   = raw["ma200"]
+    ma200_slope = raw.get("ma200_slope", 0.0)
+
+    # ── MA200 slope interpretation ────────────────────────────────────
+    # Slope is normalised: +0.001 per bar = rising trend, -0.003 = steep decline
+    ma200_trend = (
+        "rising"     if ma200_slope >  0.001 else
+        "falling"    if ma200_slope < -0.001 else
+        "flat"
+    )
+    ma200_steep_down = ma200_slope < -0.003
+
+    # ── Category / strategy flag for ETFs ────────────────────────────
+    HARD_FLAG_KW = ["leveraged","2x ","3x ","4x ","-2x","-3x",
+                    " short ","inverse","daily short","daily long"]
+    SOFT_FLAG_KW = ["carry","volatility","vix","futures","roll",
+                    "enhanced","momentum tilt","swap-based carry"]
+    etf_name_lower = name.lower() if name else ""
+    etf_strat_lower = str(jetf_meta.get("strategy","")).lower()
+    combined_text   = etf_name_lower + " " + etf_strat_lower
+
+    hard_flagged = is_etf and any(kw in combined_text for kw in HARD_FLAG_KW)
+    soft_flagged = is_etf and (not hard_flagged) and any(
+        kw in combined_text for kw in SOFT_FLAG_KW)
+    flag_reason  = next(
+        (kw for kw in HARD_FLAG_KW + SOFT_FLAG_KW if kw.strip() in combined_text),
+        ""
+    ).strip()
     vix        = get_live_vix()
     fg, fg_lbl = get_fg_index()
 
@@ -2635,9 +2685,28 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
         if action2 == "AVOID": score2 -= 2
         if is_knife2:          score2 -= 0.3
         score2 += fund_delta_live
-        # Propagate fundamental-driven action adjustments
+        # Fundamental-driven action adjustments
         if action2 == "WATCH" and fund_delta_live >= 0.08:  action2 = "BUY"
         if action2 == "BUY"   and fund_delta_live <= -0.08: action2 = "WATCH"
+
+        # MA200 slope adjustments — is the long-term trend itself healthy?
+        if ma200_steep_down:
+            score2 -= 0.10
+            if action2 == "BUY":   action2 = "WATCH"   # don't BUY into falling MA200
+            if action2 == "WATCH": action2 = "WAIT"    # steep decline → wait for floor
+        elif ma200_trend == "falling":
+            score2 -= 0.05
+            if action2 == "BUY":   action2 = "WATCH"   # gently falling → downgrade
+        elif ma200_trend == "rising":
+            score2 += 0.05                              # dip into rising trend = ideal
+
+        # Category / strategy hard flag — leveraged/inverse products
+        if hard_flagged:
+            score2 -= 0.20
+            if action2 in ("BUY", "WATCH"): action2 = "AVOID"
+        elif soft_flagged:
+            score2 -= 0.08                              # carry/VIX/futures — soft penalty
+
         new_row = {
             "ticker": ticker, "yf_symbol": resolved_yf or ticker,
             "data_source": "live_deepdive", "price": round(cur_p, 4),
@@ -2728,15 +2797,57 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
     elif sell_score>=40: sell_el = dbc.Alert("⚠️ TRIM — Partial reduction.", color="warning")
     else:                sell_el = dbc.Alert("🟢 HOLD — No sell signal.", color="success")
 
+    # MA200 trend label for KPI card
+    ma200_trend_label = (
+        "↗ Rising"  if ma200_trend == "rising"  else
+        "↘ Falling" if ma200_trend == "falling" else
+        "→ Flat"
+    )
+    ma200_trend_color = (
+        "#00e676" if ma200_trend == "rising"      else
+        "#ff6d00" if ma200_steep_down             else
+        "#ffd600" if ma200_trend == "falling"     else
+        "#e8edf5"
+    )
+
     # ── Metrics
     metrics = dbc.Row([
         dbc.Col(kpi_card("Price",      f"{curr_sym}{cur_p:.2f}"), width=2),
         dbc.Col(kpi_card("vs MA200",   f"{dist_ma:+.1f}%",  "#00e676" if dist_ma<0 else "#ff6d00"), width=2),
+        dbc.Col(kpi_card("MA200 Trend", ma200_trend_label, ma200_trend_color), width=2),
         dbc.Col(kpi_card("RSI",        f"{rsi_val:.1f} {'↗' if rsi_rising else '↘'}"), width=2),
         dbc.Col(kpi_card("MACD",       "▲ Bull" if macd_bull else "▼ Bear", "#00e676" if macd_bull else "#ff6d00"), width=2),
         dbc.Col(kpi_card("52W High",   f"{dist_52h:+.1f}%"), width=2),
-        dbc.Col(kpi_card("Conf",       f"{conf:.2f}"), width=2),
     ], className="g-2 mb-3")
+
+    # ── Warning banners for category flags and MA200 slope ────────────
+    flag_banners = []
+    if hard_flagged:
+        flag_banners.append(dbc.Alert(
+            [html.Strong("⚠️ Strategy warning: "),
+             f"This ETF uses a '{flag_reason}' strategy — leveraged or inverse products "
+             f"can structurally decay over time. Technical dip signals are unreliable here."],
+            color="danger", className="py-2 mb-2"))
+    elif soft_flagged:
+        flag_banners.append(dbc.Alert(
+            [html.Strong("⚠️ Strategy note: "),
+             f"This ETF involves '{flag_reason}' — these strategies can experience "
+             f"structural decay unrelated to broader market cycles. Verify the thesis before acting."],
+            color="warning", className="py-2 mb-2"))
+    if ma200_steep_down:
+        flag_banners.append(dbc.Alert(
+            [html.Strong("📉 MA200 in steep decline — "),
+             f"The 200-day moving average has been falling sharply "
+             f"(slope {ma200_slope:+.4f}). This is a structural downtrend, not a cyclical dip. "
+             f"Wait for MA200 to flatten before considering entry."],
+            color="warning", className="py-2 mb-2"))
+    elif ma200_trend == "falling":
+        flag_banners.append(dbc.Alert(
+            [html.Strong("⚠️ MA200 declining — "),
+             f"Long-term trend is weakening (slope {ma200_slope:+.4f}). "
+             f"Signal downgraded. Look for MA200 to stabilise first."],
+            color="secondary", className="py-2 mb-2"))
+    flag_banner_el = html.Div(flag_banners) if flag_banners else None
 
     # justETF strip
     meta_parts = []
@@ -2927,6 +3038,7 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
     return html.Div([
         html.Hr(style={"borderColor":"#333"}),
         metrics,
+        flag_banner_el,
         links,
         meta_strip,
         fund_row,
