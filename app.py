@@ -1502,6 +1502,285 @@ def fetch_pe_data(ticker):
     cache_set(key, result, ttl=3600)
     return result
 
+def fetch_yf_fundamentals(ticker, timeout=5):
+    """
+    Fetch full fundamental metrics from yfinance for value scoring.
+    Covers all 7 metrics: PE, PEG, P/B, FCF yield, ROE, D/E, rev growth.
+    Uses 5s timeout — partial results returned on timeout.
+    Cached 24h to match FMP TTL.
+    """
+    cache_key = f"yfund_{ticker}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    import concurrent.futures as _cf
+
+    def _get_info():
+        try:
+            t = yf.Ticker(ticker)
+            info = t.info or {}
+            # Also get cashflow for FCF yield computation
+            try:
+                cf = t.cashflow
+                if cf is not None and not cf.empty:
+                    # Free cash flow = Operating CF - Capex
+                    op_cf_row  = [r for r in cf.index if "Operating" in str(r)]
+                    capex_row  = [r for r in cf.index if "Capital" in str(r)]
+                    if op_cf_row and capex_row:
+                        op_cf  = float(cf.loc[op_cf_row[0]].iloc[0])
+                        capex  = float(cf.loc[capex_row[0]].iloc[0])
+                        info["_fcf"] = op_cf + capex  # capex is negative
+            except Exception:
+                pass
+            return info
+        except Exception:
+            return {}
+
+    try:
+        with _cf.ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(_get_info)
+            info = fut.result(timeout=timeout)
+    except Exception:
+        info = {}
+
+    def _sf(v, mn=-1e15, mx=1e15):
+        try:
+            f = float(v)
+            return f if mn <= f <= mx else None
+        except:
+            return None
+
+    pe         = _sf(info.get("trailingPE"),   0, 2000)
+    fwd_pe     = _sf(info.get("forwardPE"),     0, 2000)
+    pb         = _sf(info.get("priceToBook"),   0, 500)
+    roe        = _sf(info.get("returnOnEquity"),-5, 50)
+    de         = _sf(info.get("debtToEquity"),   0, 100)
+    rev_growth = _sf(info.get("revenueGrowth"), -5, 50)
+    eps_growth = _sf(info.get("earningsGrowth"),-5, 50)
+    div_yield  = _sf(info.get("dividendYield"),  0, 1)
+    mcap       = _sf(info.get("marketCap"),      0, 1e15)
+
+    # FCF yield = FCF / market cap
+    fcf_yield = None
+    fcf_raw   = info.get("_fcf") or info.get("freeCashflow")
+    if fcf_raw and mcap and mcap > 0:
+        try:
+            fcf_yield = float(fcf_raw) / mcap
+        except Exception:
+            pass
+
+    # PEG: use yfinance trailingPegRatio if available, else compute
+    peg = _sf(info.get("trailingPegRatio"), 0, 20)
+    if peg is None and pe and eps_growth and eps_growth > 0.01:
+        peg = round(pe / (eps_growth * 100), 2)
+
+    result = {
+        "fmp_pe_ttm":    pe or fwd_pe,
+        "fmp_peg":       peg,
+        "fmp_pb":        pb,
+        "fmp_fcf_yield": fcf_yield,
+        "fmp_roe":       roe,
+        "fmp_debt_eq":   de / 100 if de else None,  # yf returns as %, normalise
+        "fmp_rev_growth":rev_growth,
+        "fmp_eps_growth":eps_growth,
+        "fmp_div_yield": div_yield,
+        "fmp_mcap":      mcap,
+        "_source":       "yfinance",
+    }
+    cache_set(cache_key, result, ttl=86400)
+    return result
+
+
+def fetch_yf_fundamentals_batch(tickers, max_workers=8, timeout=5):
+    """
+    Parallel yfinance fundamental fetch with per-ticker timeout.
+    Returns {ticker: fundamentals_dict}, timed_out: list
+    """
+    results   = {}
+    timed_out = []
+
+    # Check cache first
+    to_fetch = []
+    for t in tickers:
+        cached = cache_get(f"yfund_{t}")
+        if cached is not None:
+            results[t] = cached
+        else:
+            to_fetch.append(t)
+
+    if to_fetch:
+        import concurrent.futures as _cf
+        with _cf.ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futs = {ex.submit(fetch_yf_fundamentals, t, timeout): t
+                    for t in to_fetch}
+            for fut in _cf.as_completed(futs, timeout=timeout + 2):
+                t = futs[fut]
+                try:
+                    results[t] = fut.result()
+                except Exception:
+                    results[t] = {}
+                    timed_out.append(t)
+
+        # Any futures that didn't complete = timed out
+        for fut, t in futs.items():
+            if t not in results:
+                results[t] = {}
+                timed_out.append(t)
+
+    return results, timed_out
+
+
+def fetch_conviction_signals(ticker, timeout=5):
+    """
+    Fetch conviction overlay signals from yfinance:
+    - Insider buying (net purchases last 6m)
+    - Short interest (% of float)
+    - Earnings beat history (last 4 quarters)
+    - Analyst consensus (recommendation mean)
+    Returns dict with conviction_score (0-100) and grade.
+    Cached 24h.
+    """
+    cache_key = f"conv_{ticker}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    import concurrent.futures as _cf
+
+    def _fetch():
+        result = {}
+        t = yf.Ticker(ticker)
+
+        # Analyst consensus (1=Strong Buy → 5=Strong Sell)
+        try:
+            info = t.info or {}
+            rec  = info.get("recommendationMean")
+            n_analysts = info.get("numberOfAnalystOpinions", 0)
+            if rec and n_analysts:
+                result["analyst_mean"]    = float(rec)
+                result["analyst_count"]   = int(n_analysts)
+                result["analyst_buy_pct"] = max(0, round((3.0 - float(rec)) / 2.0 * 100))
+        except Exception:
+            pass
+
+        # Short interest
+        try:
+            si = info.get("shortPercentOfFloat") or info.get("shortRatio")
+            if si:
+                result["short_pct"] = float(si) * 100 if float(si) < 1 else float(si)
+        except Exception:
+            pass
+
+        # Earnings surprise history — last 4 quarters
+        try:
+            eh = t.earnings_history
+            if eh is not None and not eh.empty and "surprisePercent" in eh.columns:
+                surprises = eh["surprisePercent"].dropna().tail(4).tolist()
+                result["earnings_surprises"]   = [round(s, 2) for s in surprises]
+                result["earnings_beat_count"]  = sum(1 for s in surprises if s > 0)
+                result["earnings_beat_avg_pct"]= round(sum(surprises)/len(surprises), 2) if surprises else None
+        except Exception:
+            pass
+
+        # Insider purchases
+        try:
+            ins = t.insider_purchases
+            if ins is not None and not ins.empty:
+                # Net shares purchased (positive = buying, negative = selling)
+                if "Shares" in ins.columns and "Transaction" in ins.columns:
+                    buys  = ins[ins["Transaction"].str.contains("Purchase", na=False)]["Shares"].sum()
+                    sells = ins[ins["Transaction"].str.contains("Sale",     na=False)]["Shares"].sum()
+                    result["insider_net_shares"] = int(buys - sells)
+                    result["insider_buying"]     = buys > sells
+        except Exception:
+            pass
+
+        return result
+
+    try:
+        with _cf.ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(_fetch)
+            raw = fut.result(timeout=timeout)
+    except Exception:
+        raw = {}
+
+    # ── Compute conviction score 0–100 ───────────────────────────────
+    score  = 50  # neutral baseline
+    labels = []
+
+    # Analyst consensus (±20 pts)
+    am = raw.get("analyst_mean")
+    if am is not None:
+        if   am <= 1.5: score += 20; labels.append("Strong analyst Buy")
+        elif am <= 2.2: score += 12; labels.append("Analyst Buy")
+        elif am <= 2.8: score +=  4
+        elif am <= 3.5: score -=  8; labels.append("Analyst Hold")
+        else:           score -= 20; labels.append("Analyst Sell")
+
+    # Short interest (±15 pts)
+    si = raw.get("short_pct")
+    if si is not None:
+        if   si > 30: score -= 15; labels.append(f"High short {si:.0f}%")
+        elif si > 15: score -=  8; labels.append(f"Elevated short {si:.0f}%")
+        elif si <  3: score +=  5
+
+    # Earnings beat streak (±15 pts)
+    beats = raw.get("earnings_beat_count", 0)
+    avg   = raw.get("earnings_beat_avg_pct")
+    if beats == 4:  score += 15; labels.append("4/4 earnings beats")
+    elif beats == 3:score += 10; labels.append("3/4 earnings beats")
+    elif beats <= 1:score -=  8; labels.append("Poor earnings history")
+
+    # Insider buying (±15 pts)
+    if raw.get("insider_buying") is True:
+        score += 15; labels.append("Insider buying")
+    elif raw.get("insider_net_shares", 0) < 0:
+        score -=  8; labels.append("Insider selling")
+
+    score = max(0, min(100, score))
+    grade = "🟢 HIGH" if score >= 70 else "🟡 MED" if score >= 45 else "🔴 LOW"
+
+    conviction = {
+        **raw,
+        "conviction_score": score,
+        "conviction_grade": grade,
+        "conviction_labels": labels,
+    }
+    cache_set(cache_key, conviction, ttl=86400)
+    return conviction
+
+
+def fetch_conviction_batch(tickers, max_workers=6, timeout=5):
+    """Parallel conviction fetch. Only called for tickers passing value threshold."""
+    results = {}
+    import concurrent.futures as _cf
+
+    # Cache check first
+    to_fetch = [t for t in tickers if cache_get(f"conv_{t}") is None]
+    for t in tickers:
+        c = cache_get(f"conv_{t}")
+        if c is not None:
+            results[t] = c
+
+    if to_fetch:
+        with _cf.ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futs = {ex.submit(fetch_conviction_signals, t, timeout): t
+                    for t in to_fetch}
+            for fut in _cf.as_completed(futs, timeout=timeout + 2):
+                t = futs[fut]
+                try:
+                    results[t] = fut.result()
+                except Exception:
+                    results[t] = {"conviction_grade": "—", "conviction_score": 50}
+
+        for fut, t in [(f, futs[f]) for f in futs]:
+            if t not in results:
+                results[t] = {"conviction_grade": "—", "conviction_score": 50}
+
+    return results
+
+
 # ───────────────────────────────────────────────────────────────────
 # UNIVERSE BUILDER
 # ───────────────────────────────────────────────────────────────────
@@ -3633,88 +3912,95 @@ def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
 
     tickers = [t.strip().upper() for t in tickers_raw.replace("\n"," ").split(",")
                if t.strip()]
-    tickers = list(dict.fromkeys(tickers))[:100]  # dedupe, max 100
+    tickers = list(dict.fromkeys(tickers))[:100]
 
-    if not _get_fmp_key():
-        return dbc.Alert(
-            "⚠️ FMP_API_KEY not set. Add it to Railway environment variables to use Value Screen.",
-            color="warning"), ""
+    # ── Data source: FMP if available, yfinance fallback ─────────────
+    use_fmp    = bool(_get_fmp_key())
+    timed_out  = []
 
-    status = dbc.Alert(f"⏳ Screening {len(tickers)} tickers via FMP…", color="info", className="py-1")
+    if use_fmp:
+        fund_batch     = fetch_fmp_value_batch(tickers, max_workers=10)
+        data_src_label = "FMP"
+    else:
+        fund_batch, timed_out = fetch_yf_fundamentals_batch(
+            tickers, max_workers=8, timeout=5)
+        data_src_label = "yfinance"
 
-    # Fetch FMP fundamentals in parallel
-    fmp_batch = fetch_fmp_value_batch(tickers, max_workers=10)
-
-    # Also pull tech signal from signals_df if available
+    # Tech signal from scanner cache
     tech_map = {}
     if not signals_df.empty and "ticker" in signals_df.columns:
         for _, row in signals_df.iterrows():
             tech_map[str(row.get("ticker","")).upper()] = str(row.get("action","WAIT"))
 
-    rows = []
+    def _fmt(v, pct=False, mult=1):
+        if v is None: return "—"
+        try:
+            f = float(v) * mult
+            return f"{f:.1f}%" if pct else f"{f:.2f}"
+        except: return "—"
+
+    # ── First pass: value score + filters ────────────────────────────
+    scored = []
     for t in tickers:
-        fmp = fmp_batch.get(t, {})
-        score, grade, bdown, coverage = compute_value_score(fmp)
+        fund = fund_batch.get(t, {})
+        score, grade, bdown, coverage = compute_value_score(fund)
         if score < (min_score or 0):
             continue
-
         tech_signal = tech_map.get(t, "—")
-        if tech_filter == "BUY" and tech_signal != "BUY":
-            continue
-        if tech_filter == "BUY_WATCH" and tech_signal not in ("BUY","WATCH"):
-            continue
+        if tech_filter == "BUY"       and tech_signal != "BUY":               continue
+        if tech_filter == "BUY_WATCH" and tech_signal not in ("BUY","WATCH"): continue
+        scored.append((t, fund, score, grade, bdown, coverage, tech_signal))
 
-        def _fmt(v, pct=False, mult=1):
-            if v is None: return "—"
-            try:
-                f = float(v) * mult
-                return f"{f:.1f}%" if pct else f"{f:.2f}"
-            except: return "—"
+    if not scored:
+        return dbc.Alert(
+            "No tickers passed the filters. Try lowering Min Value Score or "
+            "relaxing the tech filter.", color="warning"), ""
 
-        mcap = fmp.get("fmp_mcap")
+    # ── Second pass: conviction layer (only for passing tickers) ─────
+    passing    = [t for t,*_ in scored]
+    conv_batch = fetch_conviction_batch(passing, max_workers=6, timeout=5)
+
+    # ── Build rows ────────────────────────────────────────────────────
+    rows = []
+    for t, fund, score, grade, bdown, coverage, tech_signal in scored:
+        conv    = conv_batch.get(t, {})
+        cgrade  = conv.get("conviction_grade", "—")
+        clabels = conv.get("conviction_labels", [])
+        am      = conv.get("analyst_mean")
+        ac      = conv.get("analyst_count", 0)
+        mcap    = fund.get("fmp_mcap")
         mcap_str = (f"${mcap/1e9:.1f}B" if mcap and mcap>=1e9
                     else f"${mcap/1e6:.0f}M" if mcap else "—")
-
         rows.append({
-            "Ticker":      t,
-            "Score":       score,
-            "Grade":       grade,
-            "Coverage":    f"{coverage}/7",
-            "Tech":        tech_signal,
-            "PE":          _fmt(fmp.get("fmp_pe_ttm") or fmp.get("fmp_pe")),
-            "PEG":         _fmt(fmp.get("fmp_peg")),
-            "P/B":         _fmt(fmp.get("fmp_pb")),
-            "FCF Yield":   _fmt(fmp.get("fmp_fcf_yield"), pct=True, mult=100),
-            "ROE":         _fmt(fmp.get("fmp_roe"),       pct=True, mult=100),
-            "D/E":         _fmt(fmp.get("fmp_debt_eq")),
-            "Rev Growth":  _fmt(fmp.get("fmp_rev_growth"), pct=True, mult=100),
-            "MCap":        mcap_str,
+            "Ticker":     t,
+            "Score":      score,
+            "Grade":      grade,
+            "Coverage":   f"{coverage}/7",
+            "Conviction": cgrade,
+            "Tech":       tech_signal,
+            "PE":         _fmt(fund.get("fmp_pe_ttm") or fund.get("fmp_pe")),
+            "PEG":        _fmt(fund.get("fmp_peg")),
+            "P/B":        _fmt(fund.get("fmp_pb")),
+            "FCF Yield":  _fmt(fund.get("fmp_fcf_yield"), pct=True, mult=100),
+            "ROE":        _fmt(fund.get("fmp_roe"),        pct=True, mult=100),
+            "D/E":        _fmt(fund.get("fmp_debt_eq")),
+            "Rev Growth": _fmt(fund.get("fmp_rev_growth"), pct=True, mult=100),
+            "MCap":       mcap_str,
+            "Analyst":    f"{am:.1f} ({ac})" if am and ac else "—",
+            "Short%":     _fmt(conv.get("short_pct"), pct=True, mult=1),
+            "EPS Beats":  (f"{conv.get('earnings_beat_count')}/4"
+                           if conv.get("earnings_beat_count") is not None else "—"),
+            "_labels":    " · ".join(clabels),
         })
-
-    if not rows:
-        return dbc.Alert("No tickers passed the filters. Try lowering Min Value Score or relaxing the tech filter.", color="warning"), ""
 
     df_out = pd.DataFrame(rows).sort_values("Score", ascending=False).reset_index(drop=True)
     df_out.insert(0, "Rank", range(1, len(df_out)+1))
-
-    # Grade colour coding
-    grade_style = {
-        "A": {"color":"#0d9488","fontWeight":"700"},
-        "B": {"color":"#0284c7","fontWeight":"700"},
-        "C": {"color":"#d97706","fontWeight":"600"},
-        "D": {"color":"#dc2626","fontWeight":"600"},
-    }
-    tech_style = {
-        "BUY":   {"color":"#00c853","fontWeight":"700"},
-        "WATCH": {"color":"#00bcd4","fontWeight":"600"},
-        "SELL":  {"color":"#ff1744","fontWeight":"700"},
-        "AVOID": {"color":"#ff6d00","fontWeight":"700"},
-    }
+    display_cols = [c for c in df_out.columns if not c.startswith("_")]
 
     table = dash_table.DataTable(
         id="vs-table",
         data=df_out.to_dict("records"),
-        columns=[{"name":c,"id":c} for c in df_out.columns],
+        columns=[{"name":c,"id":c} for c in display_cols],
         sort_action="native",
         filter_action="native",
         page_size=25,
@@ -3731,73 +4017,65 @@ def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
             "textTransform":"uppercase","letterSpacing":"0.05em",
         },
         style_data_conditional=[
-            # Grade A
-            {"if":{"filter_query":'{Grade} = "A"',"column_id":"Grade"},
-             "color":"#0d9488","fontWeight":"700"},
-            {"if":{"filter_query":'{Grade} = "B"',"column_id":"Grade"},
-             "color":"#0284c7","fontWeight":"700"},
-            {"if":{"filter_query":'{Grade} = "C"',"column_id":"Grade"},
-             "color":"#d97706","fontWeight":"600"},
-            {"if":{"filter_query":'{Grade} = "D"',"column_id":"Grade"},
-             "color":"#dc2626","fontWeight":"600"},
-            # Tech signal
-            {"if":{"filter_query":'{Tech} = "BUY"',"column_id":"Tech"},
-             "color":"#00c853","fontWeight":"700"},
-            {"if":{"filter_query":'{Tech} = "WATCH"',"column_id":"Tech"},
-             "color":"#0284c7","fontWeight":"600"},
-            {"if":{"filter_query":'{Tech} = "SELL"',"column_id":"Tech"},
-             "color":"#dc2626","fontWeight":"700"},
-            # Score bar — highlight top scores
+            {"if":{"filter_query":'{Grade} = "A"',"column_id":"Grade"},  "color":"#0d9488","fontWeight":"700"},
+            {"if":{"filter_query":'{Grade} = "B"',"column_id":"Grade"},  "color":"#0284c7","fontWeight":"700"},
+            {"if":{"filter_query":'{Grade} = "C"',"column_id":"Grade"},  "color":"#d97706","fontWeight":"600"},
+            {"if":{"filter_query":'{Grade} = "D"',"column_id":"Grade"},  "color":"#dc2626","fontWeight":"600"},
+            {"if":{"filter_query":'{Tech} = "BUY"',"column_id":"Tech"},  "color":"#00c853","fontWeight":"700"},
+            {"if":{"filter_query":'{Tech} = "WATCH"',"column_id":"Tech"},"color":"#0284c7","fontWeight":"600"},
+            {"if":{"filter_query":'{Tech} = "SELL"',"column_id":"Tech"}, "color":"#dc2626","fontWeight":"700"},
             {"if":{"filter_query":"{Score} >= 75","column_id":"Score"},
              "background":"#f0fdf4","color":"#0d9488","fontWeight":"700"},
             {"if":{"filter_query":"{Score} >= 55 && {Score} < 75","column_id":"Score"},
              "background":"#eff6ff","color":"#0284c7","fontWeight":"600"},
-            # Stripe alternate rows
             {"if":{"row_index":"odd"},"background":"#f8fafc"},
-            # Coverage colouring — grey for sparse data
-            {"if":{"filter_query":'{Coverage} = "2/7" || {Coverage} = "1/7"',
-                   "column_id":"Coverage"},
+            {"if":{"filter_query":'{Coverage} = "1/7" || {Coverage} = "2/7"',"column_id":"Coverage"},
              "color":"#dc2626","fontSize":"11px"},
             {"if":{"filter_query":'{Coverage} = "3/7"',"column_id":"Coverage"},
              "color":"#d97706","fontSize":"11px"},
             {"if":{"filter_query":'{Coverage} = "4/7"',"column_id":"Coverage"},
              "color":"#0284c7","fontSize":"11px"},
-            {"if":{"filter_query":'{Coverage} = "5/7" || {Coverage} = "6/7" || {Coverage} = "7/7"',
-                   "column_id":"Coverage"},
+            {"if":{"filter_query":'{Coverage} = "5/7" || {Coverage} = "6/7" || {Coverage} = "7/7"',"column_id":"Coverage"},
              "color":"#0d9488","fontSize":"11px"},
         ],
         style_cell_conditional=[
-            {"if":{"column_id":"Ticker"},   "fontWeight":"700","textAlign":"left"},
-            {"if":{"column_id":"Rank"},     "color":"#94a3b8","width":"40px"},
-            {"if":{"column_id":"Coverage"}, "fontSize":"11px","color":"#64748b"},
+            {"if":{"column_id":"Ticker"},     "fontWeight":"700","textAlign":"left"},
+            {"if":{"column_id":"Rank"},       "color":"#94a3b8","width":"40px"},
+            {"if":{"column_id":"Coverage"},   "fontSize":"11px"},
+            {"if":{"column_id":"Conviction"}, "fontSize":"12px"},
         ],
         tooltip_data=[{
-            "Score": {"value":
-                "\n".join([f"{k}: {v}/100" for k,v in
-                           (compute_value_score(fmp_batch.get(r["Ticker"],{}))[2] or {}).items()
-                           if v is not None]),
-                "type":"markdown"}
+            "Score": {
+                "value": "\n".join([f"{k}: {v}/100" for k,v in
+                    (compute_value_score(fund_batch.get(r["Ticker"],{}))[2] or {}).items()
+                    if v is not None]),
+                "type":"markdown"},
+            "Conviction": {
+                "value": r.get("_labels","—") or "No signals",
+                "type":"markdown"},
         } for r in df_out.to_dict("records")],
         tooltip_duration=None,
     )
 
     n_a  = sum(1 for r in rows if r["Grade"]=="A")
     n_b  = sum(1 for r in rows if r["Grade"]=="B")
-    fmp_cached = sum(1 for k in _cache if str(k).startswith("fmp_"))
-    status_out = dbc.Alert(
-        [html.Strong(f"✅ {len(rows)} tickers screened  "),
-         html.Span(f"Grade A: {n_a}  ·  Grade B: {n_b}  ·  "
-                   f"Sorted by Value Score  ·  Hover Score for breakdown",
-                   style={"fontSize":"12px","color":"#64748b"}),
-         html.Span(f"  ·  💾 {fmp_cached} FMP responses cached (24h)",
-                   style={"fontSize":"11px","color":"#94a3b8",
-                          "fontFamily":"'DM Mono',monospace"}),
-        ],
-        color="success", className="py-2")
+    n_hi = sum(1 for r in rows if "HIGH" in str(r.get("Conviction","")))
+    cached_count = sum(1 for k in _cache if str(k).startswith(("fmp_","yfund_","conv_")))
+    to_note = f"  ·  ⏱ {len(timed_out)} timed out" if timed_out else ""
+
+    status_out = dbc.Alert([
+        html.Strong(f"✅ {len(rows)} tickers via {data_src_label}  "),
+        html.Span(
+            f"Grade A: {n_a}  ·  Grade B: {n_b}  ·  🟢 High conviction: {n_hi}"
+            f"  ·  Hover Score/Conviction for details{to_note}",
+            style={"fontSize":"12px","color":"#64748b"}),
+        html.Span(f"  ·  💾 {cached_count} cached (24h)",
+                  style={"fontSize":"11px","color":"#94a3b8",
+                         "fontFamily":"'DM Mono',monospace"}),
+    ], color="success", className="py-2")
 
     return html.Div([table]), status_out
 
-# ───────────────────────────────────────────────────────────────────
 # CALLBACK — Value Screen candidate loader
 # ───────────────────────────────────────────────────────────────────
 
