@@ -2358,13 +2358,6 @@ def show_scanner_context(ticker, tab):
 # CALLBACKS — Deep Dive
 # ───────────────────────────────────────────────────────────────────
 
-@app.callback(
-    Output("dd-results","children"),
-    Input("dd-btn","n_clicks"),
-    State("dd-input","value"),
-    State("dd-budget","value"),
-    prevent_initial_call=True,
-)
 def _price_currency(yf_sym):
     """Infer currency symbol from yfinance ticker suffix."""
     s = str(yf_sym or "")
@@ -2383,6 +2376,13 @@ def _price_currency(yf_sym):
     return "$"
 
 
+@app.callback(
+    Output("dd-results","children"),
+    Input("dd-btn","n_clicks"),
+    State("dd-input","value"),
+    State("dd-budget","value"),
+    prevent_initial_call=True,
+)
 def run_deep_dive(n_clicks, user_input, budget):
     if not n_clicks or not user_input:
         return ""
