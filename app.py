@@ -1644,6 +1644,7 @@ def deepdive_tab():
 
         html.Div(id="dd-from-scanner",className="mb-2"),
         html.Div(id="dd-results"),
+        dcc.Store(id="dd-scanner-store", data={}),
     ])
 
 app.layout = html.Div([
@@ -2345,14 +2346,42 @@ def open_deep_dive(n_clicks, selected_rows, store_data, active_tab):
 
 @app.callback(
     Output("dd-from-scanner","children"),
-    Input("dd-input","value"),
-    State("main-tabs","active_tab"),
+    Input("dd-scanner-store","data"),
 )
-def show_scanner_context(ticker, tab):
-    if tab == "deepdive" and ticker:
-        return dbc.Alert(f"📡 **{ticker}** loaded from Scanner — click Analyse below.",
-                         color="info", className="py-1")
+def show_scanner_context(store):
+    if store and store.get("ticker"):
+        return dbc.Alert(
+            f"📡 **{store['ticker']}** loaded from Scanner — click Analyse below.",
+            color="info", className="py-1")
     return ""
+
+
+@app.callback(
+    Output("dd-scanner-store","data"),
+    Input("goto-dive-btn","n_clicks"),
+    Input("dd-btn","n_clicks"),
+    Input("dd-input","value"),
+    State("main-table","selected_rows"),
+    State("scan-store","data"),
+    State("signal-tabs","active_tab"),
+    prevent_initial_call=True,
+)
+def update_scanner_store(goto_clicks, analyse_clicks, input_val,
+                         selected_rows, store_data, active_tab):
+    from dash import ctx
+    trigger = ctx.triggered_id if ctx.triggered_id else ""
+    # Clear when user types manually or clicks Analyse
+    if trigger in ("dd-btn", "dd-input"):
+        return {}
+    # Set when coming from scanner button
+    if trigger == "goto-dive-btn" and goto_clicks and selected_rows and store_data:
+        import io
+        df  = pd.read_json(io.StringIO(store_data), orient="split")
+        sub = df if active_tab == "all" or not active_tab else df[df["Action"]==active_tab]
+        idx = selected_rows[0]
+        if idx < len(sub):
+            return {"ticker": sub.iloc[idx]["Ticker"]}
+    return {}
 
 # ───────────────────────────────────────────────────────────────────
 # CALLBACKS — Deep Dive
@@ -2686,34 +2715,42 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
         try: return f"{float(v):.{dec}f}"
         except: return "—"
 
-    # Primary fundamentals row (yfinance)
-    pe_val   = pe_data.get("PE","—")
-    beta_val = pe_data.get("Beta","—")
-    div_val  = pe_data.get("Div%","—")
-    mcap_val = pe_data.get("MCap","—")
+    # Primary fundamentals row — ETFs and stocks show different fields
+    def _fund_kpi(label, value):
+        return dbc.Col([
+            html.Div(label, style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600",
+                                   "textTransform":"uppercase","letterSpacing":"0.08em"}),
+            html.Div(str(value), style={"fontSize":"14px","fontWeight":"700","color":"#0f172a",
+                                        "fontFamily":"'DM Mono',monospace"}),
+        ], width="auto", className="me-3")
 
-    fund_row = dbc.Row([
-        dbc.Col([html.Div("PE", style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600",
-                                       "textTransform":"uppercase","letterSpacing":"0.08em"}),
-                 html.Div(str(pe_val), style={"fontSize":"14px","fontWeight":"700","color":"#0f172a",
-                                              "fontFamily":"'DM Mono',monospace"})],
-                width="auto", className="me-3"),
-        dbc.Col([html.Div("Beta", style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600",
-                                         "textTransform":"uppercase","letterSpacing":"0.08em"}),
-                 html.Div(str(beta_val), style={"fontSize":"14px","fontWeight":"700","color":"#0f172a",
-                                                "fontFamily":"'DM Mono',monospace"})],
-                width="auto", className="me-3"),
-        dbc.Col([html.Div("Div%", style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600",
-                                          "textTransform":"uppercase","letterSpacing":"0.08em"}),
-                 html.Div(str(div_val), style={"fontSize":"14px","fontWeight":"700","color":"#0f172a",
-                                               "fontFamily":"'DM Mono',monospace"})],
-                width="auto", className="me-3"),
-        dbc.Col([html.Div("MCap", style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600",
-                                          "textTransform":"uppercase","letterSpacing":"0.08em"}),
-                 html.Div(str(mcap_val), style={"fontSize":"14px","fontWeight":"700","color":"#0f172a",
-                                                "fontFamily":"'DM Mono',monospace"})],
-                width="auto"),
-    ], className="mb-2 align-items-end")
+    if is_etf:
+        # ETFs: show TER, fund size, distribution policy, replication from justETF
+        # yfinance PE/MCap are meaningless for ETFs — skip them
+        ter_val  = (f"{jetf_meta['ter']:.2f}%" if jetf_meta.get("ter") else
+                    pe_data.get("Div%","—"))   # div yield as fallback if TER missing
+        size_val = (f"€{jetf_meta['fund_size_eur']:,.0f}m"
+                    if jetf_meta.get("fund_size_eur") else "—")
+        dist_val = jetf_meta.get("dist_policy","—") or "—"
+        repl_val = jetf_meta.get("replication","—") or "—"
+        fund_row = dbc.Row([
+            _fund_kpi("TER",          ter_val),
+            _fund_kpi("Fund Size",    size_val),
+            _fund_kpi("Distribution", dist_val),
+            _fund_kpi("Replication",  repl_val),
+        ], className="mb-2 align-items-end")
+    else:
+        # Stocks: show PE, Beta, Div%, MCap from yfinance
+        pe_val   = pe_data.get("PE","—")
+        beta_val = pe_data.get("Beta","—")
+        div_val  = pe_data.get("Div%","—")
+        mcap_val = pe_data.get("MCap","—")
+        fund_row = dbc.Row([
+            _fund_kpi("PE",   pe_val),
+            _fund_kpi("Beta", beta_val),
+            _fund_kpi("Div%", div_val),
+            _fund_kpi("MCap", mcap_val),
+        ], className="mb-2 align-items-end")
 
     # FMP second opinion section
     fmp_section = None
