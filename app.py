@@ -2359,28 +2359,20 @@ def show_scanner_context(store):
 @app.callback(
     Output("dd-scanner-store","data"),
     Input("goto-dive-btn","n_clicks"),
-    Input("dd-btn","n_clicks"),
-    Input("dd-input","value"),
     State("main-table","selected_rows"),
     State("scan-store","data"),
     State("signal-tabs","active_tab"),
     prevent_initial_call=True,
 )
-def update_scanner_store(goto_clicks, analyse_clicks, input_val,
-                         selected_rows, store_data, active_tab):
-    from dash import ctx
-    trigger = ctx.triggered_id if ctx.triggered_id else ""
-    # Clear when user types manually or clicks Analyse
-    if trigger in ("dd-btn", "dd-input"):
+def update_scanner_store(goto_clicks, selected_rows, store_data, active_tab):
+    if not goto_clicks or not selected_rows or not store_data:
         return {}
-    # Set when coming from scanner button
-    if trigger == "goto-dive-btn" and goto_clicks and selected_rows and store_data:
-        import io
-        df  = pd.read_json(io.StringIO(store_data), orient="split")
-        sub = df if active_tab == "all" or not active_tab else df[df["Action"]==active_tab]
-        idx = selected_rows[0]
-        if idx < len(sub):
-            return {"ticker": sub.iloc[idx]["Ticker"]}
+    import io
+    df  = pd.read_json(io.StringIO(store_data), orient="split")
+    sub = df if active_tab == "all" or not active_tab else df[df["Action"]==active_tab]
+    idx = selected_rows[0]
+    if idx < len(sub):
+        return {"ticker": sub.iloc[idx]["Ticker"]}
     return {}
 
 # ───────────────────────────────────────────────────────────────────
