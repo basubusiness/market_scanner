@@ -2120,12 +2120,14 @@ def scanner_tab():
                 html.Div(id="top-signals", className="mb-3"),
                 html.Hr(style={"borderColor":"#333"}),
                 dbc.Tabs([
-                    dbc.Tab(label="All",       tab_id="all"),
-                    dbc.Tab(label="🟢 BUY",   tab_id="BUY"),
-                    dbc.Tab(label="👀 WATCH", tab_id="WATCH"),
-                    dbc.Tab(label="⛔ AVOID", tab_id="AVOID"),
-                    dbc.Tab(label="🔴 SELL",  tab_id="SELL"),
-                    dbc.Tab(label="🟡 WAIT",  tab_id="WAIT"),
+                    dbc.Tab(label="All",        tab_id="all"),
+                    dbc.Tab(label="🟢 BUY",    tab_id="BUY"),
+                    dbc.Tab(label="👀 WATCH",  tab_id="WATCH"),
+                    dbc.Tab(label="⛔ AVOID",  tab_id="AVOID"),
+                    dbc.Tab(label="🔴 SELL",   tab_id="SELL"),
+                    dbc.Tab(label="🟡 WAIT",   tab_id="WAIT"),
+                    dbc.Tab(label="💎 Value A", tab_id="VALUE_A"),
+                    dbc.Tab(label="🔷 Value B", tab_id="VALUE_B"),
                 ], id="signal-tabs", active_tab="all", className="mb-2"),
                 html.Div(id="results-table"),
             ]
@@ -2557,6 +2559,8 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
                     "Beta":    f"{beta:.2f}" if beta and str(beta) != 'nan' else "—",
                     "Div%":    f"{div*100:.1f}%" if div and str(div) != 'nan' else "—",
                     "MCap":    f"${mcap/1e9:.1f}B" if mcap and str(mcap) != 'nan' else "—",
+                    "VGrade":  str(r.get("value_grade","")) if pd.notna(r.get("value_grade",None)) and str(r.get("value_grade","")) not in ("","nan","None") else "—",
+                    "VScore":  int(r["value_score"]) if pd.notna(r.get("value_score",None)) and str(r.get("value_score","")) not in ("","nan","None") else None,
                 })
             result_df = pd.DataFrame(rows)
             # Penalise momentum-only signals — rank them below price-data signals
@@ -2796,11 +2800,18 @@ def render_results(store_data, active_tab):
     ], className="g-2")
 
     # Full table — global rank, no re-ranking on tab switch
-    sub = df if active_tab == "all" else df[df["Action"]==active_tab]
+    if active_tab == "all":
+        sub = df
+    elif active_tab == "VALUE_A":
+        sub = df[df["VGrade"] == "A"] if "VGrade" in df.columns else df.iloc[0:0]
+    elif active_tab == "VALUE_B":
+        sub = df[df["VGrade"].isin(["A","B"])] if "VGrade" in df.columns else df.iloc[0:0]
+    else:
+        sub = df[df["Action"] == active_tab]
 
     SHOW_COLS = ["Rank","Ticker","Name","ISIN","Price","MA200","Dist%","52W%",
                  "RSI","RSI↗","MACD","MACD⚡","Vol%","Conf",
-                 "PE","Beta","Div%","MCap",
+                 "PE","Beta","Div%","MCap","VGrade",
                  "Signal","Knife","Allocation"]
     show_cols = [c for c in SHOW_COLS if c in sub.columns]
 
