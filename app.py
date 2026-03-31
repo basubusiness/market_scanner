@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-# Market Decision Engine v10.0 — Dash + Railway
+# Market Decision Engine v10.3 — Dash + Railway
 # ═══════════════════════════════════════════════════════════════════
 
 import dash
@@ -25,7 +25,7 @@ try:
 except ImportError:
     JUSTETF_AVAILABLE = False
 
-APP_VERSION = "v10.2"
+APP_VERSION = "v10.3"
 from datetime import datetime as _datetime
 BUILD_TIME = _datetime.utcnow().strftime("%d %b %H:%M UTC")
 
@@ -1210,27 +1210,53 @@ def fetch_pe_data(ticker):
     cached = cache_get(key)
     if cached is not None:
         return cached
+
+    def _safe(v, mn=0, mx=5000):
+        try:
+            f = float(v)
+            return f if mn < f < mx else None
+        except:
+            return None
+
+    info = {}
+    t = yf.Ticker(ticker)
+
+    # fast_info: lightweight, rarely hangs — get market cap + price
     try:
-        info = yf.Ticker(ticker).info or {}
-        def _safe(v, mn=0, mx=5000):
-            try:
-                f = float(v)
-                return f if mn < f < mx else None
-            except: return None
-        pe   = _safe(info.get("trailingPE"), 0, 2000) or _safe(info.get("forwardPE"), 0, 2000)
-        mcap = _safe(info.get("marketCap"), 0, 1e15)
-        beta = _safe(info.get("beta"), -5, 10)
-        div  = _safe(info.get("dividendYield"), 0, 1)
-        result = {
-            "PE":    round(pe,1) if pe else "—",
-            "Beta":  round(beta,2) if beta else "—",
-            "Div%":  f"{div*100:.2f}%" if div else "—",
-            "MCap":  (f"${mcap/1e9:.1f}B" if mcap >= 1e9 else f"${mcap/1e6:.0f}M") if mcap else "—",
-        }
-        cache_set(key, result, ttl=3600)
-        return result
+        fi = t.fast_info
+        mcap_fast = getattr(fi, "market_cap", None)
+        info["marketCap"] = mcap_fast
     except Exception:
-        return {"PE":"—","Beta":"—","Div%":"—","MCap":"—"}
+        pass
+
+    # Full .info: can hang on obscure tickers — run in thread with 8s timeout
+    import concurrent.futures as _cf
+    def _get_info():
+        try:
+            return t.info or {}
+        except Exception:
+            return {}
+    try:
+        with _cf.ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(_get_info)
+            full = fut.result(timeout=8)
+        info.update(full)
+    except Exception:
+        pass  # timeout or error — use whatever fast_info gave us
+
+    pe   = _safe(info.get("trailingPE"), 0, 2000) or _safe(info.get("forwardPE"), 0, 2000)
+    mcap = _safe(info.get("marketCap"), 0, 1e15)
+    beta = _safe(info.get("beta"), -5, 10)
+    div  = _safe(info.get("dividendYield"), 0, 1)
+
+    result = {
+        "PE":   round(pe, 1) if pe else "—",
+        "Beta": round(beta, 2) if beta else "—",
+        "Div%": f"{div*100:.2f}%" if div else "—",
+        "MCap": (f"${mcap/1e9:.1f}B" if mcap >= 1e9 else f"${mcap/1e6:.0f}M") if mcap else "—",
+    }
+    cache_set(key, result, ttl=3600)
+    return result
 
 # ───────────────────────────────────────────────────────────────────
 # UNIVERSE BUILDER
@@ -2339,9 +2365,44 @@ def show_scanner_context(ticker, tab):
     State("dd-budget","value"),
     prevent_initial_call=True,
 )
+def _price_currency(yf_sym):
+    """Infer currency symbol from yfinance ticker suffix."""
+    s = str(yf_sym or "")
+    eur_sfx = (".DE", ".L", ".AS", ".PA", ".MI", ".BR", ".VI",
+               ".LS", ".ST", ".CO", ".HE", ".OL", ".MC", ".WA")
+    if any(s.endswith(sfx) for sfx in eur_sfx):
+        return "€"
+    if s.endswith(".SW"):
+        return "CHF "
+    if s.endswith(".AX"):
+        return "A$"
+    if s.endswith(".HK"):
+        return "HK$"
+    if s.endswith(".T"):
+        return "¥"
+    return "$"
+
+
 def run_deep_dive(n_clicks, user_input, budget):
     if not n_clicks or not user_input:
         return ""
+    try:
+        return _run_deep_dive_inner(n_clicks, user_input, budget)
+    except Exception as exc:
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[deep_dive ERROR] {exc}", flush=True)
+        print(tb, flush=True)
+        return dbc.Alert([
+            html.Strong("Deep Dive error — "),
+            html.Span(str(exc)),
+            html.Br(),
+            html.Small(tb[:500], style={"fontFamily":"monospace","fontSize":"10px",
+                                         "color":"#94a3b8","whiteSpace":"pre-wrap"}),
+        ], color="danger")
+
+
+def _run_deep_dive_inner(n_clicks, user_input, budget):
     ticker = user_input.strip().upper()
     budget = budget or 1000
 
@@ -2451,6 +2512,7 @@ def run_deep_dive(n_clicks, user_input, budget):
     macd_h   = raw["macd_h"]
 
     cur_p      = raw["price"]
+    curr_sym   = _price_currency(resolved_yf or ticker)
     dist_ma    = raw["dist_ma"]
     rsi_val    = raw["rsi"]
     rsi_rising = raw["rsi_slope"] > 0
@@ -2470,18 +2532,35 @@ def run_deep_dive(n_clicks, user_input, budget):
     global signals_df
     try:
         from datetime import date
-        knife_thr2 = max(-25, -15)
-        is_knife2  = dist_ma < knife_thr2 and rsi_val < 30 and raw["trend_down_strong"]
-        reversal2  = is_knife2 and macd_bull and rsi_rising
-        if is_knife2 and not reversal2:       action2 = "AVOID"
-        elif dist_ma < -10 and rsi_val < 45 and macd_bull and macd_accel: action2 = "BUY"
-        elif dist_ma < -10 and rsi_val < 45 and (macd_bull or rsi_rising): action2 = "WATCH"
-        elif dist_ma < -5  and rsi_val < 35: action2 = "WATCH"
-        elif dist_ma > 10  and rsi_val > 70: action2 = "SELL"
-        else:                                action2 = "WAIT"
-        dist_s2 = min(-dist_ma/30, 1) if dist_ma < 0 else 0
-        score2   = (dist_s2*0.30 + max((50-rsi_val)/50,0)*0.25 +
-                   (0.20 if macd_bull else 0) + (0.10 if macd_accel else 0) + conf*0.15)
+        # Mirror the fixed scoring from build_signals.py
+        # Skip structural collapses (same -55% hard cap as build_signals)
+        if dist_ma < -55:
+            action2, score2 = "AVOID", -2.0
+        else:
+            pass  # classification follows
+        knife_thr2 = -25
+        is_knife2  = (dist_ma < knife_thr2) and (15 < rsi_val < 35) and raw["trend_down_strong"]
+        reversal2  = (is_knife2 and macd_bull and rsi_rising and rsi_val > 25 and not raw["trend_down_strong"])
+        if is_knife2 and not reversal2:
+            action2 = "AVOID"
+        elif (-40 < dist_ma < -10) and (30 <= rsi_val < 48) and macd_bull and macd_accel:
+            action2 = "BUY"
+        elif (-40 < dist_ma < -5) and rsi_val < 48 and (macd_bull or rsi_rising):
+            action2 = "WATCH"
+        elif dist_ma < -40 and rsi_val > 28 and macd_bull and rsi_rising:
+            action2 = "WATCH"
+        elif dist_ma > 10 and rsi_val > 70:
+            action2 = "SELL"
+        else:
+            action2 = "WAIT"
+        sweet2       = -20
+        dist_pen2    = max(0, (-dist_ma - 40) / 30)
+        dist_s2      = max(0, 1 - abs(dist_ma - sweet2) / 25) * (1 - min(dist_pen2, 1))
+        rsi_s2_live  = max((50 - rsi_val) / 50, 0) if rsi_val >= 25 else 0
+        score2       = (dist_s2*0.35 + rsi_s2_live*0.25 +
+                        (0.20 if macd_bull else 0) + (0.10 if macd_accel else 0) + conf*0.10)
+        if action2 == "AVOID": score2 -= 2
+        if is_knife2:          score2 -= 0.3
         new_row = {
             "ticker": ticker, "yf_symbol": resolved_yf or ticker,
             "data_source": "live_deepdive", "price": round(cur_p, 4),
@@ -2574,7 +2653,7 @@ def run_deep_dive(n_clicks, user_input, budget):
 
     # ── Metrics
     metrics = dbc.Row([
-        dbc.Col(kpi_card("Price",      f"${cur_p:.2f}"), width=2),
+        dbc.Col(kpi_card("Price",      f"{curr_sym}{cur_p:.2f}"), width=2),
         dbc.Col(kpi_card("vs MA200",   f"{dist_ma:+.1f}%",  "#00e676" if dist_ma<0 else "#ff6d00"), width=2),
         dbc.Col(kpi_card("RSI",        f"{rsi_val:.1f} {'↗' if rsi_rising else '↘'}"), width=2),
         dbc.Col(kpi_card("MACD",       "▲ Bull" if macd_bull else "▼ Bear", "#00e676" if macd_bull else "#ff6d00"), width=2),
@@ -2666,14 +2745,14 @@ def run_deep_dive(n_clicks, user_input, budget):
             color  = "#0d9488" if upside > 0 else "#dc2626"
             target_items.append(html.Span([
                 html.Span("Analyst Target  ", style={"fontSize":"11px","color":"#64748b"}),
-                html.Span(f"${float(target_mean):.2f}", style={"fontWeight":"700","color":"#0f172a",
+                html.Span(f"{curr_sym}{float(target_mean):.2f}", style={"fontWeight":"700","color":"#0f172a",
                                                                  "fontFamily":"'DM Mono',monospace"}),
                 html.Span(f"  {upside:+.1f}%", style={"color":color,"fontWeight":"600",
                                                         "marginLeft":"4px","fontFamily":"'DM Mono',monospace"}),
             ]))
             if fmp_data.get("fmp_target_low") and fmp_data.get("fmp_target_high"):
                 target_items.append(html.Span(
-                    f"  Range ${float(fmp_data['fmp_target_low']):.2f}–${float(fmp_data['fmp_target_high']):.2f}",
+                    f"  Range {curr_sym}{float(fmp_data['fmp_target_low']):.2f}–{curr_sym}{float(fmp_data['fmp_target_high']):.2f}",
                     style={"fontSize":"11px","color":"#94a3b8","fontFamily":"'DM Mono',monospace"}
                 ))
 
