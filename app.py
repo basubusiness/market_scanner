@@ -1215,7 +1215,173 @@ def fetch_fmp_fundamentals(ticker):
         if upcoming:
             result["fmp_next_earnings"] = upcoming[0].get("date","")
 
+    # Financial growth (revenue + earnings YoY)
+    fg = _fmp_get(f"financial-growth/{base_ticker}", {"limit": 1})
+    if fg and isinstance(fg, list) and fg:
+        g = fg[0]
+        def _f(v):
+            try: return float(v) if v is not None else None
+            except: return None
+        result["fmp_rev_growth"]  = _f(g.get("revenueGrowth"))
+        result["fmp_eps_growth"]  = _f(g.get("epsgrowth") or g.get("epsGrowth"))
+        result["fmp_net_inc_growth"] = _f(g.get("netIncomeGrowth"))
+
+    # PEG ratio — PE / earnings growth rate
+    # Use TTM PE and TTM EPS growth; fall back to FWD PE / analyst growth
+    _pe_for_peg  = result.get("fmp_pe_ttm") or result.get("fmp_pe")
+    _eps_g       = result.get("fmp_eps_growth")
+    if _pe_for_peg and _eps_g and _eps_g > 0.01:
+        result["fmp_peg"] = round(_pe_for_peg / (_eps_g * 100), 2)
+    else:
+        result["fmp_peg"] = None
+
     return result
+
+
+def compute_value_score(fmp):
+    """
+    Compute a 0-100 value score from FMP fundamentals.
+    Returns (score, grade, breakdown_dict).
+    Gracefully handles missing data — missing metrics contribute 0.
+    """
+    if not fmp:
+        return 0, "N/A", {}
+
+    def _f(v):
+        try: return float(v)
+        except: return None
+
+    pe        = _f(fmp.get("fmp_pe_ttm") or fmp.get("fmp_pe"))
+    peg       = _f(fmp.get("fmp_peg"))
+    pb        = _f(fmp.get("fmp_pb"))
+    fcf_yield = _f(fmp.get("fmp_fcf_yield"))   # already a ratio e.g. 0.06 = 6%
+    roe       = _f(fmp.get("fmp_roe"))          # ratio e.g. 0.18 = 18%
+    debt_eq   = _f(fmp.get("fmp_debt_eq"))
+    rev_growth= _f(fmp.get("fmp_rev_growth"))   # ratio e.g. 0.12 = 12%
+    div_yield = _f(fmp.get("fmp_div_yield"))
+    eps_growth= _f(fmp.get("fmp_eps_growth"))
+
+    breakdown = {}
+    total_weight = 0
+    weighted_sum = 0
+
+    def score_metric(name, value, weight, thresholds):
+        """
+        thresholds: list of (max_value, score_0_to_1) sorted ascending.
+        Returns weighted contribution and records in breakdown.
+        """
+        nonlocal total_weight, weighted_sum
+        if value is None:
+            breakdown[name] = None
+            return
+        # Find score by threshold
+        s = 0.0
+        for thresh, pts in thresholds:
+            if value <= thresh:
+                s = pts
+                break
+        else:
+            s = thresholds[-1][1]  # use last bucket if above all thresholds
+        breakdown[name] = round(s * 100)
+        weighted_sum  += s * weight
+        total_weight  += weight
+
+    # ── PE ratio (25%) — lower is cheaper ────────────────────────────
+    # Negative PE = losing money = 0 pts
+    if pe is not None and pe > 0:
+        score_metric("PE", pe, 25, [
+            (10,  1.00), (15,  0.85), (20, 0.70),
+            (25,  0.55), (35,  0.35), (50, 0.15), (999, 0.0),
+        ])
+    elif pe is not None and pe <= 0:
+        breakdown["PE"] = 0
+        total_weight += 25  # penalise loss-making companies
+
+    # ── PEG ratio (20%) — < 1 means growth is cheap ──────────────────
+    if peg is not None and peg > 0:
+        score_metric("PEG", peg, 20, [
+            (0.5, 1.00), (0.8, 0.85), (1.0, 0.70),
+            (1.5, 0.45), (2.0, 0.20), (999, 0.0),
+        ])
+
+    # ── P/B ratio (15%) — below book value is a gift ─────────────────
+    if pb is not None and pb > 0:
+        score_metric("P/B", pb, 15, [
+            (1.0, 1.00), (1.5, 0.80), (2.5, 0.55),
+            (4.0, 0.25), (7.0, 0.10), (999, 0.0),
+        ])
+
+    # ── FCF yield (15%) — higher = more cash generated per $ of price ─
+    if fcf_yield is not None:
+        fcf_pct = fcf_yield * 100  # convert to %
+        score_metric("FCF Yield", fcf_pct, 15, [
+            (-999, 0.0),   # negative FCF = bad
+            (0,    0.05),
+            (2,    0.30),  (4,   0.55), (6,   0.75),
+            (8,    0.90),  (999, 1.00),
+        ])
+
+    # ── ROE (10%) — return on equity ─────────────────────────────────
+    if roe is not None:
+        roe_pct = roe * 100
+        score_metric("ROE", roe_pct, 10, [
+            (0,   0.0),  (5,  0.20), (10, 0.45),
+            (15,  0.65), (20, 0.80), (30, 0.95), (999, 1.00),
+        ])
+
+    # ── Debt/Equity (10%) — lower is safer ───────────────────────────
+    if debt_eq is not None and debt_eq >= 0:
+        score_metric("D/E", debt_eq, 10, [
+            (0.1, 1.00), (0.3, 0.85), (0.7, 0.65),
+            (1.5, 0.35), (3.0, 0.10), (999, 0.0),
+        ])
+
+    # ── Revenue growth (5%) ───────────────────────────────────────────
+    if rev_growth is not None:
+        rev_pct = rev_growth * 100
+        score_metric("Rev Growth", rev_pct, 5, [
+            (-999, 0.0), (0, 0.10), (5, 0.40),
+            (10,   0.65), (15, 0.85), (999, 1.00),
+        ])
+
+    # ── Dividend yield bonus (extra 5 pts if >2%, not in main weight) ─
+    div_bonus = 0
+    if div_yield is not None and div_yield > 0.02:
+        div_bonus = min(5, round(div_yield * 100))  # up to 5 bonus points
+
+    if total_weight == 0:
+        return 0, "N/A", breakdown
+
+    raw_score = (weighted_sum / total_weight) * 100 + div_bonus
+    score = min(100, round(raw_score))
+
+    grade = (
+        "A" if score >= 75 else
+        "B" if score >= 55 else
+        "C" if score >= 35 else
+        "D"
+    )
+    return score, grade, breakdown
+
+
+def fetch_fmp_value_batch(tickers, max_workers=8):
+    """
+    Fetch FMP fundamentals for a list of tickers in parallel.
+    Returns dict: {ticker: fmp_data}
+    Rate-limited to avoid hammering the API.
+    """
+    if not _FMP_KEY:
+        return {}
+    results = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futs = {ex.submit(fetch_fmp_fundamentals, t): t for t in tickers}
+        for fut in as_completed(futs):
+            t = futs[fut]
+            try:
+                results[t] = fut.result()
+            except Exception:
+                results[t] = {}
+    return results
 
 
 def fetch_pe_data(ticker):
@@ -1660,6 +1826,45 @@ def deepdive_tab():
         dcc.Store(id="dd-scanner-store", data={}),
     ])
 
+def value_screener_tab():
+    """Layout for the Value Screener tab."""
+    return html.Div([
+        dbc.Row([
+            dbc.Col([
+                html.Label("Tickers to screen (comma-separated)", className="fw-semibold"),
+                dbc.Textarea(
+                    id="vs-tickers",
+                    placeholder="AAPL, MSFT, GOOGL, META, AMZN, NVDA, TSLA, BRK-B, JPM, JNJ, V, PG, UNH, HD, MA ...",
+                    rows=3, className="mb-2",
+                    style={"fontFamily":"'DM Mono',monospace","fontSize":"12px"},
+                ),
+            ], width=8),
+            dbc.Col([
+                html.Label("Min Value Score", className="fw-semibold"),
+                dbc.Input(id="vs-min-score", type="number", value=50, min=0, max=100, step=5,
+                          className="mb-2"),
+                html.Label("Require tech signal", className="fw-semibold"),
+                dbc.Select(id="vs-tech-filter",
+                    options=[
+                        {"label":"Any","value":"any"},
+                        {"label":"BUY only","value":"BUY"},
+                        {"label":"BUY or WATCH","value":"BUY_WATCH"},
+                    ], value="any", className="mb-2"),
+            ], width=2),
+            dbc.Col([
+                html.Br(),
+                dbc.Button("🔍 Screen", id="vs-btn", color="danger",
+                           className="w-100 mt-1 mb-2"),
+                dbc.Button("📋 S&P 500 Top 50", id="vs-preset-btn", color="outline-secondary",
+                           size="sm", className="w-100"),
+            ], width=2),
+        ], className="mb-3"),
+        html.Div(id="vs-status", className="mb-2"),
+        html.Div(id="vs-results"),
+        dcc.Store(id="vs-store", data={}),
+    ])
+
+
 app.layout = html.Div([
     # Scanning overlay — shown while scan runs
     html.Div([
@@ -1690,8 +1895,9 @@ app.layout = html.Div([
         # Main content
         html.Div([
             dbc.Tabs([
-                dbc.Tab(scanner_tab(), label="🔭 Market Scanner", tab_id="scanner"),
-                dbc.Tab(deepdive_tab(), label="🔬 Deep Dive",     tab_id="deepdive"),
+                dbc.Tab(scanner_tab(),        label="🔭 Market Scanner", tab_id="scanner"),
+                dbc.Tab(deepdive_tab(),        label="🔬 Deep Dive",      tab_id="deepdive"),
+                dbc.Tab(value_screener_tab(), label="💎 Value Screen",   tab_id="valuescreen"),
             ], id="main-tabs", active_tab="scanner"),
         ], style={"flex":"1","padding":"20px","overflowY":"auto","background":"#f8f9fc"}),
     ], style={"display":"flex","height":"100vh","overflow":"hidden"}),
@@ -2751,7 +2957,9 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
     pe_data = pe_data_early  # already fetched above for score writeback
 
     # FMP second opinion — async-style: fetch in background, show if available
-    fmp_data = fetch_fmp_fundamentals(resolved_yf or ticker) if _FMP_KEY else {}
+    fmp_data    = fetch_fmp_fundamentals(resolved_yf or ticker) if _FMP_KEY else {}
+    value_score, value_grade, value_bdown = compute_value_score(fmp_data)
+    value_available = value_score > 0 and not is_etf
 
     # ── Price chart
     fig_price = go.Figure()
@@ -2776,20 +2984,34 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
         margin=dict(l=0,r=0,t=10,b=0), height=260,
         legend=dict(orientation="h",y=1.05))
 
-    # ── Buy decision
-    if is_knife and not reversal:
+    # ── Buy decision (enhanced with value score) ─────────────────────
+    def _val_suffix():
+        if not value_available: return ""
+        if value_grade == "A":  return f" · 🏆 Value A ({value_score}/100)"
+        if value_grade == "B":  return f" · ✅ Value B ({value_score}/100)"
+        if value_grade == "D":  return f" · ⚠️ Expensive ({value_score}/100)"
+        return ""
+
+    if hard_flagged:
+        buy_el = dbc.Alert("⛔ AVOID — Leveraged/inverse strategy. Not suitable for dip buying.", color="danger")
+    elif is_knife and not reversal:
         buy_el = dbc.Alert("⛔ AVOID — Falling knife. Wait for reversal.", color="danger")
     elif entry=="WAIT":
         buy_el = dbc.Alert("⏳ WAIT — Still falling. Let it stabilise.", color="warning")
     elif entry=="WATCH":
         if buy_score>=70:
-            buy_el = dbc.Alert(f"⚖️ PREPARE — Good setup (~€{budget:,.0f})", color="info")
+            buy_el = dbc.Alert(f"⚖️ PREPARE — Good setup (~€{budget:,.0f}){_val_suffix()}", color="info")
         else:
-            buy_el = dbc.Alert("🔍 WATCH — No strong entry yet.", color="secondary")
+            buy_el = dbc.Alert(f"🔍 WATCH — No strong entry yet.{_val_suffix()}", color="secondary")
     else:
-        if buy_score>=70:   buy_el = dbc.Alert(f"🔥 BUY — €{budget*2:,.0f}", color="success")
-        elif buy_score>=40: buy_el = dbc.Alert(f"⚖️ BUY — €{budget:,.0f}", color="success")
-        else:               buy_el = dbc.Alert(f"⚠️ LIGHT — €{budget*0.5:,.0f}", color="warning")
+        if value_available and value_grade == "A" and buy_score >= 60:
+            buy_el = dbc.Alert(f"🏆 CONVICTION BUY — Technically ready + fundamentally cheap · €{budget*2:,.0f}", color="success")
+        elif buy_score>=70:
+            buy_el = dbc.Alert(f"🔥 BUY — €{budget*2:,.0f}{_val_suffix()}", color="success")
+        elif buy_score>=40:
+            buy_el = dbc.Alert(f"⚖️ BUY — €{budget:,.0f}{_val_suffix()}", color="success")
+        else:
+            buy_el = dbc.Alert(f"⚠️ LIGHT — €{budget*0.5:,.0f}{_val_suffix()}", color="warning")
     if reversal:
         buy_el = html.Div([buy_el, dbc.Alert("✅ Reversal confirmed (MACD + RSI turned bullish)", color="success")])
 
@@ -2810,14 +3032,24 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
         "#e8edf5"
     )
 
+    # Value score KPI colour
+    value_color = (
+        "#00e676" if value_grade == "A" else
+        "#00bcd4" if value_grade == "B" else
+        "#ffd600" if value_grade == "C" else
+        "#ff6d00" if value_grade == "D" else
+        "#e8edf5"
+    )
+    value_label = f"{value_score}/100 ({value_grade})" if value_available else "N/A"
+
     # ── Metrics
     metrics = dbc.Row([
-        dbc.Col(kpi_card("Price",      f"{curr_sym}{cur_p:.2f}"), width=2),
-        dbc.Col(kpi_card("vs MA200",   f"{dist_ma:+.1f}%",  "#00e676" if dist_ma<0 else "#ff6d00"), width=2),
+        dbc.Col(kpi_card("Price",       f"{curr_sym}{cur_p:.2f}"), width=2),
+        dbc.Col(kpi_card("vs MA200",    f"{dist_ma:+.1f}%",  "#00e676" if dist_ma<0 else "#ff6d00"), width=2),
         dbc.Col(kpi_card("MA200 Trend", ma200_trend_label, ma200_trend_color), width=2),
-        dbc.Col(kpi_card("RSI",        f"{rsi_val:.1f} {'↗' if rsi_rising else '↘'}"), width=2),
-        dbc.Col(kpi_card("MACD",       "▲ Bull" if macd_bull else "▼ Bear", "#00e676" if macd_bull else "#ff6d00"), width=2),
-        dbc.Col(kpi_card("52W High",   f"{dist_52h:+.1f}%"), width=2),
+        dbc.Col(kpi_card("RSI",         f"{rsi_val:.1f} {'↗' if rsi_rising else '↘'}"), width=2),
+        dbc.Col(kpi_card("MACD",        "▲ Bull" if macd_bull else "▼ Bear", "#00e676" if macd_bull else "#ff6d00"), width=2),
+        dbc.Col(kpi_card("Value Score", value_label, value_color), width=2),
     ], className="g-2 mb-3")
 
     # ── Warning banners for category flags and MA200 slope ────────────
@@ -3035,12 +3267,66 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
         style_header={"background":"#f8f9fc","color":"#00bcd4","fontWeight":"bold","border":"1px solid #2a2a3e"},
     )
 
+    # ── Value breakdown panel ─────────────────────────────────────────
+    value_panel = None
+    if value_available and value_bdown:
+        grade_colors = {"A":"#0d9488","B":"#0284c7","C":"#d97706","D":"#dc2626","N/A":"#94a3b8"}
+        gc = grade_colors.get(value_grade, "#94a3b8")
+        metric_cols = []
+        label_map = {
+            "PE":"P/E","PEG":"PEG","P/B":"P/B",
+            "FCF Yield":"FCF Yield","ROE":"ROE",
+            "D/E":"Debt/Eq","Rev Growth":"Rev Growth",
+        }
+        for m, pts in value_bdown.items():
+            if pts is None: continue
+            bar_color = "#0d9488" if pts>=70 else "#0284c7" if pts>=50 else "#d97706" if pts>=30 else "#dc2626"
+            metric_cols.append(
+                dbc.Col([
+                    html.Div(label_map.get(m,m),
+                             style={"fontSize":"9px","color":"#64748b","fontWeight":"600",
+                                    "textTransform":"uppercase","letterSpacing":"0.06em"}),
+                    html.Div(f"{pts}/100",
+                             style={"fontSize":"13px","fontWeight":"700","color":bar_color,
+                                    "fontFamily":"'DM Mono',monospace"}),
+                ], width="auto", className="me-3")
+            )
+        # Growth context row
+        growth_parts = []
+        if fmp_data.get("fmp_rev_growth") is not None:
+            rg = fmp_data["fmp_rev_growth"]*100
+            growth_parts.append(f"Rev {rg:+.1f}%")
+        if fmp_data.get("fmp_eps_growth") is not None:
+            eg = fmp_data["fmp_eps_growth"]*100
+            growth_parts.append(f"EPS {eg:+.1f}%")
+        if fmp_data.get("fmp_peg") is not None:
+            growth_parts.append(f"PEG {fmp_data['fmp_peg']:.2f}")
+        growth_str = "  ·  ".join(growth_parts)
+
+        value_panel = html.Div([
+            html.Div([
+                html.Span("📊 Value Score  ", style={"fontSize":"10px","fontWeight":"700",
+                                                      "color":gc,"letterSpacing":"0.06em",
+                                                      "textTransform":"uppercase"}),
+                html.Span(f"{value_score}/100", style={"fontSize":"16px","fontWeight":"800",
+                                                         "color":gc,"fontFamily":"'DM Mono',monospace"}),
+                html.Span(f"  Grade {value_grade}", style={"fontSize":"12px","fontWeight":"700",
+                                                             "color":gc,"marginLeft":"6px"}),
+                html.Span(f"  {growth_str}" if growth_str else "",
+                          style={"fontSize":"11px","color":"#64748b","marginLeft":"10px",
+                                 "fontFamily":"'DM Mono',monospace"}),
+            ], className="mb-2"),
+            dbc.Row(metric_cols, className="align-items-end"),
+        ], style={"background":"#f8fafc","border":"1px solid #e2e8f0",
+                  "borderRadius":"6px","padding":"10px 14px","marginBottom":"10px"})
+
     return html.Div([
         html.Hr(style={"borderColor":"#333"}),
         metrics,
         flag_banner_el,
         links,
         meta_strip,
+        value_panel,
         fund_row,
         fmp_section,
         dbc.Row([
@@ -3213,3 +3499,185 @@ def debug_info():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
     app.run(debug=False, host="0.0.0.0", port=port)
+
+# ═══════════════════════════════════════════════════════════════════
+# CALLBACKS — Value Screener
+# ═══════════════════════════════════════════════════════════════════
+
+SP500_TOP50 = [
+    "AAPL","MSFT","NVDA","GOOGL","AMZN","META","BRK-B","LLY","AVGO","TSLA",
+    "WMT","JPM","V","UNH","XOM","ORCL","MA","HD","PG","COST","JNJ","ABBV",
+    "BAC","NFLX","KO","CRM","CVX","MRK","AMD","PEP","ADBE","TMO","ACN","LIN",
+    "MCD","ABT","CSCO","TXN","DIS","DHR","NEE","INTC","PM","IBM","RTX","INTU",
+    "NOW","QCOM","GE","HON",
+]
+
+@app.callback(
+    Output("vs-tickers","value"),
+    Input("vs-preset-btn","n_clicks"),
+    prevent_initial_call=True,
+)
+def load_sp500_preset(n):
+    return ", ".join(SP500_TOP50)
+
+
+@app.callback(
+    Output("vs-results","children"),
+    Output("vs-status","children"),
+    Input("vs-btn","n_clicks"),
+    State("vs-tickers","value"),
+    State("vs-min-score","value"),
+    State("vs-tech-filter","value"),
+    prevent_initial_call=True,
+)
+def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
+    if not n_clicks or not tickers_raw:
+        return "", ""
+
+    tickers = [t.strip().upper() for t in tickers_raw.replace("\n"," ").split(",")
+               if t.strip()]
+    tickers = list(dict.fromkeys(tickers))[:100]  # dedupe, max 100
+
+    if not _FMP_KEY:
+        return dbc.Alert(
+            "⚠️ FMP_API_KEY not set. Add it to Railway environment variables to use Value Screen.",
+            color="warning"), ""
+
+    status = dbc.Alert(f"⏳ Screening {len(tickers)} tickers via FMP…", color="info", className="py-1")
+
+    # Fetch FMP fundamentals in parallel
+    fmp_batch = fetch_fmp_value_batch(tickers, max_workers=10)
+
+    # Also pull tech signal from signals_df if available
+    tech_map = {}
+    if not signals_df.empty and "ticker" in signals_df.columns:
+        for _, row in signals_df.iterrows():
+            tech_map[str(row.get("ticker","")).upper()] = str(row.get("action","WAIT"))
+
+    rows = []
+    for t in tickers:
+        fmp = fmp_batch.get(t, {})
+        score, grade, bdown = compute_value_score(fmp)
+        if score < (min_score or 0):
+            continue
+
+        tech_signal = tech_map.get(t, "—")
+        if tech_filter == "BUY" and tech_signal != "BUY":
+            continue
+        if tech_filter == "BUY_WATCH" and tech_signal not in ("BUY","WATCH"):
+            continue
+
+        def _fmt(v, pct=False, mult=1):
+            if v is None: return "—"
+            try:
+                f = float(v) * mult
+                return f"{f:.1f}%" if pct else f"{f:.2f}"
+            except: return "—"
+
+        mcap = fmp.get("fmp_mcap")
+        mcap_str = (f"${mcap/1e9:.1f}B" if mcap and mcap>=1e9
+                    else f"${mcap/1e6:.0f}M" if mcap else "—")
+
+        rows.append({
+            "Ticker":      t,
+            "Score":       score,
+            "Grade":       grade,
+            "Tech":        tech_signal,
+            "PE":          _fmt(fmp.get("fmp_pe_ttm") or fmp.get("fmp_pe")),
+            "PEG":         _fmt(fmp.get("fmp_peg")),
+            "P/B":         _fmt(fmp.get("fmp_pb")),
+            "FCF Yield":   _fmt(fmp.get("fmp_fcf_yield"), pct=True, mult=100),
+            "ROE":         _fmt(fmp.get("fmp_roe"),       pct=True, mult=100),
+            "D/E":         _fmt(fmp.get("fmp_debt_eq")),
+            "Rev Growth":  _fmt(fmp.get("fmp_rev_growth"), pct=True, mult=100),
+            "MCap":        mcap_str,
+        })
+
+    if not rows:
+        return dbc.Alert("No tickers passed the filters. Try lowering Min Value Score or relaxing the tech filter.", color="warning"), ""
+
+    df_out = pd.DataFrame(rows).sort_values("Score", ascending=False).reset_index(drop=True)
+    df_out.insert(0, "Rank", range(1, len(df_out)+1))
+
+    # Grade colour coding
+    grade_style = {
+        "A": {"color":"#0d9488","fontWeight":"700"},
+        "B": {"color":"#0284c7","fontWeight":"700"},
+        "C": {"color":"#d97706","fontWeight":"600"},
+        "D": {"color":"#dc2626","fontWeight":"600"},
+    }
+    tech_style = {
+        "BUY":   {"color":"#00c853","fontWeight":"700"},
+        "WATCH": {"color":"#00bcd4","fontWeight":"600"},
+        "SELL":  {"color":"#ff1744","fontWeight":"700"},
+        "AVOID": {"color":"#ff6d00","fontWeight":"700"},
+    }
+
+    table = dash_table.DataTable(
+        id="vs-table",
+        data=df_out.to_dict("records"),
+        columns=[{"name":c,"id":c} for c in df_out.columns],
+        sort_action="native",
+        filter_action="native",
+        page_size=25,
+        style_table={"overflowX":"auto"},
+        style_cell={
+            "background":"#ffffff","color":"#0f172a",
+            "border":"1px solid #e2e8f0","fontSize":"12px",
+            "padding":"8px 12px","fontFamily":"'DM Mono',monospace",
+            "textAlign":"center",
+        },
+        style_header={
+            "background":"#f1f5f9","color":"#475569","fontWeight":"700",
+            "border":"1px solid #e2e8f0","fontSize":"11px",
+            "textTransform":"uppercase","letterSpacing":"0.05em",
+        },
+        style_data_conditional=[
+            # Grade A
+            {"if":{"filter_query":'{Grade} = "A"',"column_id":"Grade"},
+             "color":"#0d9488","fontWeight":"700"},
+            {"if":{"filter_query":'{Grade} = "B"',"column_id":"Grade"},
+             "color":"#0284c7","fontWeight":"700"},
+            {"if":{"filter_query":'{Grade} = "C"',"column_id":"Grade"},
+             "color":"#d97706","fontWeight":"600"},
+            {"if":{"filter_query":'{Grade} = "D"',"column_id":"Grade"},
+             "color":"#dc2626","fontWeight":"600"},
+            # Tech signal
+            {"if":{"filter_query":'{Tech} = "BUY"',"column_id":"Tech"},
+             "color":"#00c853","fontWeight":"700"},
+            {"if":{"filter_query":'{Tech} = "WATCH"',"column_id":"Tech"},
+             "color":"#0284c7","fontWeight":"600"},
+            {"if":{"filter_query":'{Tech} = "SELL"',"column_id":"Tech"},
+             "color":"#dc2626","fontWeight":"700"},
+            # Score bar — highlight top scores
+            {"if":{"filter_query":"{Score} >= 75","column_id":"Score"},
+             "background":"#f0fdf4","color":"#0d9488","fontWeight":"700"},
+            {"if":{"filter_query":"{Score} >= 55 && {Score} < 75","column_id":"Score"},
+             "background":"#eff6ff","color":"#0284c7","fontWeight":"600"},
+            # Stripe alternate rows
+            {"if":{"row_index":"odd"},"background":"#f8fafc"},
+        ],
+        style_cell_conditional=[
+            {"if":{"column_id":"Ticker"},"fontWeight":"700","textAlign":"left"},
+            {"if":{"column_id":"Rank"},  "color":"#94a3b8","width":"40px"},
+        ],
+        tooltip_data=[{
+            "Score": {"value":
+                "\n".join([f"{k}: {v}/100" for k,v in
+                           (compute_value_score(fmp_batch.get(r["Ticker"],{}))[2] or {}).items()
+                           if v is not None]),
+                "type":"markdown"}
+        } for r in df_out.to_dict("records")],
+        tooltip_duration=None,
+    )
+
+    n_a  = sum(1 for r in rows if r["Grade"]=="A")
+    n_b  = sum(1 for r in rows if r["Grade"]=="B")
+    status_out = dbc.Alert(
+        [html.Strong(f"✅ {len(rows)} tickers screened  "),
+         html.Span(f"Grade A: {n_a}  ·  Grade B: {n_b}  ·  "
+                   f"Sorted by Value Score  ·  Hover Score for breakdown",
+                   style={"fontSize":"12px","color":"#64748b"})],
+        color="success", className="py-2")
+
+    return html.Div([table]), status_out
