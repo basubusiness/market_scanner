@@ -642,6 +642,41 @@ def load_signals():
 
 signals_df = load_signals()
 
+# ── Backfill value_grade from existing fundamentals if column missing ─
+# Allows Value A/B tabs to work immediately without a full rebuild.
+# Uses whatever fundamentals are already in signals.csv (pe, pb, div, etc.)
+if not signals_df.empty and "value_grade" not in signals_df.columns:
+    def _backfill_value_grades(df):
+        grades, scores = [], []
+        for _, r in df.iterrows():
+            try:
+                # Build a partial fund dict from existing columns
+                pe  = float(r["pe_ratio"])  if pd.notna(r.get("pe_ratio"))  else None
+                pb  = float(r["pb_ratio"])  if pd.notna(r.get("pb_ratio"))  else None
+                div = float(r["div_yield"]) if pd.notna(r.get("div_yield")) else None
+                mc  = float(r["market_cap"])if pd.notna(r.get("market_cap"))else None
+                beta= float(r["beta"])      if pd.notna(r.get("beta"))      else None
+                fund = {
+                    "fmp_pe_ttm": pe, "fmp_pb": pb,
+                    "fmp_div_yield": div, "fmp_mcap": mc,
+                }
+                asset_type = str(r.get("type","Stock"))
+                s, g, _, _ = compute_value_score(fund) if asset_type == "Stock" else (None, None, {}, 0)
+                grades.append(g)
+                scores.append(s)
+            except Exception:
+                grades.append(None)
+                scores.append(None)
+        df = df.copy()
+        df["value_grade"] = grades
+        df["value_score"] = scores
+        n_graded = sum(1 for g in grades if g is not None)
+        print(f"[signals] Backfilled value grades: {n_graded:,} stocks graded "
+              f"(A:{grades.count('A')} B:{grades.count('B')} C:{grades.count('C')} D:{grades.count('D')})",
+              flush=True)
+        return df
+    signals_df = _backfill_value_grades(signals_df)
+
 # Pre-warm suffix cache for top justETF tickers in background
 def _prewarm_suffix_cache():
     if jetf_df.empty:
