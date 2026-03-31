@@ -642,38 +642,54 @@ def load_signals():
 
 signals_df = load_signals()
 
-# ── Backfill value_grade from existing fundamentals if column missing ─
-# Allows Value A/B tabs to work immediately without a full rebuild.
-# Uses whatever fundamentals are already in signals.csv (pe, pb, div, etc.)
+# ── Backfill value_grade if column missing ───────────────────────────
+# Uses extended columns if present (new builder), falls back to basic ones.
 if not signals_df.empty and "value_grade" not in signals_df.columns:
     def _backfill_value_grades(df):
         grades, scores = [], []
         for _, r in df.iterrows():
             try:
-                # Build a partial fund dict from existing columns
-                pe  = float(r["pe_ratio"])  if pd.notna(r.get("pe_ratio"))  else None
-                pb  = float(r["pb_ratio"])  if pd.notna(r.get("pb_ratio"))  else None
-                div = float(r["div_yield"]) if pd.notna(r.get("div_yield")) else None
-                mc  = float(r["market_cap"])if pd.notna(r.get("market_cap"))else None
-                beta= float(r["beta"])      if pd.notna(r.get("beta"))      else None
-                fund = {
-                    "fmp_pe_ttm": pe, "fmp_pb": pb,
-                    "fmp_div_yield": div, "fmp_mcap": mc,
-                }
                 asset_type = str(r.get("type","Stock"))
-                s, g, _, _ = compute_value_score(fund) if asset_type == "Stock" else (None, None, {}, 0)
-                grades.append(g)
-                scores.append(s)
+                if asset_type != "Stock":
+                    grades.append(None); scores.append(None); continue
+                def _f(col):
+                    v = r.get(col)
+                    try: return float(v) if pd.notna(v) and v not in ("","nan","None") else None
+                    except: return None
+                # Use whatever columns are available — new builder has more
+                pe  = _f("pe_ratio")
+                pb  = _f("pb_ratio")
+                div = _f("div_yield")
+                mc  = _f("market_cap")
+                roe = _f("roe")
+                de  = _f("debt_equity")
+                fcf = _f("fcf_yield")
+                rev = _f("rev_growth")
+                peg = _f("peg")
+                fund = {
+                    "fmp_pe_ttm":    pe,
+                    "fmp_pb":        pb,
+                    "fmp_div_yield": div,
+                    "fmp_mcap":      mc,
+                    "fmp_roe":       roe,
+                    "fmp_debt_eq":   de,
+                    "fmp_fcf_yield": fcf,
+                    "fmp_rev_growth":rev,
+                    "fmp_peg":       peg,
+                }
+                s, g, _, _ = compute_value_score(fund)
+                grades.append(g); scores.append(s)
             except Exception:
-                grades.append(None)
-                scores.append(None)
+                grades.append(None); scores.append(None)
         df = df.copy()
         df["value_grade"] = grades
         df["value_score"] = scores
-        n_graded = sum(1 for g in grades if g is not None)
-        print(f"[signals] Backfilled value grades: {n_graded:,} stocks graded "
-              f"(A:{grades.count('A')} B:{grades.count('B')} C:{grades.count('C')} D:{grades.count('D')})",
-              flush=True)
+        graded = [g for g in grades if g]
+        from collections import Counter
+        dist = Counter(graded)
+        print(f"[signals] Value grades backfilled: {len(graded):,} stocks "
+              f"(A:{dist.get('A',0)} B:{dist.get('B',0)} "
+              f"C:{dist.get('C',0)} D:{dist.get('D',0)})", flush=True)
         return df
     signals_df = _backfill_value_grades(signals_df)
 
@@ -2161,8 +2177,8 @@ def scanner_tab():
                     dbc.Tab(label="⛔ AVOID",  tab_id="AVOID"),
                     dbc.Tab(label="🔴 SELL",   tab_id="SELL"),
                     dbc.Tab(label="🟡 WAIT",   tab_id="WAIT"),
-                    dbc.Tab(label="💎 Value A", tab_id="VALUE_A"),
-                    dbc.Tab(label="🔷 Value B", tab_id="VALUE_B"),
+                    dbc.Tab(label="💎 Value A", tab_id="VALUE_A", id="tab-value-a"),
+                    dbc.Tab(label="🔷 Value B", tab_id="VALUE_B", id="tab-value-b"),
                 ], id="signal-tabs", active_tab="all", className="mb-2"),
                 html.Div(id="results-table"),
             ]
@@ -2838,9 +2854,33 @@ def render_results(store_data, active_tab):
     if active_tab == "all":
         sub = df
     elif active_tab == "VALUE_A":
-        sub = df[df["VGrade"] == "A"] if "VGrade" in df.columns else df.iloc[0:0]
+        if "VGrade" in df.columns:
+            sub = df[df["VGrade"] == "A"]
+            if sub.empty:
+                # No A grades in this scan — show message
+                return kpis, top, dbc.Alert(
+                    "💎 No Grade A stocks in current scan. "
+                    "Run build_signals.py locally and commit the new signals.csv to populate this tab. "
+                    "Grade A = Value Score ≥ 75 (PE < 15, P/B < 1.5, FCF yield > 6%, ROE > 20%).",
+                    color="info", className="mt-3")
+        else:
+            return kpis, top, dbc.Alert(
+                "💎 Value grades not yet computed. "
+                "Run build_signals.py locally and commit signals.csv, then redeploy.",
+                color="info", className="mt-3")
     elif active_tab == "VALUE_B":
-        sub = df[df["VGrade"].isin(["A","B"])] if "VGrade" in df.columns else df.iloc[0:0]
+        if "VGrade" in df.columns:
+            sub = df[df["VGrade"].isin(["A","B"])]
+            if sub.empty:
+                return kpis, top, dbc.Alert(
+                    "🔷 No Grade A or B stocks in current scan. "
+                    "Run build_signals.py locally and commit the new signals.csv.",
+                    color="info", className="mt-3")
+        else:
+            return kpis, top, dbc.Alert(
+                "🔷 Value grades not yet computed. "
+                "Run build_signals.py locally and commit signals.csv, then redeploy.",
+                color="info", className="mt-3")
     else:
         sub = df[df["Action"] == active_tab]
 
