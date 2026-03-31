@@ -1834,6 +1834,19 @@ def deepdive_tab():
 def value_screener_tab():
     """Layout for the Value Screener tab."""
     return html.Div([
+        # ── Candidate loader bar ─────────────────────────────────────
+        dbc.Row([
+            dbc.Col([
+                html.Span("🎯 Load from scanner cache: ", className="small text-muted me-2"),
+                dbc.Button("📡 Stock candidates (BUY/WATCH dips)",
+                           id="vs-candidates-btn", color="outline-primary",
+                           size="sm", className="me-2"),
+                html.Span(id="vs-candidate-info",
+                          className="small text-muted",
+                          style={"fontFamily":"'DM Mono',monospace"}),
+            ], width=12),
+        ], className="mb-2"),
+
         dbc.Row([
             dbc.Col([
                 html.Label("Tickers to screen (comma-separated)", className="fw-semibold"),
@@ -3686,3 +3699,81 @@ def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
         color="success", className="py-2")
 
     return html.Div([table]), status_out
+
+# ───────────────────────────────────────────────────────────────────
+# CALLBACK — Value Screen candidate loader
+# ───────────────────────────────────────────────────────────────────
+
+@app.callback(
+    Output("vs-tickers", "value"),
+    Output("vs-candidate-info", "children"),
+    Input("vs-candidates-btn", "n_clicks"),
+    Input("vs-preset-btn", "n_clicks"),
+    prevent_initial_call=True,
+)
+def load_vs_candidates(cand_clicks, preset_clicks):
+    from dash import ctx
+    trigger = ctx.triggered_id if ctx.triggered_id else ""
+
+    if trigger == "vs-preset-btn":
+        return ", ".join(SP500_TOP50), f"{len(SP500_TOP50)} tickers loaded"
+
+    # ── Load candidates from signals_df cache ─────────────────────
+    if signals_df.empty or "ticker" not in signals_df.columns:
+        return "", "⚠️ No scanner cache yet — run a scan first"
+
+    df = signals_df.copy()
+
+    # Stocks only — ETFs have no FMP fundamentals
+    if "type" in df.columns:
+        df = df[df["type"] == "Stock"]
+    else:
+        # Fallback: exclude known ETF tickers by checking universe
+        if not universe.empty and "type" in universe.columns:
+            etf_tickers = set(universe[universe["type"] == "ETF"]["ticker"].str.upper())
+            df = df[~df["ticker"].str.upper().isin(etf_tickers)]
+
+    # Filter: BUY or WATCH action
+    if "action" in df.columns:
+        df = df[df["action"].isin(["BUY", "WATCH"])]
+
+    # Filter: meaningful dip range — not a collapse, not barely moved
+    if "dist_ma200" in df.columns:
+        dm = pd.to_numeric(df["dist_ma200"], errors="coerce")
+        df = df[(dm >= -40) & (dm <= -5)]
+
+    # Filter: RSI in oversold-to-neutral range
+    if "rsi" in df.columns:
+        rsi = pd.to_numeric(df["rsi"], errors="coerce")
+        df = df[(rsi >= 25) & (rsi <= 55)]
+
+    # Filter: exclude penny stocks (price < $1)
+    if "price" in df.columns:
+        price = pd.to_numeric(df["price"], errors="coerce")
+        df = df[price >= 1.0]
+
+    # Sort by score descending, take top 60
+    if "score" in df.columns:
+        df = df.sort_values("score", ascending=False)
+    df = df.head(60)
+
+    if df.empty:
+        return "", "No stock candidates found in cache — run Market Scanner first"
+
+    # Use yf_symbol if available (FMP needs clean base ticker)
+    if "yf_symbol" in df.columns:
+        tickers = df["yf_symbol"].fillna(df["ticker"]).str.split(".").str[0].str.upper()
+    else:
+        tickers = df["ticker"].str.upper()
+
+    tickers = tickers.drop_duplicates().tolist()
+
+    # Annotate with action counts for info label
+    n_buy   = int((df["action"] == "BUY").sum())  if "action" in df.columns else 0
+    n_watch = int((df["action"] == "WATCH").sum()) if "action" in df.columns else 0
+
+    info = (f"{len(tickers)} candidates loaded  ·  "
+            f"🟢 {n_buy} BUY  👀 {n_watch} WATCH  ·  "
+            f"dist MA200 -5% to -40%  ·  RSI 25–55")
+
+    return ", ".join(tickers), info
