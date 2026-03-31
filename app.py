@@ -3200,22 +3200,6 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
     )
     ma200_steep_down = ma200_slope < -0.003
 
-    # ── Category / strategy flag for ETFs ────────────────────────────
-    HARD_FLAG_KW = ["leveraged","2x ","3x ","4x ","-2x","-3x",
-                    " short ","inverse","daily short","daily long"]
-    SOFT_FLAG_KW = ["carry","volatility","vix","futures","roll",
-                    "enhanced","momentum tilt","swap-based carry"]
-    etf_name_lower = name.lower() if name else ""
-    etf_strat_lower = str(jetf_meta.get("strategy","")).lower()
-    combined_text   = etf_name_lower + " " + etf_strat_lower
-
-    hard_flagged = is_etf and any(kw in combined_text for kw in HARD_FLAG_KW)
-    soft_flagged = is_etf and (not hard_flagged) and any(
-        kw in combined_text for kw in SOFT_FLAG_KW)
-    flag_reason  = next(
-        (kw for kw in HARD_FLAG_KW + SOFT_FLAG_KW if kw.strip() in combined_text),
-        ""
-    ).strip()
     vix        = get_live_vix()
     fg, fg_lbl = get_fg_index()
 
@@ -3336,6 +3320,23 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
     isin = isin or isin_found
     if not jetf_df.empty and ticker in jetf_df["ticker"].values:
         jetf_meta = jetf_df[jetf_df["ticker"]==ticker].iloc[0].to_dict()
+
+    # ── Category / strategy flag for ETFs (needs name + jetf_meta) ───
+    HARD_FLAG_KW = ["leveraged","2x ","3x ","4x ","-2x","-3x",
+                    " short ","inverse","daily short","daily long"]
+    SOFT_FLAG_KW = ["carry","volatility","vix","futures","roll",
+                    "enhanced","momentum tilt","swap-based carry"]
+    etf_name_lower  = name.lower() if name else ""
+    etf_strat_lower = str(jetf_meta.get("strategy","")).lower()
+    combined_text   = etf_name_lower + " " + etf_strat_lower
+
+    hard_flagged = is_etf and any(kw in combined_text for kw in HARD_FLAG_KW)
+    soft_flagged = is_etf and (not hard_flagged) and any(
+        kw in combined_text for kw in SOFT_FLAG_KW)
+    flag_reason  = next(
+        (kw for kw in HARD_FLAG_KW + SOFT_FLAG_KW if kw.strip() in combined_text),
+        ""
+    ).strip()
 
     # PE data (yfinance primary)
     pe_data = pe_data_early  # already fetched above for score writeback
