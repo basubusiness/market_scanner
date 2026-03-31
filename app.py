@@ -3342,8 +3342,26 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
 
     # FMP second opinion — async-style: fetch in background, show if available
     fmp_data    = fetch_fmp_fundamentals(resolved_yf or ticker) if _get_fmp_key() else {}
-    value_score, value_grade, value_bdown, value_coverage = compute_value_score(fmp_data)
+
+    # For value score: use yfinance fundamentals if FMP has no coverage
+    _yf_fund = {}
+    if not is_etf:
+        _cached_yfund = cache_get(f"yfund_{resolved_yf or ticker}")
+        if _cached_yfund:
+            _yf_fund = _cached_yfund
+        elif not fmp_data:
+            _yf_fund = fetch_yf_fundamentals(resolved_yf or ticker, timeout=6)
+
+    # Merge: FMP takes priority where available, yfinance fills gaps
+    _combined_fund = {**_yf_fund, **fmp_data}
+    value_score, value_grade, value_bdown, value_coverage = compute_value_score(_combined_fund)
     value_available = value_score > 0 and not is_etf
+
+    # Conviction signals (cached 24h — analyst, short interest, EPS beats, insider)
+    conviction = {} if is_etf else fetch_conviction_signals(resolved_yf or ticker, timeout=6)
+    conv_grade  = conviction.get("conviction_grade", "—")
+    conv_labels = conviction.get("conviction_labels", [])
+    conv_score  = conviction.get("conviction_score", 50)
 
     # ── Price chart
     fig_price = go.Figure()
@@ -3707,12 +3725,78 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
         ], style={"background":"#f8fafc","border":"1px solid #e2e8f0",
                   "borderRadius":"6px","padding":"10px 14px","marginBottom":"10px"})
 
+    # ── Conviction panel ──────────────────────────────────────────────
+    conviction_panel = None
+    if not is_etf and conviction:
+        c_color = "#0d9488" if "HIGH" in conv_grade else "#d97706" if "MED" in conv_grade else "#dc2626" if "LOW" in conv_grade else "#94a3b8"
+        c_items = []
+
+        # Analyst consensus
+        am = conviction.get("analyst_mean")
+        ac = conviction.get("analyst_count", 0)
+        if am and ac:
+            am_label = ("Strong Buy" if am<=1.5 else "Buy" if am<=2.2
+                        else "Hold" if am<=3.2 else "Underperform" if am<=4 else "Sell")
+            am_color = "#0d9488" if am<=2.2 else "#d97706" if am<=3.2 else "#dc2626"
+            c_items.append(html.Div([
+                html.Span("Analyst  ", style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600","textTransform":"uppercase"}),
+                html.Span(f"{am_label} ({am:.1f})", style={"fontSize":"13px","fontWeight":"700","color":am_color,"fontFamily":"'DM Mono',monospace"}),
+                html.Span(f"  {ac} analysts", style={"fontSize":"10px","color":"#94a3b8"}),
+            ], className="me-4"))
+
+        # Short interest
+        si = conviction.get("short_pct")
+        if si is not None:
+            si_color = "#dc2626" if si>25 else "#d97706" if si>12 else "#64748b"
+            c_items.append(html.Div([
+                html.Span("Short Interest  ", style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600","textTransform":"uppercase"}),
+                html.Span(f"{si:.1f}%", style={"fontSize":"13px","fontWeight":"700","color":si_color,"fontFamily":"'DM Mono',monospace"}),
+            ], className="me-4"))
+
+        # EPS beats
+        beats = conviction.get("earnings_beat_count")
+        avg_beat = conviction.get("earnings_beat_avg_pct")
+        if beats is not None:
+            b_color = "#0d9488" if beats>=3 else "#d97706" if beats==2 else "#dc2626"
+            c_items.append(html.Div([
+                html.Span("EPS Beats  ", style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600","textTransform":"uppercase"}),
+                html.Span(f"{beats}/4 qtrs", style={"fontSize":"13px","fontWeight":"700","color":b_color,"fontFamily":"'DM Mono',monospace"}),
+                html.Span(f"  avg {avg_beat:+.1f}%" if avg_beat else "",
+                          style={"fontSize":"10px","color":"#94a3b8"}),
+            ], className="me-4"))
+
+        # Insider buying
+        ins_buy = conviction.get("insider_buying")
+        if ins_buy is not None:
+            ins_color = "#0d9488" if ins_buy else "#dc2626"
+            ins_label = "Buying" if ins_buy else "Selling"
+            c_items.append(html.Div([
+                html.Span("Insiders  ", style={"fontSize":"9px","color":"#94a3b8","fontWeight":"600","textTransform":"uppercase"}),
+                html.Span(ins_label, style={"fontSize":"13px","fontWeight":"700","color":ins_color,"fontFamily":"'DM Mono',monospace"}),
+            ], className="me-4"))
+
+        if c_items:
+            conviction_panel = html.Div([
+                html.Div([
+                    html.Span("🎯 Conviction  ", style={"fontSize":"10px","fontWeight":"700",
+                                                         "color":c_color,"letterSpacing":"0.06em",
+                                                         "textTransform":"uppercase"}),
+                    html.Span(conv_grade, style={"fontSize":"14px","fontWeight":"800","color":c_color,
+                                                  "fontFamily":"'DM Mono',monospace","marginRight":"10px"}),
+                    html.Span(" · ".join(conv_labels) if conv_labels else "",
+                              style={"fontSize":"10px","color":"#94a3b8"}),
+                ], className="mb-2"),
+                html.Div(c_items, style={"display":"flex","flexWrap":"wrap","alignItems":"flex-end"}),
+            ], style={"background":"#fafafa","border":"1px solid #e2e8f0",
+                      "borderRadius":"6px","padding":"10px 14px","marginBottom":"10px"})
+
     return html.Div([
         html.Hr(style={"borderColor":"#333"}),
         metrics,
         flag_banner_el,
         links,
         meta_strip,
+        conviction_panel,
         value_panel,
         fund_row,
         fmp_section,
