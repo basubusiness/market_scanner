@@ -2423,6 +2423,37 @@ def run_deep_dive(n_clicks, user_input, budget):
         ], color="danger")
 
 
+def _fundamental_score_adjustment(pe=None, pb=None, div=None,
+                                   eps=None, mc=None, beta=None,
+                                   asset_type="Stock"):
+    """Score delta [-0.15, +0.15] from fundamentals. Zero when data missing."""
+    if asset_type == "ETF":
+        return 0.0
+    delta = 0.0
+    if pe  is not None:
+        if   pe <= 0:       delta -= 0.06
+        elif pe < 12:       delta += 0.04
+        elif pe < 25:       delta += 0.02
+        elif pe >= 50:      delta -= 0.04
+    if pb  is not None:
+        if   pb <= 0:       delta -= 0.02
+        elif pb < 1.5:      delta += 0.02
+        elif pb > 4:        delta -= 0.03
+    if eps is not None:
+        delta += 0.02 if eps > 0 else -0.03
+    if div is not None:
+        delta += 0.02 if div > 0.04 else (0.01 if div > 0.01 else 0)
+    if mc  is not None:
+        if   mc < 50e6:     delta -= 0.04
+        elif mc < 300e6:    delta -= 0.02
+        elif mc > 10e9:     delta += 0.01
+    if beta is not None:
+        if   beta > 3.0:    delta -= 0.03
+        elif beta > 2.0:    delta -= 0.01
+        elif 0.4 < beta < 1.5: delta += 0.01
+    return max(-0.15, min(0.15, round(delta, 4)))
+
+
 def _run_deep_dive_inner(n_clicks, user_input, budget):
     ticker = user_input.strip().upper()
     budget = budget or 1000
@@ -2548,6 +2579,27 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
     vix        = get_live_vix()
     fg, fg_lbl = get_fg_index()
 
+    # Fetch fundamentals early so score writeback can use them
+    pe_data_early = fetch_pe_data(resolved_yf or ticker)
+    _pe   = pe_data_early.get("PE")
+    _beta = pe_data_early.get("Beta")
+    _div  = pe_data_early.get("Div%")
+    _mc   = pe_data_early.get("MCap")
+    def _parse_fund(v):
+        try:
+            s = str(v).replace("$","").replace("B","e9").replace("M","e6").replace("%","")
+            return float(s)
+        except: return None
+    fund_delta_live = _fundamental_score_adjustment(
+        pe   = _parse_fund(_pe),
+        pb   = None,   # not in pe_data dict — would need separate fetch
+        div  = _parse_fund(_div) / 100 if _parse_fund(_div) else None,
+        eps  = None,
+        mc   = _parse_fund(_mc),
+        beta = _parse_fund(_beta),
+        asset_type = "ETF" if is_etf else "Stock",
+    )
+
     # ── Write fresh signal back to in-memory signals_df ──────────────
     # This keeps scanner results consistent with Deep Dive live data
     global signals_df
@@ -2582,6 +2634,10 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
                         (0.20 if macd_bull else 0) + (0.10 if macd_accel else 0) + conf*0.10)
         if action2 == "AVOID": score2 -= 2
         if is_knife2:          score2 -= 0.3
+        score2 += fund_delta_live
+        # Propagate fundamental-driven action adjustments
+        if action2 == "WATCH" and fund_delta_live >= 0.08:  action2 = "BUY"
+        if action2 == "BUY"   and fund_delta_live <= -0.08: action2 = "WATCH"
         new_row = {
             "ticker": ticker, "yf_symbol": resolved_yf or ticker,
             "data_source": "live_deepdive", "price": round(cur_p, 4),
@@ -2623,7 +2679,7 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
         jetf_meta = jetf_df[jetf_df["ticker"]==ticker].iloc[0].to_dict()
 
     # PE data (yfinance primary)
-    pe_data = fetch_pe_data(resolved_yf or ticker)
+    pe_data = pe_data_early  # already fetched above for score writeback
 
     # FMP second opinion — async-style: fetch in background, show if available
     fmp_data = fetch_fmp_fundamentals(resolved_yf or ticker) if _FMP_KEY else {}
@@ -2716,11 +2772,22 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
                                         "fontFamily":"'DM Mono',monospace"}),
         ], width="auto", className="me-3")
 
+    # Fundamental score delta badge
+    def _fund_badge(delta):
+        if delta == 0:  return None
+        color = "#0d9488" if delta > 0 else "#dc2626"
+        label = f"{'▲' if delta > 0 else '▼'} Fund adj {delta:+.2f}"
+        return html.Span(label, style={
+            "fontSize":"10px","fontWeight":"700","color":color,
+            "background": "#f0fdf4" if delta > 0 else "#fff1f2",
+            "border": f"1px solid {'#86efac' if delta > 0 else '#fecaca'}",
+            "borderRadius":"4px","padding":"2px 7px","marginLeft":"10px",
+            "fontFamily":"'DM Mono',monospace",
+        })
+
     if is_etf:
-        # ETFs: show TER, fund size, distribution policy, replication from justETF
-        # yfinance PE/MCap are meaningless for ETFs — skip them
         ter_val  = (f"{jetf_meta['ter']:.2f}%" if jetf_meta.get("ter") else
-                    pe_data.get("Div%","—"))   # div yield as fallback if TER missing
+                    pe_data.get("Div%","—"))
         size_val = (f"€{jetf_meta['fund_size_eur']:,.0f}m"
                     if jetf_meta.get("fund_size_eur") else "—")
         dist_val = jetf_meta.get("dist_policy","—") or "—"
@@ -2732,16 +2799,17 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
             _fund_kpi("Replication",  repl_val),
         ], className="mb-2 align-items-end")
     else:
-        # Stocks: show PE, Beta, Div%, MCap from yfinance
         pe_val   = pe_data.get("PE","—")
         beta_val = pe_data.get("Beta","—")
         div_val  = pe_data.get("Div%","—")
         mcap_val = pe_data.get("MCap","—")
+        badge    = _fund_badge(fund_delta_live)
         fund_row = dbc.Row([
             _fund_kpi("PE",   pe_val),
             _fund_kpi("Beta", beta_val),
             _fund_kpi("Div%", div_val),
             _fund_kpi("MCap", mcap_val),
+            dbc.Col(badge, width="auto", className="align-self-center") if badge else None,
         ], className="mb-2 align-items-end")
 
     # FMP second opinion section
