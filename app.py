@@ -1393,7 +1393,7 @@ def compute_value_score(fmp):
         div_bonus = min(5, round(div_yield * 100))  # up to 5 bonus points
 
     if total_weight == 0:
-        return 0, "N/A", breakdown
+        return 0, "N/A", breakdown, 0
 
     raw_score = (weighted_sum / total_weight) * 100 + div_bonus
     score = min(100, round(raw_score))
@@ -1404,7 +1404,9 @@ def compute_value_score(fmp):
         "C" if score >= 35 else
         "D"
     )
-    return score, grade, breakdown
+    # Coverage: number of metrics that had data
+    coverage = sum(1 for v in breakdown.values() if v is not None)
+    return score, grade, breakdown, coverage
 
 
 def fetch_fmp_value_batch(tickers, max_workers=8):
@@ -1916,8 +1918,18 @@ def value_screener_tab():
                 ),
             ], width=8),
             dbc.Col([
-                html.Label("Min Value Score", className="fw-semibold"),
-                dbc.Input(id="vs-min-score", type="number", value=50, min=0, max=100, step=5,
+                html.Label([
+                    "Min Value Score  ",
+                    html.Span("ⓘ", id="vs-score-tip",
+                              style={"cursor":"pointer","color":"#94a3b8","fontSize":"12px"}),
+                ], className="fw-semibold"),
+                dbc.Tooltip(
+                    "Score 0–100 from PE, PEG, P/B, FCF yield, ROE, D/E, revenue growth. "
+                    "Low score may mean sparse FMP data, not a bad stock. "
+                    "Set to 0 to see everything. Check 'Coverage' column.",
+                    target="vs-score-tip", placement="left",
+                ),
+                dbc.Input(id="vs-min-score", type="number", value=20, min=0, max=100, step=5,
                           className="mb-2"),
                 html.Label("Require tech signal", className="fw-semibold"),
                 dbc.Select(id="vs-tech-filter",
@@ -3034,7 +3046,7 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
 
     # FMP second opinion — async-style: fetch in background, show if available
     fmp_data    = fetch_fmp_fundamentals(resolved_yf or ticker) if _get_fmp_key() else {}
-    value_score, value_grade, value_bdown = compute_value_score(fmp_data)
+    value_score, value_grade, value_bdown, value_coverage = compute_value_score(fmp_data)
     value_available = value_score > 0 and not is_etf
 
     # ── Price chart
@@ -3388,6 +3400,9 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
                                                          "color":gc,"fontFamily":"'DM Mono',monospace"}),
                 html.Span(f"  Grade {value_grade}", style={"fontSize":"12px","fontWeight":"700",
                                                              "color":gc,"marginLeft":"6px"}),
+                html.Span(f"  {value_coverage}/7 metrics",
+                          style={"fontSize":"10px","color":"#94a3b8","marginLeft":"8px",
+                                 "fontFamily":"'DM Mono',monospace"}),
                 html.Span(f"  {growth_str}" if growth_str else "",
                           style={"fontSize":"11px","color":"#64748b","marginLeft":"10px",
                                  "fontFamily":"'DM Mono',monospace"}),
@@ -3633,7 +3648,7 @@ def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
     rows = []
     for t in tickers:
         fmp = fmp_batch.get(t, {})
-        score, grade, bdown = compute_value_score(fmp)
+        score, grade, bdown, coverage = compute_value_score(fmp)
         if score < (min_score or 0):
             continue
 
@@ -3658,6 +3673,7 @@ def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
             "Ticker":      t,
             "Score":       score,
             "Grade":       grade,
+            "Coverage":    f"{coverage}/7",
             "Tech":        tech_signal,
             "PE":          _fmt(fmp.get("fmp_pe_ttm") or fmp.get("fmp_pe")),
             "PEG":         _fmt(fmp.get("fmp_peg")),
@@ -3732,10 +3748,22 @@ def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
              "background":"#eff6ff","color":"#0284c7","fontWeight":"600"},
             # Stripe alternate rows
             {"if":{"row_index":"odd"},"background":"#f8fafc"},
+            # Coverage colouring — grey for sparse data
+            {"if":{"filter_query":'{Coverage} = "2/7" || {Coverage} = "1/7"',
+                   "column_id":"Coverage"},
+             "color":"#dc2626","fontSize":"11px"},
+            {"if":{"filter_query":'{Coverage} = "3/7"',"column_id":"Coverage"},
+             "color":"#d97706","fontSize":"11px"},
+            {"if":{"filter_query":'{Coverage} = "4/7"',"column_id":"Coverage"},
+             "color":"#0284c7","fontSize":"11px"},
+            {"if":{"filter_query":'{Coverage} = "5/7" || {Coverage} = "6/7" || {Coverage} = "7/7"',
+                   "column_id":"Coverage"},
+             "color":"#0d9488","fontSize":"11px"},
         ],
         style_cell_conditional=[
-            {"if":{"column_id":"Ticker"},"fontWeight":"700","textAlign":"left"},
-            {"if":{"column_id":"Rank"},  "color":"#94a3b8","width":"40px"},
+            {"if":{"column_id":"Ticker"},   "fontWeight":"700","textAlign":"left"},
+            {"if":{"column_id":"Rank"},     "color":"#94a3b8","width":"40px"},
+            {"if":{"column_id":"Coverage"}, "fontSize":"11px","color":"#64748b"},
         ],
         tooltip_data=[{
             "Score": {"value":
