@@ -1106,107 +1106,6 @@ def analyse_ticker(ticker, risk_mult, isin=None):
         "Score": round(score,4),
     }
 
-#New CGP logic
-
-def analyse_stock_alpha(ticker, risk_mult, isin=None):
-    raw = fetch_ticker_data(ticker, isin=isin)
-    if raw is None:
-        return None
-
-    dm   = raw["dist_ma"]
-    rsi  = raw["rsi"]
-    conf = raw["confidence"]
-
-    macd_bull  = raw["macd"] > raw["macd_signal"]
-    macd_accel = raw["macd_hist"] > 0
-    vol        = raw["vol"]
-
-    # Core idea: undervalued but stabilizing
-    undervalued = dm < -8
-    not_overbought = rsi < 50
-    stable_vol = vol < 5
-
-    if undervalued and not_overbought and macd_bull and macd_accel and stable_vol:
-        action = "BUY"
-    elif undervalued and not_overbought:
-        action = "WATCH"
-    elif rsi > 70 and dm > 10:
-        action = "SELL"
-    else:
-        action = "WAIT"
-
-    strength = "Strong" if conf > 0.7 else "Medium" if conf > 0.4 else "Weak"
-
-    score = (
-        min(-dm/20,1)*0.4 +
-        min((50-rsi)/50,1)*0.3 +
-        (0.2 if macd_bull else 0) +
-        conf*0.1
-    )
-
-    return {
-        "Ticker": ticker,
-        "Price": round(raw["price"],2),
-        "MA200": round(raw["ma200"],2),
-        "Dist%": round(dm,1),
-        "RSI": round(rsi,1),
-        "MACD": "▲ Bull" if macd_bull else "▼ Bear",
-        "Vol%": round(vol,2),
-        "Conf": round(conf,2),
-        "Action": action,
-        "Signal": f"{action} ({strength})",
-        "Score": round(score,4),
-    }
-
-def analyse_darkhorse(ticker, risk_mult, isin=None):
-    raw = fetch_ticker_data(ticker, isin=isin)
-    if raw is None:
-        return None
-
-    rsi = raw["rsi"]
-    dm  = raw["dist_ma"]
-    conf = raw["confidence"]
-
-    macd_bull  = raw["macd"] > raw["macd_signal"]
-    macd_accel = raw["macd_hist"] > 0
-    rsi_rising = raw["rsi_slope"] > 0
-    slope      = raw["price_slope"]
-
-    breakout = slope > 0.002
-    early_stage = rsi < 65
-
-    if breakout and macd_accel and rsi_rising and early_stage:
-        action = "BUY"
-    elif macd_bull and rsi_rising:
-        action = "WATCH"
-    elif rsi > 75:
-        action = "SELL"
-    else:
-        action = "WAIT"
-
-    score = (
-        (0.3 if breakout else 0) +
-        (0.3 if macd_accel else 0) +
-        (0.2 if rsi_rising else 0) +
-        conf*0.2
-    )
-
-    return {
-        "Ticker": ticker,
-        "Price": round(raw["price"],2),
-        "RSI": round(rsi,1),
-        "Dist%": round(dm,1),
-        "MACD": "▲ Bull" if macd_bull else "▼ Bear",
-        "Conf": round(conf,2),
-        "Action": action,
-        "Signal": f"{action} (Momentum)",
-        "Score": round(score,4),
-    }
-
-
-
-#CGP logic ends
-
 def resolve_yf_ticker(ticker, isin=None):
     """Find the correct yfinance ticker symbol for a given ETF ticker/ISIN.
     Returns the working yfinance symbol or None."""
@@ -1949,7 +1848,6 @@ PRESETS = {
     "🏦 Fixed Income ETFs":    {"type":"ETF","category_group":["Fixed Income"]},
     "🥇 Commodity ETFs":       {"type":"ETF","category_group":["Commodities"]},
     "🔧 Custom":               {"type":"custom"},
-    "🔥 Dark Horses": {"type":"Stock"},
 }
 
 def build_tickers(preset_key, filters):
@@ -2767,25 +2665,7 @@ def run_scan(run_clicks, clear_clicks, stop_clicks, overlay_stop_clicks, preset,
         isin_map = {}
         if not jetf_df.empty and "ticker" in jetf_df.columns and "isin" in jetf_df.columns:
             isin_map = dict(zip(jetf_df["ticker"], jetf_df["isin"].fillna("")))
-        
-        #old Claude futs = {ex.submit(analyse_ticker, t, risk_mult, isin_map.get(t,"")): t for t in tickers}
-        #NEw CGP
-        def pick_engine(ticker):
-            if preset in ["📈 US Stocks", "🌐 Global Stocks"]:
-                return analyse_stock_alpha
-            elif preset == "🔥 Dark Horses":
-                return analyse_darkhorse
-            return analyse_ticker  # default (ETF engine)
-        
-        engine = pick_engine(None)
-        
-        futs = {
-            ex.submit(engine, t, risk_mult, isin_map.get(t,"")): t
-            for t in tickers
-        }
-
-
-        
+        futs = {ex.submit(analyse_ticker, t, risk_mult, isin_map.get(t,"")): t for t in tickers}
         for fut in as_completed(futs):
             if cache_get("current_scan_id") != scan_id or not _active_scans.get(scan_id, True):
                 _active_scans.pop(scan_id, None)
