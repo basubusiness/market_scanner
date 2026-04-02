@@ -907,9 +907,12 @@ def fetch_ticker_data(ticker, isin=None, force_refresh=False):
         if cached is not None:
             return None if cached == "FAILED" else cached
     try:
-        # Check universe.csv pre-resolved symbol first
-        known_sfx = cache_get(f"sfx_{ticker}")
+        # Universe.csv is a HINT only — never an override.
+        # We read the suggested suffix, try it first, but always fall back to bare ticker.
+        known_sfx   = cache_get(f"sfx_{ticker}")
         resolved_sym = cache_get(f"resolved_{ticker}")
+        universe_sfx = None  # suggestion from universe.csv — unvalidated
+
         if known_sfx is None and resolved_sym is None and not universe.empty and "yf_symbol" in universe.columns:
             rows = universe[universe["ticker"] == ticker]
             if not rows.empty:
@@ -917,19 +920,16 @@ def fetch_ticker_data(ticker, isin=None, force_refresh=False):
                 yf_sfx = str(rows.iloc[0].get("yf_suffix","")).strip()
                 if yf_sym and yf_sym not in ("","nan","None"):
                     if yf_sfx.startswith("→"):
-                        # Full symbol replacement (ISIN-resolved to different ticker)
-                        resolved_sym = yf_sym
-                        cache_set(f"resolved_{ticker}", yf_sym, ttl=86400*7)
+                        resolved_sym = yf_sym  # full-symbol hint (still falls back if invalid)
                     else:
-                        known_sfx = "" if yf_sfx in ("","nan","None") else yf_sfx
-                        cache_set(f"sfx_{ticker}", known_sfx, ttl=86400*7)
+                        universe_sfx = "" if yf_sfx in ("","nan","None") else yf_sfx
 
-        # Check if we already know the working suffix
-        known_sfx = cache_get(f"sfx_{ticker}")
+        # Re-read cache — may have been populated by a prior successful fetch
+        known_sfx    = cache_get(f"sfx_{ticker}")
         resolved_sym = resolved_sym or cache_get(f"resolved_{ticker}")
+
         def _fetch_history(sym):
             """Fetch 1y history — multiple methods for cross-version yfinance compatibility."""
-            # Method 1: Ticker.history — most direct path, works on all versions
             try:
                 df = flatten_df(yf.Ticker(sym).history(
                     period="1y", auto_adjust=True, timeout=15))
@@ -937,21 +937,17 @@ def fetch_ticker_data(ticker, isin=None, force_refresh=False):
                     return df
             except Exception:
                 pass
-            # Method 2: yf.download without raise_errors (older API, broader compat)
             try:
                 import yfinance as _yf
                 df = flatten_df(_yf.download(
-                    sym, period="1y", auto_adjust=True,
-                    progress=False, threads=False,
-                ))
+                    sym, period="1y", auto_adjust=True, progress=False, threads=False))
                 if not df.empty and "Close" in df.columns and len(df["Close"].dropna()) >= 30:
                     return df
             except Exception:
                 pass
-            # Method 3: Ticker.history with explicit date range (avoids period= parsing bugs)
             try:
                 import datetime
-                end = datetime.date.today()
+                end   = datetime.date.today()
                 start = end - datetime.timedelta(days=400)
                 df = flatten_df(yf.Ticker(sym).history(
                     start=str(start), end=str(end), auto_adjust=True, timeout=15))
@@ -965,31 +961,55 @@ def fetch_ticker_data(ticker, isin=None, force_refresh=False):
             return (not df.empty and "Close" in df.columns
                     and len(df["Close"].dropna()) >= 30)
 
-        # Determine the symbol to use
-        target_sym = resolved_sym or (ticker + known_sfx if known_sfx is not None else ticker)
-        print(f"[fetch] {ticker} → target={target_sym} known_sfx={known_sfx!r} resolved={resolved_sym!r}", flush=True)
+        # ── Ordered attempt list: cached → universe hint → bare ticker ──
+        # Bare ticker is ALWAYS the final fallback — universe cannot block it.
+        _attempts = []
+        if resolved_sym:
+            _attempts.append(("resolved", resolved_sym))
+        elif known_sfx is not None:
+            _attempts.append(("cached_sfx", ticker + known_sfx))
 
-        # Try Stooq first — fast, no rate limits
-        df = _fetch_stooq(target_sym)
-        print(f"[fetch] {ticker} stooq={'OK' if _valid(df) else 'MISS'} rows={len(df)}", flush=True)
+        if universe_sfx is not None and universe_sfx != "":
+            _univ_sym = ticker + universe_sfx
+            if not any(s == _univ_sym for _, s in _attempts):
+                _attempts.append(("universe", _univ_sym))
 
-        # Fall back to yfinance if Stooq fails
+        # Always try bare ticker — this is the critical fallback
+        if not any(s == ticker for _, s in _attempts):
+            _attempts.append(("bare", ticker))
+
+        print(f"[fetch] {ticker} attempts={[s for _,s in _attempts]}", flush=True)
+
+        df = pd.DataFrame()
+        used_sym = ticker
+        for _src, _sym in _attempts:
+            df = _fetch_stooq(_sym)
+            if _valid(df):
+                print(f"[fetch] {ticker} OK stooq/{_src} sym={_sym}", flush=True)
+                used_sym = _sym
+                break
+            df = _fetch_history(_sym)
+            if _valid(df):
+                print(f"[fetch] {ticker} OK yf/{_src} sym={_sym}", flush=True)
+                used_sym = _sym
+                break
+            print(f"[fetch] {ticker} MISS {_src} sym={_sym}", flush=True)
+
+        # Cache the working suffix so future fetches skip the search
+        if _valid(df):
+            cache_set(f"sfx_{ticker}", used_sym[len(ticker):], ttl=86400*7)
+
+        # If still nothing, try exchange suffix scan
         if not _valid(df):
-            if resolved_sym:
-                df = _fetch_history(resolved_sym)
-            elif known_sfx is not None:
-                df = _fetch_history(ticker + known_sfx)
-            else:
-                df = _fetch_history(ticker)
-                print(f"[fetch] {ticker} yf bare={'OK' if _valid(df) else 'MISS'} rows={len(df)}", flush=True)
-                if not _valid(df):
-                    _sfx_list = [".DE",".DU",".L",".AS",".SG"] if isin else [".DE",".DU",".L",".AS",".PA",".MI",".SW",".SG",".F",".VI",".BR"]
-                    for sfx in _sfx_list:
-                        df2 = _fetch_history(ticker + sfx)
-                        if _valid(df2):
-                            df = df2
-                            cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
-                            break
+            _sfx_list = [".DE",".DU",".L",".AS",".SG"] if isin else [".DE",".DU",".L",".AS",".PA",".MI",".SW",".SG",".F",".VI",".BR"]
+            for sfx in _sfx_list:
+                df2 = _fetch_history(ticker + sfx)
+                if _valid(df2):
+                    df = df2
+                    used_sym = ticker + sfx
+                    cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
+                    print(f"[fetch] {ticker} OK sfx-scan sym={used_sym}", flush=True)
+                    break
             # Cache negative result — short TTL (5 min) so transient failures don't block
             if not _valid(df) and not isin:
                 print(f"[fetch] FAILED for {ticker} (no valid data from Stooq or yfinance)", flush=True)
