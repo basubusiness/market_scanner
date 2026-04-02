@@ -803,7 +803,10 @@ def get_live_vix():
     if cached is not None:
         return cached
     try:
-        d = flatten_df(yf.Ticker("^VIX").history(period="5d", auto_adjust=True))
+        d = flatten_df(yf.download("^VIX", period="5d", auto_adjust=True,
+                                    progress=False, threads=False, raise_errors=False))
+        if d.empty or "Close" not in d.columns:
+            d = flatten_df(yf.Ticker("^VIX").history(period="5d", auto_adjust=True))
         if not d.empty and "Close" in d.columns:
             val = float(d["Close"].dropna().iloc[-1])
             cache_set("vix", val, ttl=300)
@@ -925,12 +928,29 @@ def fetch_ticker_data(ticker, isin=None, force_refresh=False):
         known_sfx = cache_get(f"sfx_{ticker}")
         resolved_sym = resolved_sym or cache_get(f"resolved_{ticker}")
         def _fetch_history(sym):
-            """Fetch 1y history with timeout protection."""
+            """Fetch 1y history — tries yf.download first (more reliable), then Ticker.history."""
+            # Method 1: yf.download — works across all recent yfinance versions
             try:
-                return flatten_df(yf.Ticker(sym).history(
-                    period="1y", auto_adjust=True, timeout=10))
+                import yfinance as _yf
+                df = _yf.download(
+                    sym, period="1y", auto_adjust=True,
+                    progress=False, threads=False,
+                    raise_errors=False,
+                )
+                df = flatten_df(df)
+                if not df.empty and "Close" in df.columns and len(df["Close"].dropna()) >= 30:
+                    return df
             except Exception:
-                return pd.DataFrame()
+                pass
+            # Method 2: Ticker.history fallback
+            try:
+                df = flatten_df(yf.Ticker(sym).history(
+                    period="1y", auto_adjust=True, timeout=10))
+                if not df.empty and "Close" in df.columns:
+                    return df
+            except Exception:
+                pass
+            return pd.DataFrame()
 
         def _valid(df):
             return (not df.empty and "Close" in df.columns
@@ -3263,28 +3283,30 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
         # Deep Dive always bypasses FAILED cache — user explicitly requested this ticker
         raw = fetch_ticker_data(resolved_yf or ticker, isin=isin, force_refresh=True)
 
-    # Extra fallback: try yfinance directly with common US ticker patterns
-    # This catches tickers that slip through fetch_ticker_data's Stooq-first logic
+    # Extra fallback: try yf.download directly — most reliable across yfinance versions
+    # Catches tickers that slip through fetch_ticker_data (e.g. newly listed, unusual symbols)
     if raw is None:
         _dd_attempts = [ticker]
-        # If ticker has no dot, it might need a suffix on some exchanges
         if "." not in ticker:
             _dd_attempts += [ticker + sfx for sfx in [".DE", ".L", ".AS", ".PA"]]
         for _attempt in _dd_attempts:
             try:
-                _t = yf.Ticker(_attempt)
-                _df = flatten_df(_t.history(period="1y", auto_adjust=True, timeout=15))
+                _df = flatten_df(yf.download(
+                    _attempt, period="1y", auto_adjust=True,
+                    progress=False, threads=False, raise_errors=False,
+                ))
                 if not _df.empty and "Close" in _df.columns and len(_df["Close"].dropna()) >= 30:
-                    # Build raw dict inline
                     _close = _df["Close"].dropna()
                     _price = float(_close.iloc[-1])
                     if _price >= 0.10:
+                        # Store in cache so fetch_ticker_data picks it up immediately
+                        cache_set(f"sfx_{ticker}", "" if _attempt == ticker else _attempt[len(ticker):], ttl=86400*7)
                         raw = fetch_ticker_data(_attempt, isin=isin, force_refresh=True)
                         if raw:
-                            print(f"[deep_dive] Extra fallback succeeded: {_attempt}", flush=True)
+                            print(f"[deep_dive] yf.download fallback succeeded: {_attempt}", flush=True)
                             break
             except Exception as _e:
-                print(f"[deep_dive] Extra fallback {_attempt} failed: {_e}", flush=True)
+                print(f"[deep_dive] yf.download fallback {_attempt} failed: {_e}", flush=True)
                 continue
     if raw is None:
         try:
