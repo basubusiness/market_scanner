@@ -803,10 +803,10 @@ def get_live_vix():
     if cached is not None:
         return cached
     try:
-        d = flatten_df(yf.download("^VIX", period="5d", auto_adjust=True,
-                                    progress=False, threads=False, raise_errors=False))
+        d = flatten_df(yf.Ticker("^VIX").history(period="5d", auto_adjust=True, timeout=15))
         if d.empty or "Close" not in d.columns:
-            d = flatten_df(yf.Ticker("^VIX").history(period="5d", auto_adjust=True))
+            d = flatten_df(yf.download("^VIX", period="5d", auto_adjust=True,
+                                        progress=False, threads=False))
         if not d.empty and "Close" in d.columns:
             val = float(d["Close"].dropna().iloc[-1])
             cache_set("vix", val, ttl=300)
@@ -928,25 +928,34 @@ def fetch_ticker_data(ticker, isin=None, force_refresh=False):
         known_sfx = cache_get(f"sfx_{ticker}")
         resolved_sym = resolved_sym or cache_get(f"resolved_{ticker}")
         def _fetch_history(sym):
-            """Fetch 1y history — tries yf.download first (more reliable), then Ticker.history."""
-            # Method 1: yf.download — works across all recent yfinance versions
+            """Fetch 1y history — multiple methods for cross-version yfinance compatibility."""
+            # Method 1: Ticker.history — most direct path, works on all versions
             try:
-                import yfinance as _yf
-                df = _yf.download(
-                    sym, period="1y", auto_adjust=True,
-                    progress=False, threads=False,
-                    raise_errors=False,
-                )
-                df = flatten_df(df)
+                df = flatten_df(yf.Ticker(sym).history(
+                    period="1y", auto_adjust=True, timeout=15))
                 if not df.empty and "Close" in df.columns and len(df["Close"].dropna()) >= 30:
                     return df
             except Exception:
                 pass
-            # Method 2: Ticker.history fallback
+            # Method 2: yf.download without raise_errors (older API, broader compat)
             try:
+                import yfinance as _yf
+                df = flatten_df(_yf.download(
+                    sym, period="1y", auto_adjust=True,
+                    progress=False, threads=False,
+                ))
+                if not df.empty and "Close" in df.columns and len(df["Close"].dropna()) >= 30:
+                    return df
+            except Exception:
+                pass
+            # Method 3: Ticker.history with explicit date range (avoids period= parsing bugs)
+            try:
+                import datetime
+                end = datetime.date.today()
+                start = end - datetime.timedelta(days=400)
                 df = flatten_df(yf.Ticker(sym).history(
-                    period="1y", auto_adjust=True, timeout=10))
-                if not df.empty and "Close" in df.columns:
+                    start=str(start), end=str(end), auto_adjust=True, timeout=15))
+                if not df.empty and "Close" in df.columns and len(df["Close"].dropna()) >= 30:
                     return df
             except Exception:
                 pass
@@ -958,9 +967,11 @@ def fetch_ticker_data(ticker, isin=None, force_refresh=False):
 
         # Determine the symbol to use
         target_sym = resolved_sym or (ticker + known_sfx if known_sfx is not None else ticker)
+        print(f"[fetch] {ticker} → target={target_sym} known_sfx={known_sfx!r} resolved={resolved_sym!r}", flush=True)
 
         # Try Stooq first — fast, no rate limits
         df = _fetch_stooq(target_sym)
+        print(f"[fetch] {ticker} stooq={'OK' if _valid(df) else 'MISS'} rows={len(df)}", flush=True)
 
         # Fall back to yfinance if Stooq fails
         if not _valid(df):
@@ -970,6 +981,7 @@ def fetch_ticker_data(ticker, isin=None, force_refresh=False):
                 df = _fetch_history(ticker + known_sfx)
             else:
                 df = _fetch_history(ticker)
+                print(f"[fetch] {ticker} yf bare={'OK' if _valid(df) else 'MISS'} rows={len(df)}", flush=True)
                 if not _valid(df):
                     _sfx_list = [".DE",".DU",".L",".AS",".SG"] if isin else [".DE",".DU",".L",".AS",".PA",".MI",".SW",".SG",".F",".VI",".BR"]
                     for sfx in _sfx_list:
@@ -3283,30 +3295,28 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
         # Deep Dive always bypasses FAILED cache — user explicitly requested this ticker
         raw = fetch_ticker_data(resolved_yf or ticker, isin=isin, force_refresh=True)
 
-    # Extra fallback: try yf.download directly — most reliable across yfinance versions
-    # Catches tickers that slip through fetch_ticker_data (e.g. newly listed, unusual symbols)
+    # Extra fallback: try yfinance directly — catches tickers that slip through fetch_ticker_data
     if raw is None:
         _dd_attempts = [ticker]
         if "." not in ticker:
             _dd_attempts += [ticker + sfx for sfx in [".DE", ".L", ".AS", ".PA"]]
         for _attempt in _dd_attempts:
             try:
-                _df = flatten_df(yf.download(
-                    _attempt, period="1y", auto_adjust=True,
-                    progress=False, threads=False, raise_errors=False,
-                ))
+                import datetime as _dt
+                _end = _dt.date.today()
+                _start = _end - _dt.timedelta(days=400)
+                _df = flatten_df(yf.Ticker(_attempt).history(
+                    start=str(_start), end=str(_end), auto_adjust=True, timeout=15))
                 if not _df.empty and "Close" in _df.columns and len(_df["Close"].dropna()) >= 30:
                     _close = _df["Close"].dropna()
-                    _price = float(_close.iloc[-1])
-                    if _price >= 0.10:
-                        # Store in cache so fetch_ticker_data picks it up immediately
+                    if float(_close.iloc[-1]) >= 0.10:
                         cache_set(f"sfx_{ticker}", "" if _attempt == ticker else _attempt[len(ticker):], ttl=86400*7)
                         raw = fetch_ticker_data(_attempt, isin=isin, force_refresh=True)
                         if raw:
-                            print(f"[deep_dive] yf.download fallback succeeded: {_attempt}", flush=True)
+                            print(f"[deep_dive] date-range fallback succeeded: {_attempt}", flush=True)
                             break
             except Exception as _e:
-                print(f"[deep_dive] yf.download fallback {_attempt} failed: {_e}", flush=True)
+                print(f"[deep_dive] date-range fallback {_attempt} failed: {_e}", flush=True)
                 continue
     if raw is None:
         try:
@@ -3315,7 +3325,6 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
                 def _is_real_symbol(q):
                     sym = q.get("symbol","")
                     if not sym or len(sym) < 1 or len(sym) > 10: return False
-                    # Filter ISINs: 12-char, starts with 2 letters, rest alphanumeric
                     if len(sym) == 12 and sym[:2].isalpha() and sym[2:].isalnum(): return False
                     return True
                 def _rank(q):
@@ -3325,12 +3334,26 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
                     if sym.startswith(ticker + "."): return 2
                     return 3
                 quotes = sorted([q for q in sr.quotes if _is_real_symbol(q)], key=_rank)
+                # Remove the entered ticker itself from suggestions (not helpful)
+                quotes = [q for q in quotes if q.get("symbol","") != ticker]
                 if quotes:
                     sugg = ", ".join([q["symbol"] for q in quotes[:3]])
-                    return dbc.Alert(f"No data for **{ticker}**. Suggested symbols: {sugg}", color="warning")
+                    return dbc.Alert([
+                        html.Strong(f"No data for {ticker}. "),
+                        html.Span(f"Could not retrieve price history. The stock may be delisted, "
+                                  f"taken private, or the ticker may differ by exchange. "),
+                        html.Br(),
+                        html.Span("Similar symbols found: "),
+                        html.Strong(sugg),
+                        html.Span(" — try one of these instead."),
+                    ], color="warning")
         except Exception:
             pass
-        return dbc.Alert(f"No data found for **{ticker}**. Check the ticker is correct and try again.", color="danger")
+        return dbc.Alert([
+            html.Strong(f"No data found for {ticker}. "),
+            html.Span("The stock may be delisted, taken private, or not covered by our data sources. "),
+            html.Span("Try searching Yahoo Finance to confirm the ticker is still actively traded."),
+        ], color="danger")
 
     close    = raw["close"]
     ma50_s   = raw["ma50_s"]
