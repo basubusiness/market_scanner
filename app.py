@@ -880,14 +880,29 @@ def fetch_justetf_chart(isin):
         return pd.DataFrame()
 
 
-def fetch_ticker_data(ticker, isin=None):
+def fetch_ticker_data(ticker, isin=None, force_refresh=False):
     # Quick reject obvious invalid tickers before any API call
     if not ticker or ticker.startswith("$") or len(ticker) < 2:
         return None
     key = f"tick_{ticker}"
-    cached = cache_get(key)
-    if cached is not None:
-        return None if cached == "FAILED" else cached
+    if force_refresh:
+        # Bust all cached keys for this ticker so we get truly fresh data
+        with _cache_lock:
+            base = ticker.split(".")[0]
+            for k in list(_cache.keys()):
+                if k in (key, f"sfx_{ticker}", f"resolved_{ticker}", f"meta_{ticker}") \
+                        or k.startswith(f"yfund_{ticker}") \
+                        or k.startswith(f"conv_{ticker}"):
+                    _cache.pop(k, None)
+            # Also bust FMP cache keys for this ticker's base symbol
+            for k in list(_cache.keys()):
+                if k.startswith(f"fmp_") and f"/{base}" in k:
+                    _cache.pop(k, None)
+        print(f"[refresh] Busted cache for {ticker}", flush=True)
+    else:
+        cached = cache_get(key)
+        if cached is not None:
+            return None if cached == "FAILED" else cached
     try:
         # Check universe.csv pre-resolved symbol first
         known_sfx = cache_get(f"sfx_{ticker}")
@@ -941,8 +956,8 @@ def fetch_ticker_data(ticker, isin=None):
                         df2 = _fetch_history(ticker + sfx)
                         if _valid(df2):
                             df = df2
-                        cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
-                        break
+                            cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
+                            break
             # Cache negative result for tickers that failed all suffixes
             if not _valid(df) and not isin:
                 cache_set(key, "FAILED", ttl=3600)
@@ -2282,12 +2297,17 @@ def value_screener_tab():
                 dbc.Button("🔍 Screen", id="vs-btn", color="danger",
                            className="w-100 mt-1 mb-2"),
                 dbc.Button("📋 S&P 500 Top 50", id="vs-preset-btn", color="outline-secondary",
-                           size="sm", className="w-100"),
+                           size="sm", className="w-100 mb-2"),
+                dbc.Button("🔄 Refresh Live", id="vs-refresh-btn", color="outline-warning",
+                           size="sm", className="w-100",
+                           title="Force re-fetch live prices for the tickers above (bypasses cache)"),
             ], width=2),
         ], className="mb-3"),
+        html.Div(id="vs-refresh-status", className="mb-1"),
         html.Div(id="vs-status", className="mb-2"),
         html.Div(id="vs-results"),
         dcc.Store(id="vs-store", data={}),
+        dcc.Store(id="vs-refresh-store", data={}),
     ])
 
 
@@ -3230,6 +3250,8 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
                     "ma200_slope": _ma200_slope2,
                     "source": "justETF",
                 }
+                # Write to tick_ cache so subsequent calls (scanner writeback, re-open) hit cache
+                cache_set(f"tick_{ticker}", raw, ttl=3600)
 
     if raw is None:
         raw = fetch_ticker_data(resolved_yf or ticker, isin=isin)
@@ -4382,3 +4404,64 @@ def test_fmp_key(n):
     except Exception as e:
         return html.Span(f"❌ Request failed: {str(e)[:60]}",
                          style={"color":"#dc2626"})
+
+# ───────────────────────────────────────────────────────────────────
+# CALLBACK — Value Screen: Refresh Live Data button
+# Force-refreshes price + technical cache for all tickers in the
+# textarea, then re-runs the screen so BUY/WATCH signals are current.
+# ───────────────────────────────────────────────────────────────────
+
+@app.callback(
+    Output("vs-refresh-status", "children"),
+    Output("vs-results",        "children", allow_duplicate=True),
+    Output("vs-status",         "children", allow_duplicate=True),
+    Input("vs-refresh-btn", "n_clicks"),
+    State("vs-tickers",    "value"),
+    State("vs-min-score",  "value"),
+    State("vs-tech-filter","value"),
+    prevent_initial_call=True,
+)
+def refresh_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
+    """Bust tick_/sfx_/yfund_/conv_ caches for every listed ticker,
+    re-fetch live data via yfinance/Stooq, then re-run the screen."""
+    if not n_clicks or not tickers_raw:
+        return "", no_update, no_update
+
+    tickers = [t.strip().upper() for t in tickers_raw.replace("\n"," ").split(",") if t.strip()]
+    tickers = list(dict.fromkeys(tickers))[:100]
+
+    refreshed, failed = [], []
+    for t in tickers:
+        try:
+            result = fetch_ticker_data(t, force_refresh=True)
+            if result:
+                refreshed.append(t)
+            else:
+                failed.append(t)
+        except Exception as exc:
+            print(f"[refresh] {t} error: {exc}", flush=True)
+            failed.append(t)
+
+    # Also bust yfund_ and conv_ keys so Value Score is fresh
+    with _cache_lock:
+        for t in tickers:
+            base = t.split(".")[0]
+            for k in list(_cache.keys()):
+                if k.startswith(f"yfund_{t}") or k.startswith(f"conv_{t}") \
+                        or (k.startswith("fmp_") and f"/{base}" in k):
+                    _cache.pop(k, None)
+
+    status_msg = html.Div([
+        dbc.Alert([
+            html.Strong(f"🔄 Refreshed {len(refreshed)}/{len(tickers)} tickers live  "),
+            html.Span(
+                (f"· ✅ {', '.join(refreshed[:8])}{'…' if len(refreshed)>8 else ''}  " if refreshed else "") +
+                (f"· ❌ no data: {', '.join(failed[:5])}" if failed else ""),
+                style={"fontSize":"12px","color":"#64748b"}
+            ),
+        ], color="info", className="py-2 mb-1"),
+    ])
+
+    # Re-run the full screen with fresh data
+    results, screen_status = run_value_screen(1, tickers_raw, min_score, tech_filter)
+    return status_msg, results, screen_status
