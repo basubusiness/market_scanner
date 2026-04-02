@@ -828,7 +828,7 @@ def _fetch_stooq(symbol):
         elif symbol.endswith(".PA"): stooq_sym = symbol.replace(".PA", ".FR")
         elif symbol.endswith(".MI"): stooq_sym = symbol.replace(".MI", ".IT")
         elif symbol.endswith(".SW"): stooq_sym = symbol.replace(".SW", ".CH")
-        elif "." not in symbol:     stooq_sym = symbol  # skip .US — let yfinance handle ambiguous tickers
+        elif "." not in symbol:     stooq_sym = symbol + ".US"  # US stocks need .US suffix on Stooq
         end   = pd.Timestamp.today()
         start = end - pd.Timedelta(days=800)
         df = pdr.get_data_stooq(stooq_sym, start=start, end=end)
@@ -989,8 +989,8 @@ def fetch_ticker_data(ticker, isin=None, force_refresh=False):
             cache_set(key, "FAILED", ttl=3600)
             return None
         # Sanity: if data looks like wrong ticker, try justETF for ETFs
-        _ma_check = float(close.rolling(200).mean().iloc[-1])
-        if _ma_check > 0 and (float(close.iloc[-1]) / _ma_check) > 10 and isin:
+        _ma_check = close.rolling(200).mean().iloc[-1]
+        if pd.notna(_ma_check) and float(_ma_check) > 0 and (float(close.iloc[-1]) / float(_ma_check)) > 10 and isin:
             df_j = fetch_justetf_chart(isin)
             if not df_j.empty and len(df_j["Close"].dropna()) >= 30:
                 df    = df_j
@@ -999,16 +999,21 @@ def fetch_ticker_data(ticker, isin=None, force_refresh=False):
         if price < 0.10:  # only filter near-zero prices
             return None
         # Sanity: if price is >10x MA200, likely wrong ticker (e.g. SXRN.US vs SXRN.DE)
-        _ma200c = float(close.rolling(200).mean().iloc[-1])
-        if _ma200c > 0 and (price / _ma200c) > 10:
+        # Skip this check if MA200 is NaN (stock listed < 200 days ago — perfectly valid)
+        _ma200c = close.rolling(200).mean().iloc[-1]
+        if pd.notna(_ma200c) and float(_ma200c) > 0 and (price / float(_ma200c)) > 10:
             return None
         if "Volume" in df.columns:
             avg_vol = df["Volume"].dropna().tail(20).mean()
             # ETFs can have very low volume but still be valid — only filter true zeros
             if avg_vol == 0:
                 return None
-        ma50   = float(close.rolling(50).mean().iloc[-1])
-        ma200  = float(close.rolling(200).mean().iloc[-1])
+        ma50_raw  = close.rolling(50).mean().iloc[-1]
+        ma200_raw = close.rolling(200).mean().iloc[-1]
+        # For recently listed stocks (< 50 or < 200 days), fall back to price itself
+        # so dist_ma and downstream calculations remain meaningful
+        ma50  = float(ma50_raw)  if pd.notna(ma50_raw)  else float(price)
+        ma200 = float(ma200_raw) if pd.notna(ma200_raw) else float(price)
         rsi_s  = calculate_rsi(close)
         rsi    = float(rsi_s.iloc[-1])
         if not (1 < rsi < 99):
@@ -3257,9 +3262,19 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
         raw = fetch_ticker_data(resolved_yf or ticker, isin=isin)
     if raw is None:
         try:
-            sr = yf.Search(ticker, max_results=3)
+            sr = yf.Search(ticker, max_results=8)
             if hasattr(sr,"quotes") and sr.quotes:
-                sugg = ", ".join([q["symbol"] for q in sr.quotes[:3]])
+                # Prefer exact match or US-listed symbols — filter out foreign exchange duplicates
+                quotes = sr.quotes
+                # Prioritise: exact symbol match first, then symbols without dot (US), then others
+                def _rank(q):
+                    sym = q.get("symbol","")
+                    if sym == ticker: return 0
+                    if "." not in sym: return 1
+                    if sym.startswith(ticker + "."): return 2
+                    return 3
+                quotes_sorted = sorted(quotes, key=_rank)
+                sugg = ", ".join([q["symbol"] for q in quotes_sorted[:3]])
                 return dbc.Alert(f"No data for **{ticker}**. Try: {sugg}", color="warning")
         except Exception:
             pass
