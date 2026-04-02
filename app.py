@@ -958,9 +958,10 @@ def fetch_ticker_data(ticker, isin=None, force_refresh=False):
                             df = df2
                             cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
                             break
-            # Cache negative result for tickers that failed all suffixes
+            # Cache negative result — short TTL (5 min) so transient failures don't block
             if not _valid(df) and not isin:
-                cache_set(key, "FAILED", ttl=3600)
+                print(f"[fetch] FAILED for {ticker} (no valid data from Stooq or yfinance)", flush=True)
+                cache_set(key, "FAILED", ttl=300)
                 return None
             # Last resort: search by ISIN
             if not _valid(df) and isin:
@@ -3259,26 +3260,55 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
                 cache_set(f"tick_{ticker}", raw, ttl=3600)
 
     if raw is None:
-        raw = fetch_ticker_data(resolved_yf or ticker, isin=isin)
+        # Deep Dive always bypasses FAILED cache — user explicitly requested this ticker
+        raw = fetch_ticker_data(resolved_yf or ticker, isin=isin, force_refresh=True)
+
+    # Extra fallback: try yfinance directly with common US ticker patterns
+    # This catches tickers that slip through fetch_ticker_data's Stooq-first logic
+    if raw is None:
+        _dd_attempts = [ticker]
+        # If ticker has no dot, it might need a suffix on some exchanges
+        if "." not in ticker:
+            _dd_attempts += [ticker + sfx for sfx in [".DE", ".L", ".AS", ".PA"]]
+        for _attempt in _dd_attempts:
+            try:
+                _t = yf.Ticker(_attempt)
+                _df = flatten_df(_t.history(period="1y", auto_adjust=True, timeout=15))
+                if not _df.empty and "Close" in _df.columns and len(_df["Close"].dropna()) >= 30:
+                    # Build raw dict inline
+                    _close = _df["Close"].dropna()
+                    _price = float(_close.iloc[-1])
+                    if _price >= 0.10:
+                        raw = fetch_ticker_data(_attempt, isin=isin, force_refresh=True)
+                        if raw:
+                            print(f"[deep_dive] Extra fallback succeeded: {_attempt}", flush=True)
+                            break
+            except Exception as _e:
+                print(f"[deep_dive] Extra fallback {_attempt} failed: {_e}", flush=True)
+                continue
     if raw is None:
         try:
-            sr = yf.Search(ticker, max_results=8)
+            sr = yf.Search(ticker, max_results=10)
             if hasattr(sr,"quotes") and sr.quotes:
-                # Prefer exact match or US-listed symbols — filter out foreign exchange duplicates
-                quotes = sr.quotes
-                # Prioritise: exact symbol match first, then symbols without dot (US), then others
+                def _is_real_symbol(q):
+                    sym = q.get("symbol","")
+                    if not sym or len(sym) < 1 or len(sym) > 10: return False
+                    # Filter ISINs: 12-char, starts with 2 letters, rest alphanumeric
+                    if len(sym) == 12 and sym[:2].isalpha() and sym[2:].isalnum(): return False
+                    return True
                 def _rank(q):
                     sym = q.get("symbol","")
                     if sym == ticker: return 0
                     if "." not in sym: return 1
                     if sym.startswith(ticker + "."): return 2
                     return 3
-                quotes_sorted = sorted(quotes, key=_rank)
-                sugg = ", ".join([q["symbol"] for q in quotes_sorted[:3]])
-                return dbc.Alert(f"No data for **{ticker}**. Try: {sugg}", color="warning")
+                quotes = sorted([q for q in sr.quotes if _is_real_symbol(q)], key=_rank)
+                if quotes:
+                    sugg = ", ".join([q["symbol"] for q in quotes[:3]])
+                    return dbc.Alert(f"No data for **{ticker}**. Suggested symbols: {sugg}", color="warning")
         except Exception:
             pass
-        return dbc.Alert(f"No data found for {ticker}.", color="danger")
+        return dbc.Alert(f"No data found for **{ticker}**. Check the ticker is correct and try again.", color="danger")
 
     close    = raw["close"]
     ma50_s   = raw["ma50_s"]
