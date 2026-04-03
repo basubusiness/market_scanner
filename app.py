@@ -3257,6 +3257,11 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
 
     # For ETFs with ISIN: use justETF chart as primary source (reliable EUR prices)
     # For stocks or ETFs without ISIN: fall back to yfinance via fetch_ticker_data
+    # Always bust tick_ cache — Deep Dive must show live data on every click
+    with _cache_lock:
+        for _k in list(_cache.keys()):
+            if _k == f"tick_{ticker}" or _k == f"tick_{resolved_yf or ticker}":
+                _cache.pop(_k, None)
     raw = None
     is_etf = False
     if isin:
