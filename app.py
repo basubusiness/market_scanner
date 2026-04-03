@@ -3517,12 +3517,14 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
     buy_score  = (40 if fg<35 else 0)+(30 if rsi_val<40 else 0)+(30 if dist_ma<0 else 0)
     sell_score = (40 if fg>65 else 0)+(30 if rsi_val>65 else 0)+(30 if dist_ma>0 else 0)
 
-    if rsi_val<35 and dist_ma<0 and raw["trend_down_strong"]:
-        entry="WAIT"
-    elif rsi_rising and macd_bull:
-        entry="TRIGGER"
+    # entry drives the Buy Signal display — derive from action2 so it matches
+    # the signals_df writeback and the Value Screen Tech column exactly.
+    if action2 in ("BUY",):
+        entry = "TRIGGER"
+    elif action2 in ("WATCH",):
+        entry = "WATCH"
     else:
-        entry="WATCH"
+        entry = "WAIT"
 
     exit_s = "WAIT" if (rsi_val>65 and dist_ma>0) else ("TRIGGER" if (not rsi_rising and rsi_val>60) else "WATCH")
 
@@ -4248,23 +4250,18 @@ def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
             tickers, max_workers=8, timeout=5)
         data_src_label = "yfinance" + (" (FMP key set but plan restricts fundamentals)" if _get_fmp_key() else "")
 
-    # Tech signal — signals_df as baseline, overridden by live analyse_ticker()
-    # for the tickers being screened so Value Screen matches Deep Dive exactly.
+    # Tech signal — force-refresh tick data for screened tickers so signals_df
+    # gets updated with the same action2 scoring that Deep Dive uses, then read it.
+    for _t in tickers:
+        try:
+            fetch_ticker_data(_t, force_refresh=True)
+        except Exception:
+            pass
+
     tech_map = {}
     if not signals_df.empty and "ticker" in signals_df.columns:
         for _, row in signals_df.iterrows():
             tech_map[str(row.get("ticker","")).upper()] = str(row.get("action","WAIT"))
-
-    # Live override — call analyse_ticker() for each screened ticker
-    # Uses the same scoring logic as Deep Dive, fresh from cache/yfinance
-    _risk_mult = 1.0
-    for _t in tickers:
-        try:
-            _live = analyse_ticker(_t, _risk_mult)
-            if _live:
-                tech_map[_t] = _live.get("Action", tech_map.get(_t, "WAIT"))
-        except Exception:
-            pass  # keep signals_df value if live fetch fails
 
     def _fmt(v, pct=False, mult=1):
         if v is None: return "—"
