@@ -4248,11 +4248,23 @@ def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
             tickers, max_workers=8, timeout=5)
         data_src_label = "yfinance" + (" (FMP key set but plan restricts fundamentals)" if _get_fmp_key() else "")
 
-    # Tech signal from scanner cache
+    # Tech signal — signals_df as baseline, overridden by live analyse_ticker()
+    # for the tickers being screened so Value Screen matches Deep Dive exactly.
     tech_map = {}
     if not signals_df.empty and "ticker" in signals_df.columns:
         for _, row in signals_df.iterrows():
             tech_map[str(row.get("ticker","")).upper()] = str(row.get("action","WAIT"))
+
+    # Live override — call analyse_ticker() for each screened ticker
+    # Uses the same scoring logic as Deep Dive, fresh from cache/yfinance
+    _risk_mult = 1.0
+    for _t in tickers:
+        try:
+            _live = analyse_ticker(_t, _risk_mult)
+            if _live:
+                tech_map[_t] = _live.get("Action", tech_map.get(_t, "WAIT"))
+        except Exception:
+            pass  # keep signals_df value if live fetch fails
 
     def _fmt(v, pct=False, mult=1):
         if v is None: return "—"
