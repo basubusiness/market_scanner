@@ -803,7 +803,10 @@ def get_live_vix():
     if cached is not None:
         return cached
     try:
-        d = flatten_df(yf.Ticker("^VIX").history(period="5d", auto_adjust=True))
+        d = flatten_df(yf.Ticker("^VIX").history(period="5d", auto_adjust=True, timeout=15))
+        if d.empty or "Close" not in d.columns:
+            d = flatten_df(yf.download("^VIX", period="5d", auto_adjust=True,
+                                        progress=False, threads=False))
         if not d.empty and "Close" in d.columns:
             val = float(d["Close"].dropna().iloc[-1])
             cache_set("vix", val, ttl=300)
@@ -828,7 +831,7 @@ def _fetch_stooq(symbol):
         elif symbol.endswith(".PA"): stooq_sym = symbol.replace(".PA", ".FR")
         elif symbol.endswith(".MI"): stooq_sym = symbol.replace(".MI", ".IT")
         elif symbol.endswith(".SW"): stooq_sym = symbol.replace(".SW", ".CH")
-        elif "." not in symbol:     stooq_sym = symbol  # skip .US — let yfinance handle ambiguous tickers
+        elif "." not in symbol:     stooq_sym = symbol + ".US"  # US stocks need .US suffix on Stooq
         end   = pd.Timestamp.today()
         start = end - pd.Timedelta(days=800)
         df = pdr.get_data_stooq(stooq_sym, start=start, end=end)
@@ -880,18 +883,36 @@ def fetch_justetf_chart(isin):
         return pd.DataFrame()
 
 
-def fetch_ticker_data(ticker, isin=None):
+def fetch_ticker_data(ticker, isin=None, force_refresh=False):
     # Quick reject obvious invalid tickers before any API call
     if not ticker or ticker.startswith("$") or len(ticker) < 2:
         return None
     key = f"tick_{ticker}"
-    cached = cache_get(key)
-    if cached is not None:
-        return None if cached == "FAILED" else cached
+    if force_refresh:
+        # Bust all cached keys for this ticker so we get truly fresh data
+        with _cache_lock:
+            base = ticker.split(".")[0]
+            for k in list(_cache.keys()):
+                if k in (key, f"sfx_{ticker}", f"resolved_{ticker}", f"meta_{ticker}") \
+                        or k.startswith(f"yfund_{ticker}") \
+                        or k.startswith(f"conv_{ticker}"):
+                    _cache.pop(k, None)
+            # Also bust FMP cache keys for this ticker's base symbol
+            for k in list(_cache.keys()):
+                if k.startswith(f"fmp_") and f"/{base}" in k:
+                    _cache.pop(k, None)
+        print(f"[refresh] Busted cache for {ticker}", flush=True)
+    else:
+        cached = cache_get(key)
+        if cached is not None:
+            return None if cached == "FAILED" else cached
     try:
-        # Check universe.csv pre-resolved symbol first
-        known_sfx = cache_get(f"sfx_{ticker}")
+        # Universe.csv is a HINT only — never an override.
+        # We read the suggested suffix, try it first, but always fall back to bare ticker.
+        known_sfx   = cache_get(f"sfx_{ticker}")
         resolved_sym = cache_get(f"resolved_{ticker}")
+        universe_sfx = None  # suggestion from universe.csv — unvalidated
+
         if known_sfx is None and resolved_sym is None and not universe.empty and "yf_symbol" in universe.columns:
             rows = universe[universe["ticker"] == ticker]
             if not rows.empty:
@@ -899,53 +920,100 @@ def fetch_ticker_data(ticker, isin=None):
                 yf_sfx = str(rows.iloc[0].get("yf_suffix","")).strip()
                 if yf_sym and yf_sym not in ("","nan","None"):
                     if yf_sfx.startswith("→"):
-                        # Full symbol replacement (ISIN-resolved to different ticker)
-                        resolved_sym = yf_sym
-                        cache_set(f"resolved_{ticker}", yf_sym, ttl=86400*7)
+                        resolved_sym = yf_sym  # full-symbol hint (still falls back if invalid)
                     else:
-                        known_sfx = "" if yf_sfx in ("","nan","None") else yf_sfx
-                        cache_set(f"sfx_{ticker}", known_sfx, ttl=86400*7)
+                        universe_sfx = "" if yf_sfx in ("","nan","None") else yf_sfx
 
-        # Check if we already know the working suffix
-        known_sfx = cache_get(f"sfx_{ticker}")
+        # Re-read cache — may have been populated by a prior successful fetch
+        known_sfx    = cache_get(f"sfx_{ticker}")
         resolved_sym = resolved_sym or cache_get(f"resolved_{ticker}")
+
         def _fetch_history(sym):
-            """Fetch 1y history with timeout protection."""
+            """Fetch 1y history — multiple methods for cross-version yfinance compatibility."""
             try:
-                return flatten_df(yf.Ticker(sym).history(
-                    period="1y", auto_adjust=True, timeout=10))
+                df = flatten_df(yf.Ticker(sym).history(
+                    period="1y", auto_adjust=True, timeout=15))
+                if not df.empty and "Close" in df.columns and len(df["Close"].dropna()) >= 30:
+                    return df
             except Exception:
-                return pd.DataFrame()
+                pass
+            try:
+                import yfinance as _yf
+                df = flatten_df(_yf.download(
+                    sym, period="1y", auto_adjust=True, progress=False, threads=False))
+                if not df.empty and "Close" in df.columns and len(df["Close"].dropna()) >= 30:
+                    return df
+            except Exception:
+                pass
+            try:
+                import datetime
+                end   = datetime.date.today()
+                start = end - datetime.timedelta(days=400)
+                df = flatten_df(yf.Ticker(sym).history(
+                    start=str(start), end=str(end), auto_adjust=True, timeout=15))
+                if not df.empty and "Close" in df.columns and len(df["Close"].dropna()) >= 30:
+                    return df
+            except Exception:
+                pass
+            return pd.DataFrame()
 
         def _valid(df):
             return (not df.empty and "Close" in df.columns
                     and len(df["Close"].dropna()) >= 30)
 
-        # Determine the symbol to use
-        target_sym = resolved_sym or (ticker + known_sfx if known_sfx is not None else ticker)
+        # ── Ordered attempt list: cached → universe hint → bare ticker ──
+        # Bare ticker is ALWAYS the final fallback — universe cannot block it.
+        _attempts = []
+        if resolved_sym:
+            _attempts.append(("resolved", resolved_sym))
+        elif known_sfx is not None:
+            _attempts.append(("cached_sfx", ticker + known_sfx))
 
-        # Try Stooq first — fast, no rate limits
-        df = _fetch_stooq(target_sym)
+        if universe_sfx is not None and universe_sfx != "":
+            _univ_sym = ticker + universe_sfx
+            if not any(s == _univ_sym for _, s in _attempts):
+                _attempts.append(("universe", _univ_sym))
 
-        # Fall back to yfinance if Stooq fails
+        # Always try bare ticker — this is the critical fallback
+        if not any(s == ticker for _, s in _attempts):
+            _attempts.append(("bare", ticker))
+
+        print(f"[fetch] {ticker} attempts={[s for _,s in _attempts]}", flush=True)
+
+        df = pd.DataFrame()
+        used_sym = ticker
+        for _src, _sym in _attempts:
+            df = _fetch_stooq(_sym)
+            if _valid(df):
+                print(f"[fetch] {ticker} OK stooq/{_src} sym={_sym}", flush=True)
+                used_sym = _sym
+                break
+            df = _fetch_history(_sym)
+            if _valid(df):
+                print(f"[fetch] {ticker} OK yf/{_src} sym={_sym}", flush=True)
+                used_sym = _sym
+                break
+            print(f"[fetch] {ticker} MISS {_src} sym={_sym}", flush=True)
+
+        # Cache the working suffix so future fetches skip the search
+        if _valid(df):
+            cache_set(f"sfx_{ticker}", used_sym[len(ticker):], ttl=86400*7)
+
+        # If still nothing, try exchange suffix scan
         if not _valid(df):
-            if resolved_sym:
-                df = _fetch_history(resolved_sym)
-            elif known_sfx is not None:
-                df = _fetch_history(ticker + known_sfx)
-            else:
-                df = _fetch_history(ticker)
-                if not _valid(df):
-                    _sfx_list = [".DE",".DU",".L",".AS",".SG"] if isin else [".DE",".DU",".L",".AS",".PA",".MI",".SW",".SG",".F",".VI",".BR"]
-                    for sfx in _sfx_list:
-                        df2 = _fetch_history(ticker + sfx)
-                        if _valid(df2):
-                            df = df2
-                        cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
-                        break
-            # Cache negative result for tickers that failed all suffixes
+            _sfx_list = [".DE",".DU",".L",".AS",".SG"] if isin else [".DE",".DU",".L",".AS",".PA",".MI",".SW",".SG",".F",".VI",".BR"]
+            for sfx in _sfx_list:
+                df2 = _fetch_history(ticker + sfx)
+                if _valid(df2):
+                    df = df2
+                    used_sym = ticker + sfx
+                    cache_set(f"sfx_{ticker}", sfx, ttl=86400*7)
+                    print(f"[fetch] {ticker} OK sfx-scan sym={used_sym}", flush=True)
+                    break
+            # Cache negative result — short TTL (5 min) so transient failures don't block
             if not _valid(df) and not isin:
-                cache_set(key, "FAILED", ttl=3600)
+                print(f"[fetch] FAILED for {ticker} (no valid data from Stooq or yfinance)", flush=True)
+                cache_set(key, "FAILED", ttl=300)
                 return None
             # Last resort: search by ISIN
             if not _valid(df) and isin:
@@ -974,8 +1042,8 @@ def fetch_ticker_data(ticker, isin=None):
             cache_set(key, "FAILED", ttl=3600)
             return None
         # Sanity: if data looks like wrong ticker, try justETF for ETFs
-        _ma_check = float(close.rolling(200).mean().iloc[-1])
-        if _ma_check > 0 and (float(close.iloc[-1]) / _ma_check) > 10 and isin:
+        _ma_check = close.rolling(200).mean().iloc[-1]
+        if pd.notna(_ma_check) and float(_ma_check) > 0 and (float(close.iloc[-1]) / float(_ma_check)) > 10 and isin:
             df_j = fetch_justetf_chart(isin)
             if not df_j.empty and len(df_j["Close"].dropna()) >= 30:
                 df    = df_j
@@ -984,16 +1052,21 @@ def fetch_ticker_data(ticker, isin=None):
         if price < 0.10:  # only filter near-zero prices
             return None
         # Sanity: if price is >10x MA200, likely wrong ticker (e.g. SXRN.US vs SXRN.DE)
-        _ma200c = float(close.rolling(200).mean().iloc[-1])
-        if _ma200c > 0 and (price / _ma200c) > 10:
+        # Skip this check if MA200 is NaN (stock listed < 200 days ago — perfectly valid)
+        _ma200c = close.rolling(200).mean().iloc[-1]
+        if pd.notna(_ma200c) and float(_ma200c) > 0 and (price / float(_ma200c)) > 10:
             return None
         if "Volume" in df.columns:
             avg_vol = df["Volume"].dropna().tail(20).mean()
             # ETFs can have very low volume but still be valid — only filter true zeros
             if avg_vol == 0:
                 return None
-        ma50   = float(close.rolling(50).mean().iloc[-1])
-        ma200  = float(close.rolling(200).mean().iloc[-1])
+        ma50_raw  = close.rolling(50).mean().iloc[-1]
+        ma200_raw = close.rolling(200).mean().iloc[-1]
+        # For recently listed stocks (< 50 or < 200 days), fall back to price itself
+        # so dist_ma and downstream calculations remain meaningful
+        ma50  = float(ma50_raw)  if pd.notna(ma50_raw)  else float(price)
+        ma200 = float(ma200_raw) if pd.notna(ma200_raw) else float(price)
         rsi_s  = calculate_rsi(close)
         rsi    = float(rsi_s.iloc[-1])
         if not (1 < rsi < 99):
@@ -3184,6 +3257,11 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
 
     # For ETFs with ISIN: use justETF chart as primary source (reliable EUR prices)
     # For stocks or ETFs without ISIN: fall back to yfinance via fetch_ticker_data
+    # Always bust tick_ cache — Deep Dive must show live data on every click
+    with _cache_lock:
+        for _k in list(_cache.keys()):
+            if _k == f"tick_{ticker}" or _k == f"tick_{resolved_yf or ticker}":
+                _cache.pop(_k, None)
     raw = None
     is_etf = False
     if isin:
@@ -3235,18 +3313,72 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
                     "ma200_slope": _ma200_slope2,
                     "source": "justETF",
                 }
+                # Write to tick_ cache so subsequent calls (scanner writeback, re-open) hit cache
+                cache_set(f"tick_{ticker}", raw, ttl=3600)
 
     if raw is None:
-        raw = fetch_ticker_data(resolved_yf or ticker, isin=isin)
+        # Deep Dive always bypasses FAILED cache — user explicitly requested this ticker
+        raw = fetch_ticker_data(resolved_yf or ticker, isin=isin, force_refresh=True)
+
+    # Extra fallback: try yfinance directly — catches tickers that slip through fetch_ticker_data
+    if raw is None:
+        _dd_attempts = [ticker]
+        if "." not in ticker:
+            _dd_attempts += [ticker + sfx for sfx in [".DE", ".L", ".AS", ".PA"]]
+        for _attempt in _dd_attempts:
+            try:
+                import datetime as _dt
+                _end = _dt.date.today()
+                _start = _end - _dt.timedelta(days=400)
+                _df = flatten_df(yf.Ticker(_attempt).history(
+                    start=str(_start), end=str(_end), auto_adjust=True, timeout=15))
+                if not _df.empty and "Close" in _df.columns and len(_df["Close"].dropna()) >= 30:
+                    _close = _df["Close"].dropna()
+                    if float(_close.iloc[-1]) >= 0.10:
+                        cache_set(f"sfx_{ticker}", "" if _attempt == ticker else _attempt[len(ticker):], ttl=86400*7)
+                        raw = fetch_ticker_data(_attempt, isin=isin, force_refresh=True)
+                        if raw:
+                            print(f"[deep_dive] date-range fallback succeeded: {_attempt}", flush=True)
+                            break
+            except Exception as _e:
+                print(f"[deep_dive] date-range fallback {_attempt} failed: {_e}", flush=True)
+                continue
     if raw is None:
         try:
-            sr = yf.Search(ticker, max_results=3)
+            sr = yf.Search(ticker, max_results=10)
             if hasattr(sr,"quotes") and sr.quotes:
-                sugg = ", ".join([q["symbol"] for q in sr.quotes[:3]])
-                return dbc.Alert(f"No data for **{ticker}**. Try: {sugg}", color="warning")
+                def _is_real_symbol(q):
+                    sym = q.get("symbol","")
+                    if not sym or len(sym) < 1 or len(sym) > 10: return False
+                    if len(sym) == 12 and sym[:2].isalpha() and sym[2:].isalnum(): return False
+                    return True
+                def _rank(q):
+                    sym = q.get("symbol","")
+                    if sym == ticker: return 0
+                    if "." not in sym: return 1
+                    if sym.startswith(ticker + "."): return 2
+                    return 3
+                quotes = sorted([q for q in sr.quotes if _is_real_symbol(q)], key=_rank)
+                # Remove the entered ticker itself from suggestions (not helpful)
+                quotes = [q for q in quotes if q.get("symbol","") != ticker]
+                if quotes:
+                    sugg = ", ".join([q["symbol"] for q in quotes[:3]])
+                    return dbc.Alert([
+                        html.Strong(f"No data for {ticker}. "),
+                        html.Span(f"Could not retrieve price history. The stock may be delisted, "
+                                  f"taken private, or the ticker may differ by exchange. "),
+                        html.Br(),
+                        html.Span("Similar symbols found: "),
+                        html.Strong(sugg),
+                        html.Span(" — try one of these instead."),
+                    ], color="warning")
         except Exception:
             pass
-        return dbc.Alert(f"No data found for {ticker}.", color="danger")
+        return dbc.Alert([
+            html.Strong(f"No data found for {ticker}. "),
+            html.Span("The stock may be delisted, taken private, or not covered by our data sources. "),
+            html.Span("Try searching Yahoo Finance to confirm the ticker is still actively traded."),
+        ], color="danger")
 
     close    = raw["close"]
     ma50_s   = raw["ma50_s"]
@@ -3303,11 +3435,6 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
         beta = _parse_fund(_beta),
         asset_type = "ETF" if is_etf else "Stock",
     )
-
-    # Pre-initialise flags to False so writeback try block doesn't NameError
-    # (proper values computed after get_name_isin_full below)
-    hard_flagged = False
-    soft_flagged = False
 
     # ── Write fresh signal back to in-memory signals_df ──────────────
     # This keeps scanner results consistent with Deep Dive live data
@@ -3390,15 +3517,20 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
     buy_score  = (40 if fg<35 else 0)+(30 if rsi_val<40 else 0)+(30 if dist_ma<0 else 0)
     sell_score = (40 if fg>65 else 0)+(30 if rsi_val>65 else 0)+(30 if dist_ma>0 else 0)
 
-    # entry/exit derived from action2 (set in writeback block above)
+    # entry drives the Buy Signal display — derive from action2 (set in writeback
+    # try block above) so it matches signals_df and Value Screen Tech column exactly.
+    # action2 may not be defined if writeback try raised — fall back to simple rule.
     try:
-        _a2 = action2
+        _a2 = action2  # noqa — may be unbound if try block above raised
     except NameError:
         _a2 = "BUY" if (rsi_rising and macd_bull and dist_ma < -5) else (
               "WATCH" if (macd_bull or rsi_rising) and dist_ma < 0 else "WAIT")
-    if _a2 == "BUY":    entry = "TRIGGER"
-    elif _a2 == "WATCH": entry = "WATCH"
-    else:                entry = "WAIT"
+    if _a2 == "BUY":
+        entry = "TRIGGER"
+    elif _a2 == "WATCH":
+        entry = "WATCH"
+    else:
+        entry = "WAIT"
 
     exit_s = "WAIT" if (rsi_val>65 and dist_ma>0) else ("TRIGGER" if (not rsi_rising and rsi_val>60) else "WATCH")
 
@@ -4124,7 +4256,15 @@ def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
             tickers, max_workers=8, timeout=5)
         data_src_label = "yfinance" + (" (FMP key set but plan restricts fundamentals)" if _get_fmp_key() else "")
 
-    # Tech signal from scanner cache
+    # Tech signal — refresh tick data for screened tickers in parallel so
+    # signals_df gets the same action2 scoring that Deep Dive uses.
+    from concurrent.futures import ThreadPoolExecutor, as_completed as _as_completed
+    def _refresh_one(t):
+        try: fetch_ticker_data(t, force_refresh=True)
+        except Exception: pass
+    with ThreadPoolExecutor(max_workers=6) as _ex:
+        list(_ex.map(_refresh_one, tickers[:30]))  # cap at 30 to avoid timeout
+
     tech_map = {}
     if not signals_df.empty and "ticker" in signals_df.columns:
         for _, row in signals_df.iterrows():
@@ -4442,14 +4582,16 @@ def refresh_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
                         or (k.startswith("fmp_") and f"/{base}" in k):
                     _cache.pop(k, None)
 
-    status_msg = dbc.Alert([
-        html.Strong(f"🔄 Refreshed {len(refreshed)}/{len(tickers)} tickers live  "),
-        html.Span(
-            (f"· ✅ {', '.join(refreshed[:8])}{'…' if len(refreshed)>8 else ''}  " if refreshed else "") +
-            (f"· ❌ no data: {', '.join(failed[:5])}" if failed else ""),
-            style={"fontSize":"12px","color":"#64748b"}
-        ),
-    ], color="info", className="py-2 mb-1")
+    status_msg = html.Div([
+        dbc.Alert([
+            html.Strong(f"🔄 Refreshed {len(refreshed)}/{len(tickers)} tickers live  "),
+            html.Span(
+                (f"· ✅ {', '.join(refreshed[:8])}{'…' if len(refreshed)>8 else ''}  " if refreshed else "") +
+                (f"· ❌ no data: {', '.join(failed[:5])}" if failed else ""),
+                style={"fontSize":"12px","color":"#64748b"}
+            ),
+        ], color="info", className="py-2 mb-1"),
+    ])
 
     # Re-run the full screen with fresh data
     results, screen_status = run_value_screen(1, tickers_raw, min_score, tech_filter)
