@@ -3517,17 +3517,11 @@ def _run_deep_dive_inner(n_clicks, user_input, budget):
     buy_score  = (40 if fg<35 else 0)+(30 if rsi_val<40 else 0)+(30 if dist_ma<0 else 0)
     sell_score = (40 if fg>65 else 0)+(30 if rsi_val>65 else 0)+(30 if dist_ma>0 else 0)
 
-    # entry drives the Buy Signal display — derive from action2 (set in writeback
-    # try block above) so it matches signals_df and Value Screen Tech column exactly.
-    # action2 may not be defined if writeback try raised — fall back to simple rule.
-    try:
-        _a2 = action2  # noqa — may be unbound if try block above raised
-    except NameError:
-        _a2 = "BUY" if (rsi_rising and macd_bull and dist_ma < -5) else (
-              "WATCH" if (macd_bull or rsi_rising) and dist_ma < 0 else "WAIT")
-    if _a2 == "BUY":
+    # entry drives the Buy Signal display — derive from action2 so it matches
+    # the signals_df writeback and the Value Screen Tech column exactly.
+    if action2 in ("BUY",):
         entry = "TRIGGER"
-    elif _a2 == "WATCH":
+    elif action2 in ("WATCH",):
         entry = "WATCH"
     else:
         entry = "WAIT"
@@ -4256,14 +4250,13 @@ def run_value_screen(n_clicks, tickers_raw, min_score, tech_filter):
             tickers, max_workers=8, timeout=5)
         data_src_label = "yfinance" + (" (FMP key set but plan restricts fundamentals)" if _get_fmp_key() else "")
 
-    # Tech signal — refresh tick data for screened tickers in parallel so
-    # signals_df gets the same action2 scoring that Deep Dive uses.
-    from concurrent.futures import ThreadPoolExecutor, as_completed as _as_completed
-    def _refresh_one(t):
-        try: fetch_ticker_data(t, force_refresh=True)
-        except Exception: pass
-    with ThreadPoolExecutor(max_workers=6) as _ex:
-        list(_ex.map(_refresh_one, tickers[:30]))  # cap at 30 to avoid timeout
+    # Tech signal — force-refresh tick data for screened tickers so signals_df
+    # gets updated with the same action2 scoring that Deep Dive uses, then read it.
+    for _t in tickers:
+        try:
+            fetch_ticker_data(_t, force_refresh=True)
+        except Exception:
+            pass
 
     tech_map = {}
     if not signals_df.empty and "ticker" in signals_df.columns:
