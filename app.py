@@ -348,9 +348,12 @@ def calculate_rsi(prices, window=14):
     delta = prices.diff()
     gain  = delta.where(delta > 0, 0.0).rolling(window).mean()
     loss  = (-delta.where(delta < 0, 0.0)).rolling(window).mean()
-    rs    = gain / loss
-    rs[loss == 0] = np.inf
-    return 100 - (100 / (1 + rs))
+    both_zero = (gain == 0) & (loss == 0)
+    loss = loss.where(~both_zero, other=1e-9)
+    rs   = gain / loss.replace(0, 1e-9)
+    rsi  = 100 - (100 / (1 + rs))
+    rsi[both_zero] = 50.0
+    return rsi.fillna(50.0)
 
 def calculate_macd(prices):
     ema12  = prices.ewm(span=12, adjust=False).mean()
@@ -430,14 +433,24 @@ def _fetch_stooq(symbol):
 
 
 def fetch_justetf_live_price(isin):
-    """Fetch live exchange price via justetf_scraping.load_live_quote."""
+    """Fetch live exchange price with timeout since WebSocket can hang."""
     if not JUSTETF_AVAILABLE:
         return None
-    try:
-        quote = justetf_scraping.load_live_quote(str(isin))
-        return float(quote.last) if quote and quote.last else None
-    except Exception:
-        return None
+    import threading
+    result = [None]
+    def _fetch():
+        try:
+            quote = justetf_scraping.load_live_quote(str(isin))
+            if quote:
+                price = quote.mid or quote.last
+                if price and float(price) > 0:
+                    result[0] = float(price)
+        except Exception:
+            pass
+    t = threading.Thread(target=_fetch, daemon=True)
+    t.start()
+    t.join(timeout=6)
+    return result[0]
 
 
 def fetch_justetf_chart(isin):
@@ -502,8 +515,9 @@ def fetch_ticker_data(ticker, isin=None, force_refresh=False):
                 if yf_sym and yf_sym not in ("","nan","None"):
                     if yf_sfx.startswith("→"):
                         resolved_sym = yf_sym
-                    else:
-                        universe_sfx = "" if yf_sfx in ("","nan","None") else yf_sfx
+                    elif yf_sfx and yf_sfx not in ("","nan","None"):
+                        if not ticker.endswith(yf_sfx):
+                            universe_sfx = yf_sfx
 
         known_sfx    = cache_get(f"sfx_{ticker}")
         resolved_sym = resolved_sym or cache_get(f"resolved_{ticker}")
@@ -595,8 +609,8 @@ def fetch_ticker_data(ticker, isin=None, force_refresh=False):
 
         rsi_s     = calculate_rsi(close)
         rsi       = float(rsi_s.iloc[-1])
-        if not (1 < rsi < 99):
-            return None
+        if not (0 <= rsi <= 100):
+            rsi = 50.0
 
         macd_l, macd_sig, macd_h = calculate_macd(close)
         rsi_slope    = linear_slope(rsi_s.dropna(), window=5)
@@ -1528,7 +1542,12 @@ def build_result_df(sig, budget, fg, rm):
         target_s.notna() & price_s.notna() & (price_s > 0)
     )
     result_df["Upside%"]  = upside_raw.round(1)
-    result_df["_upside"]  = upside_raw  # numeric, for sorting
+    result_df["_upside"]  = pd.to_numeric(upside_raw, errors="coerce")
+
+    ac = pd.to_numeric(s.get("analyst_count", pd.Series([np.nan]*len(s))), errors="coerce")
+    result_df["Analysts"] = ac.where(ac.notna()).apply(
+        lambda v: int(v) if pd.notna(v) else "—"
+    )
 
     return result_df
 
@@ -1780,6 +1799,7 @@ def render_scanner(tickers, budget, vix, fg, rm):
                 "**What to do:** Medium-term holds (6–18 months). The idea is the price recovers toward fair value as the market recognises the quality."
             )
         df_val = result_df[result_df["_value"]].copy()
+        df_val["_upside"] = pd.to_numeric(df_val["_upside"], errors="coerce")
         df_val = df_val.sort_values(
             ["_upside", "Score"],
             ascending=[False, False],
@@ -1799,6 +1819,7 @@ def render_scanner(tickers, budget, vix, fg, rm):
                 "**Risk:** Momentum reverses sharply. Needs more active monitoring than Value picks."
             )
         df_mom = result_df[result_df["_momentum"]].copy()
+        df_mom["_upside"] = pd.to_numeric(df_mom["_upside"], errors="coerce")
         df_mom = df_mom.sort_values(
             ["_upside", "Score"],
             ascending=[False, False],
@@ -1830,6 +1851,7 @@ def render_scanner(tickers, budget, vix, fg, rm):
             ("📈 Technical Turnaround","📈", "Technical recovery visible but no revenue data yet — higher risk, smaller size."),
         ]:
             bucket_df = df_dh[df_dh["dh_bucket"] == bucket_label].copy()
+            bucket_df["_upside"] = pd.to_numeric(bucket_df["_upside"], errors="coerce")
             bucket_df = bucket_df.sort_values(
                 ["_upside", "Score"],
                 ascending=[False, False],
@@ -1863,14 +1885,19 @@ def render_scanner(tickers, budget, vix, fg, rm):
             ("🔴 Momentum",   "Momentum",   "_momentum"),
             ("⚡ Dark Horse", "Dark Horse", "_darkhorse"),
         ]:
-            sub = result_df[result_df[flag]].sort_values("Score", ascending=False).head(N).copy()
+            sub = result_df[result_df[flag]].sort_values(
+                ["_upside", "Score"], ascending=[False, False], na_position="last"
+            ).head(N).copy()
             if not sub.empty:
                 sub.insert(0, "Strategy", strat)
                 frames.append(sub)
         if frames:
             live_df = pd.concat(frames, ignore_index=True)
+            live_df["_upside"] = pd.to_numeric(live_df["_upside"], errors="coerce")
             live_df["_sr"] = live_df.groupby("Strategy").cumcount()
-            live_df = live_df.sort_values(["_sr","Score"], ascending=[True,False]).drop(columns=["_sr"]).reset_index(drop=True)
+            live_df = live_df.sort_values(
+                ["_sr", "_upside", "Score"], ascending=[True, False, False], na_position="last"
+            ).drop(columns=["_sr"]).reset_index(drop=True)
             live_df.insert(0,"#",range(1,len(live_df)+1))
             _show_strategy_table(live_df, "Best Picks", "#1a56db", "No signals across any strategy.")
         else:
@@ -2057,15 +2084,20 @@ def render_deepdive(budget):
     dist_hi = (cur_p - hi52) / hi52 * 100 if hi52 else 0
     dist_lo = (cur_p - lo52) / lo52 * 100 if lo52 else 0
 
+    def _fmt_price(p):
+        if p >= 1000: return f"€{p:,.0f}"
+        if p >= 100:  return f"€{p:.1f}"
+        return f"€{p:.2f}"
+
     k1,k2,k3,k4,k5,k6 = st.columns(6)
-    k1.metric("Price",        f"€{cur_p:.2f}", delta=f"{dist_ma:+.1f}% vs MA200")
-    k2.metric("52w High",     f"€{hi52:.2f}",  delta=f"{dist_hi:+.1f}%")
-    k3.metric("52w Low",      f"€{lo52:.2f}",  delta=f"{dist_lo:+.1f}%")
-    k4.metric("RSI",          f"{rsi_val:.1f}", delta="↗ Rising" if rsi_rising else "↘ Falling",
+    k1.metric("Price",       _fmt_price(cur_p), delta=f"{dist_ma:+.1f}% vs MA200")
+    k2.metric("52w High",   _fmt_price(hi52),  delta=f"{dist_hi:+.1f}%")
+    k3.metric("52w Low",    _fmt_price(lo52),  delta=f"{dist_lo:+.1f}%")
+    k4.metric("RSI",         f"{rsi_val:.1f}", delta="↗ Rising" if rsi_rising else "↘ Falling",
               delta_color="normal" if rsi_rising else "inverse")
-    k5.metric("MACD",         "▲ Bullish" if macd_bull else "▼ Bearish",
+    k5.metric("MACD",        "▲ Bullish" if macd_bull else "▼ Bearish",
               delta="Accelerating" if macd_accel else None)
-    k6.metric("Value Score",  value_label)
+    k6.metric("Value Score", value_label)
 
     # ── Warning banners ───────────────────────────────────────────────
     if hard_flagged:
@@ -2192,6 +2224,616 @@ def render_deepdive(budget):
             st.markdown(f"- {r}")
         st.caption("This explanation is generated automatically from the same signals the system uses. It is not financial advice.")
 
+    # ── AI Analysis (Gemini) ──────────────────────────────────────────
+    _ai_cache_key = f"ai_analysis_{ticker}"
+    _cached_ai    = cache_get(_ai_cache_key)
+
+    col_ai1, col_ai2 = st.columns([1, 4])
+    _run_ai = col_ai1.button("🤖 AI Analysis", key=f"ai_btn_{ticker}",
+                             help="Gemini 2.5 Flash synthesises all signals into plain English with macro context")
+    if _cached_ai and not _run_ai:
+        col_ai2.caption("📎 Cached analysis — click 🤖 AI Analysis to refresh")
+
+    if _run_ai or (_cached_ai and not _run_ai and st.session_state.get("_show_ai_" + ticker)):
+        st.session_state["_show_ai_" + ticker] = True
+
+    if _run_ai or _cached_ai:
+        if _run_ai:
+            # Build context payload
+            _ai_context = {
+                "ticker": ticker, "name": name, "type": "ETF" if is_etf else "Stock",
+                "price": cur_p, "ma200": ma200, "dist_ma200_pct": round(dist_ma, 1),
+                "rsi": round(rsi_val, 1), "rsi_rising": rsi_rising,
+                "macd_bull": macd_bull, "macd_accel": macd_accel,
+                "action": action, "score": round(score, 3),
+                "is_knife": is_knife, "reversal": reversal,
+                "value_grade": value_grade, "value_score": value_score,
+                "pe_ratio": fund_data.get("fmp_pe_ttm"),
+                "roe": fund_data.get("fmp_roe"),
+                "rev_growth": fund_data.get("fmp_rev_growth"),
+                "debt_equity": fund_data.get("fmp_debt_eq"),
+                "analyst_target_mean": fund_data.get("analyst_target_mean"),
+                "analyst_upside_pct": round(((fund_data.get("analyst_target_mean") - cur_p) / cur_p * 100), 1) if fund_data.get("analyst_target_mean") and cur_p else None,
+                "analyst_rec": fund_data.get("analyst_rec"),
+                "analyst_count": fund_data.get("analyst_count"),
+                "conviction_labels": conv_labels,
+                "vix": get_live_vix(),
+                "fear_greed": get_fg_index()[0],
+                "sector": str(get_universe()[get_universe()["ticker"]==ticker]["sector"].iloc[0]) if not get_universe().empty and "sector" in get_universe().columns and not get_universe()[get_universe()["ticker"]==ticker].empty else "",
+            }
+
+            _vix_label = "🔥 Crisis-level" if _ai_context['vix'] > 35 else "😰 Elevated fear" if _ai_context['vix'] > 25 else "⚖️ Normal" if _ai_context['vix'] > 15 else "😌 Complacent"
+            _fg_label  = "🔴 Extreme Fear" if _ai_context['fear_greed'] < 25 else "🟠 Fear" if _ai_context['fear_greed'] < 45 else "🟡 Neutral" if _ai_context['fear_greed'] < 55 else "🟢 Greed" if _ai_context['fear_greed'] < 75 else "💚 Extreme Greed"
+
+            _prompt = f"""You are helping a private investor decide what to do with {ticker} ({name}). Write like a smart friend who knows markets — clear, plain, no jargon. The investor understands basic investing but is not a professional analyst.
+
+SIGNAL DATA:
+• Price €{_ai_context['price']:.2f} | {_ai_context['dist_ma200_pct']:+.1f}% vs long-term average | RSI {_ai_context['rsi']} ({'rising' if _ai_context['rsi_rising'] else 'falling'}) | Momentum {'turning up' + (' and accelerating' if _ai_context['macd_accel'] else '') if _ai_context['macd_bull'] else 'still falling'}
+• {'⚠️ Still in freefall — no confirmed bottom yet' if _ai_context['is_knife'] and not _ai_context['reversal'] else '✅ Price appears to have bottomed' if _ai_context['reversal'] else ''}
+• Business quality: Grade {_ai_context['value_grade'] or '—'} | PE {_ai_context['pe_ratio'] or '—'} | Revenue trend {str(round(_ai_context['rev_growth']*100,1))+"%" if _ai_context['rev_growth'] else 'unknown'} | Profitability (ROE) {str(round(_ai_context['roe']*100,1))+"%" if _ai_context['roe'] else 'unknown'}
+• {_ai_context['analyst_count'] or 'No'} analysts covering | Consensus: {_ai_context['analyst_rec'] or '—'} | Their price target implies {_ai_context['analyst_upside_pct'] or '—'}% upside
+• Market mood: VIX {_ai_context['vix']:.1f} ({_vix_label}) | Investor sentiment {_ai_context['fear_greed']}/100 ({_fg_label})
+• Sector: {_ai_context['sector'] or 'unknown'}
+• System signal: {_ai_context['action']}
+
+Write EXACTLY this format using these headers:
+
+**⚡ What's happening**
+In 1-2 plain sentences: what is this company, why is it interesting right now, and what's the core tension (e.g. cheap but struggling, or recovering but risky). No jargon. Imagine explaining to a smart friend over coffee.
+
+**✅ The case FOR**
+2-3 bullet points of the strongest reasons this could work out. Translate technical terms — instead of "RSI rising" say "selling pressure is easing and buyers are stepping in". Include what analysts think and why the current market mood matters.
+
+**❌ The case AGAINST**  
+2-3 bullet points of the real risks. Be specific — what exact number or trend is worrying, and what would it mean if it continues.
+
+**👀 The one thing to watch**
+One specific thing — a price level, an upcoming event, a trend to monitor — that will tell you in the next few weeks whether this is working or not. Make it concrete enough that the investor knows exactly what to look for.
+
+**🎯 What to do**
+2-3 sentences. How much to commit (none / small test / half position / full position) and the simple reason why. Then: what price or signal would make you add more, and what would make you cut and walk away.
+
+Absolute rules: 
+- Zero financial jargon without explanation
+- Never say "it is worth noting" or "it is important to consider" 
+- Every point must be specific to {ticker} — no generic statements that could apply to any stock
+- The investor should finish reading knowing exactly what to do and why"""
+
+            with st.spinner("🤖 Gemini analysing…"):
+                try:
+                    import google.generativeai as genai
+                    # Load API key from config file or secrets
+                    _gemini_key = ""
+
+                    # 1. Environment variable
+                    import os as _os
+                    _gemini_key = _os.environ.get("GEMINI_API_KEY", "").strip()
+
+                    # 2. st.secrets (Streamlit Cloud)
+                    if not _gemini_key:
+                        try: _gemini_key = st.secrets.get("GEMINI_API_KEY", "")
+                        except: pass
+
+                    if not _gemini_key:
+                        st.warning(
+                            "⚙️ Gemini API key not found. Add `GEMINI_API_KEY` to Streamlit secrets or as an environment variable."
+                        )
+                    else:
+                        genai.configure(api_key=_gemini_key)
+                        _model    = genai.GenerativeModel("gemini-2.5-flash")
+                        _response = _model.generate_content(_prompt)
+                        _ai_text  = _response.text
+                        cache_set(_ai_cache_key, _ai_text, ttl=3600)
+                        _cached_ai = _ai_text
+                except ImportError:
+                    st.warning("⚙️ `google-generativeai` not installed. Run: `pip install google-generativeai`")
+                except Exception as _e:
+                    st.error(f"AI analysis failed: {_e}")
+
+        if _cached_ai and isinstance(_cached_ai, str):
+            with st.expander("🤖 AI Analysis (Gemini 2.5 Flash)", expanded=True):
+                st.markdown(_cached_ai)
+                st.caption("AI analysis based on quantitative signals. Not financial advice. Refresh for updated analysis.")
+    fig_price = go.Figure()
+    fig_price.add_trace(go.Scatter(x=close.index, y=close, name="Price", line=dict(color="#00bcd4",width=2)))
+    fig_price.add_trace(go.Scatter(x=ma50_s.index, y=ma50_s, name="MA50", line=dict(color="#ffd600",width=1,dash="dash")))
+    fig_price.add_trace(go.Scatter(x=ma200_s.index, y=ma200_s, name="MA200", line=dict(color="#ff6d00",width=1,dash="dash")))
+    fig_price.update_layout(template="plotly_dark", paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
+        margin=dict(l=0,r=0,t=30,b=0), height=280,
+        title=f"{ticker} — {name}", legend=dict(orientation="h",y=1.1))
+    st.plotly_chart(fig_price, use_container_width=True)
+
+    fig_ind = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.5,0.5], vertical_spacing=0.05)
+    fig_ind.add_trace(go.Scatter(x=macd_l.index,   y=macd_l,   name="MACD",   line=dict(color="#00e676")), row=1, col=1)
+    fig_ind.add_trace(go.Scatter(x=macd_sig.index, y=macd_sig, name="Signal", line=dict(color="#ff6d00")), row=1, col=1)
+    fig_ind.add_trace(go.Bar(x=macd_h.index, y=macd_h, name="Hist",
+        marker_color=["#00e676" if v>=0 else "#ff1744" for v in macd_h]), row=1, col=1)
+    fig_ind.add_trace(go.Scatter(x=rsi_s.index, y=rsi_s, name="RSI", line=dict(color="#00bcd4")), row=2, col=1)
+    fig_ind.add_hline(y=30, line_color="#00e676", line_dash="dash", row=2, col=1)
+    fig_ind.add_hline(y=70, line_color="#ff1744", line_dash="dash", row=2, col=1)
+    fig_ind.update_layout(template="plotly_dark", paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
+        margin=dict(l=0,r=0,t=10,b=0), height=260, legend=dict(orientation="h",y=1.05))
+    st.plotly_chart(fig_ind, use_container_width=True)
+
+    # ── Fundamentals panel ────────────────────────────────────────────
+    if not is_etf:
+        st.divider()
+        st.markdown("**📊 Fundamentals**")
+        def _fmt(v, mult=1, pct=False, suffix=""):
+            try:
+                f = float(v) * mult
+                return f"{f:.1f}%" if pct else f"{f:.2f}{suffix}"
+            except: return "—"
+
+        fund_fields = ["fmp_pe_ttm","fmp_pb","fmp_peg","fmp_fcf_yield",
+                       "fmp_roe","fmp_debt_eq","fmp_rev_growth","fmp_div_yield"]
+        fund_coverage = sum(1 for k in fund_fields
+                            if fund_data.get(k) is not None
+                            and str(fund_data.get(k)) not in ("nan","None",""))
+
+        if fund_coverage < 2:
+            st.warning(
+                "⚠️ **Limited fundamental data.** "
+                "yfinance may be rate-limited or this stock has limited coverage. "
+                "Technical signals above are still valid."
+            )
+            st.caption("Try clicking **🔄 Refresh** in a few minutes.")
+        else:
+            if fund_coverage < 4:
+                st.caption(f"⚠️ Partial data — {fund_coverage}/8 fields available.")
+
+            # Valuation row
+            st.caption("**Valuation**")
+            v1,v2,v3,v4 = st.columns(4)
+            v1.metric("P/E (TTM)",   _fmt(pe),
+                      delta="Cheap" if _pf(pe) and 0 < _pf(pe) < 15 else ("Expensive" if _pf(pe) and _pf(pe) > 40 else None),
+                      delta_color="normal" if _pf(pe) and 0 < _pf(pe) < 15 else "inverse")
+            v2.metric("P/B",         _fmt(fund_data.get("fmp_pb")))
+            v3.metric("PEG",         _fmt(fund_data.get("fmp_peg")))
+            v4.metric("FCF Yield",   _fmt(fund_data.get("fmp_fcf_yield"), mult=100, pct=True))
+
+            # Quality row
+            st.caption("**Quality**")
+            q1,q2,q3,q4 = st.columns(4)
+            q1.metric("ROE",         _fmt(fund_data.get("fmp_roe"), mult=100, pct=True))
+            q2.metric("D/E Ratio",   _fmt(fund_data.get("fmp_debt_eq")))
+            q3.metric("Rev Growth",  _fmt(fund_data.get("fmp_rev_growth"), mult=100, pct=True))
+            q4.metric("Div Yield",   _fmt(div, mult=100, pct=True))
+
+        if value_available:
+            grade_emoji = {"A":"🏆","B":"✅","C":"⚖️","D":"⚠️"}.get(value_grade,"")
+            st.markdown(f"**Overall Quality: {grade_emoji} Grade {value_grade} ({value_score}/100)**")
+            if value_bdown:
+                bdown_str = " · ".join(f"{k}: {v}/100" for k,v in value_bdown.items())
+                st.caption(bdown_str)
+
+    # ── Upside Potential panel ────────────────────────────────────────
+    if not is_etf:
+        st.divider()
+        st.markdown("**🎯 Upside Potential**")
+
+        # Mean reversion upside (always available)
+        reversion_upside = -dist_ma  # dist_ma is negative when below MA200
+        target_ma200     = raw["ma200"]
+        target_52w       = hi52
+
+        # Analyst targets (from yfinance)
+        analyst_mean  = _safe_float(fund_data.get("analyst_target_mean"))
+        analyst_high  = _safe_float(fund_data.get("analyst_target_high"))
+        analyst_low   = _safe_float(fund_data.get("analyst_target_low"))
+        analyst_count = fund_data.get("analyst_count")
+        analyst_rec   = str(fund_data.get("analyst_rec","")).lower()
+
+        analyst_upside = ((analyst_mean - cur_p) / cur_p * 100) if analyst_mean and cur_p else None
+
+        # 52w high shown as "gain needed to reach it" — consistent upside framing
+        gain_to_52w_high = ((hi52 - cur_p) / cur_p * 100) if hi52 and cur_p else 0
+
+        # Upside summary metrics
+        u1, u2, u3, u4 = st.columns(4)
+        u1.metric(
+            "To MA200",
+            f"{reversion_upside:+.1f}%",
+            delta=f"Target ~{_fmt_price(target_ma200)}",
+            delta_color="normal" if reversion_upside > 0 else "inverse"
+        )
+        u2.metric(
+            "To 52w High",
+            f"+{gain_to_52w_high:.1f}%" if gain_to_52w_high > 0 else f"{gain_to_52w_high:.1f}%",
+            delta=f"High ~{_fmt_price(target_52w)}",
+            delta_color="normal" if gain_to_52w_high > 0 else "off"
+        )
+        if analyst_mean:
+            u3.metric(
+                "Analyst Target",
+                f"{analyst_upside:+.1f}%" if analyst_upside is not None else "—",
+                delta=f"{_fmt_price(analyst_mean)} mean · {analyst_count or '?'} analysts",
+                delta_color="normal" if (analyst_upside or 0) > 10 else "inverse"
+            )
+            rec_label = analyst_rec.replace("_"," ").title() if analyst_rec else "—"
+            range_label = f"{_fmt_price(analyst_low)} – {_fmt_price(analyst_high)}" if analyst_low and analyst_high else "—"
+            with u4:
+                st.metric("Target Range", range_label)
+                st.caption(f"Rec: **{rec_label}**")
+        else:
+            u3.metric("Analyst Target", "—", delta="No coverage data")
+            u4.metric("Target Range",   "—")
+
+        # Upside verdict
+        if analyst_upside is not None:
+            if analyst_upside < 5:
+                st.warning(f"⚠️ **Limited upside** — analysts see only {analyst_upside:.1f}% to consensus target. "
+                           f"The dip may already be priced in.")
+            elif analyst_upside < 15:
+                st.info(f"📊 **Moderate upside** — {analyst_upside:.1f}% to analyst consensus. "
+                        f"Reasonable but not exceptional.")
+            else:
+                st.success(f"🚀 **Strong upside** — {analyst_upside:.1f}% to analyst consensus target of €{analyst_mean:.2f}. "
+                           f"Analysts see significant recovery potential.")
+        else:
+            # Fall back to MA200 reversion
+            if reversion_upside < 5:
+                st.info(f"📊 Stock is near its MA200 — limited mean reversion upside ({reversion_upside:.1f}%).")
+            elif reversion_upside > 15:
+                st.success(f"📈 **{reversion_upside:.1f}% upside** to MA200 — meaningful mean reversion potential.")
+            else:
+                st.info(f"📊 {reversion_upside:.1f}% upside to MA200.")
+            st.caption("No analyst coverage data available. Upside based on MA200 mean reversion.")
+
+    # ── Write everything back to signals.db synchronously ────────────
+    # Technicals change daily, fundamentals quarterly, analyst targets monthly.
+    # All written on every Deep Dive — single source of truth, no async, no data loss.
+    import math as _math, sqlite3 as _sq
+
+    full_writeback = {
+        "ticker":      ticker,
+        "data_source": "live_deepdive",
+        "computed_at": date.today().isoformat(),
+        # Technicals
+        "price":       cur_p,
+        "ma200":       raw["ma200"],
+        "dist_ma200":  dist_ma,
+        "rsi":         rsi_val,
+        "rsi_rising":  int(rsi_rising),
+        "macd_bull":   int(macd_bull),
+        "macd_accel":  int(macd_accel),
+        "vol_pct":     raw["vol"],
+        "conf":        raw["confidence"],
+        "action":      action,
+        "score":       score,
+        "is_knife":    int(is_knife),
+        "reversal":    int(reversal),
+        # Fundamentals
+        "pe_ratio":    _pf(fund_data.get("fmp_pe_ttm")),
+        "div_yield":   _pf(fund_data.get("fmp_div_yield")),
+        "market_cap":  _pf(fund_data.get("fmp_mcap")),
+        "beta":        _pf(fund_data.get("fmp_beta")),
+        "pb_ratio":    _pf(fund_data.get("fmp_pb")),
+        "roe":         _pf(fund_data.get("fmp_roe")),
+        "debt_equity": _pf(fund_data.get("fmp_debt_eq")),
+        "fcf_yield":   _pf(fund_data.get("fmp_fcf_yield")),
+        "rev_growth":  _pf(fund_data.get("fmp_rev_growth")),
+        "peg":         _pf(fund_data.get("fmp_peg")),
+        "value_score": value_score if value_available else None,
+        "value_grade": value_grade if value_available else None,
+        # Analyst targets
+        "analyst_target_mean": _pf(fund_data.get("analyst_target_mean")),
+        "analyst_target_high": _pf(fund_data.get("analyst_target_high")),
+        "analyst_target_low":  _pf(fund_data.get("analyst_target_low")),
+        "analyst_count":       fund_data.get("analyst_count"),
+        "analyst_rec":         fund_data.get("analyst_rec"),
+    }
+
+    try:
+        if _SIGNALS_DB.exists():
+            _conn = _sq.connect(str(_SIGNALS_DB))
+            _existing_cols = {r[1] for r in _conn.execute("PRAGMA table_info(signals)").fetchall()}
+            for _col, _typ in {"analyst_target_mean":"REAL","analyst_target_high":"REAL",
+                               "analyst_target_low":"REAL","analyst_count":"INTEGER",
+                               "analyst_rec":"TEXT"}.items():
+                if _col not in _existing_cols:
+                    _conn.execute(f"ALTER TABLE signals ADD COLUMN {_col} {_typ}")
+            _conn.commit()
+
+            # Read existing row before write
+            _before = _conn.execute(
+                "SELECT action, score FROM signals WHERE ticker=?", [ticker]
+            ).fetchone()
+
+            _existing = _conn.execute(
+                "SELECT * FROM signals WHERE ticker=?", [ticker]
+            ).fetchone()
+            _existing_names = [r[1] for r in _conn.execute("PRAGMA table_info(signals)").fetchall()]
+
+            if _existing:
+                _merged = dict(zip(_existing_names, _existing))
+            else:
+                _merged = {}
+
+            for _k, _v in full_writeback.items():
+                if _v is not None and not (isinstance(_v, float) and (_math.isnan(_v) or _math.isinf(_v))):
+                    _merged[_k] = _v
+
+            _conn.execute("DELETE FROM signals WHERE ticker=?", [ticker])
+            _cols = list(_merged.keys())
+            _vals = list(_merged.values())
+            _ph   = ",".join("?" * len(_cols))
+            _conn.execute(f"INSERT INTO signals ({','.join(_cols)}) VALUES ({_ph})", _vals)
+            _conn.commit()
+            _conn.close()
+            load_signals.clear()
+        else:
+            st.warning(f"signals.db not found at {_SIGNALS_DB}")
+    except Exception as _e:
+        st.warning(f"DB write error: {_e}")
+
+    update_signals_df(full_writeback, source_tab="deepdive")
+
+
+# ───────────────────────────────────────────────────────────────────
+# TAB 3 — COMPARE
+# ───────────────────────────────────────────────────────────────────
+
+SP500_TOP50 = [
+    "AAPL","MSFT","NVDA","GOOGL","AMZN","META","BRK-B","LLY","AVGO","TSLA",
+    "WMT","JPM","V","UNH","XOM","ORCL","MA","HD","PG","COST","JNJ","ABBV",
+    "BAC","NFLX","KO","CRM","CVX","MRK","AMD","PEP","ADBE","TMO","ACN","LIN",
+    "MCD","ABT","CSCO","TXN","DIS","DHR","NEE","INTC","PM","IBM","RTX","INTU",
+    "NOW","QCOM","GE","HON",
+]
+
+def render_compare():
+    st.session_state.pop("_signals_updated_by", None)
+    st.subheader("⚖️ Compare")
+    st.caption("Side-by-side fundamental comparison of multiple stocks. "
+               "Use this to validate candidates from the scanner before committing capital.")
+
+    with st.expander("ℹ️ How to use this", expanded=False):
+        st.markdown(
+            "**What this does:** Fetches live fundamentals for multiple stocks at once and ranks them "
+            "side by side — so you can compare PE, ROE, revenue growth, FCF yield and more in one view.\n\n"
+            "**Workflow:** Run a scan → identify interesting candidates → enter their tickers here → "
+            "compare fundamentals → Deep Dive on the best ones before buying.\n\n"
+            "**Columns explained:**\n"
+            "- **Score** = overall value quality 0–100 (higher = better fundamentals)\n"
+            "- **Grade** = A (top quality) · B (solid) · C (average) · D (weak or expensive)\n"
+            "- **Coverage** = how many of 7 fundamental fields had data (higher = more reliable score)\n"
+            "- **Conviction** = external signals: analyst ratings, insider activity, short interest\n"
+            "- **Tech** = current technical signal from the scanner (BUY/WATCH/WAIT etc.)\n\n"
+            "**Tip:** Tickers can be loaded automatically from the scanner in a future update. "
+            "For now, paste them manually or use the preset buttons."
+        )
+
+    col_a, col_b = st.columns([3,1])
+    with col_a:
+        sdf = get_signals_df()
+        if st.button("📡 Load BUY/WATCH stocks from scanner"):
+            if not sdf.empty:
+                cands = sdf[
+                    (sdf["action"].isin(["BUY","WATCH"])) &
+                    (sdf.get("type","Stock") != "ETF" if "type" in sdf.columns else True)
+                ]["ticker"].dropna().unique().tolist()[:100]
+                st.session_state["vs_tickers"] = ", ".join(cands)
+    with col_b:
+        if st.button("🇺🇸 S&P 500 Top 50"):
+            st.session_state["vs_tickers"] = ", ".join(SP500_TOP50)
+
+    tickers_raw = st.text_area(
+        "Tickers to compare (comma-separated, max 100)",
+        value=st.session_state.get("vs_tickers",""),
+        height=70,
+        placeholder="e.g. AAPL, MSFT, ASML, SAP, HMC …",
+    )
+
+    c1,c2,c3,c4 = st.columns([2,2,1,1])
+    min_score   = c1.number_input("Min quality score", min_value=0, max_value=100, value=20, step=5,
+                                   help="0 = show all · 50 = solid quality · 75 = Grade A only")
+    tech_filter = c2.selectbox("Technical signal filter", ["Any","BUY only","BUY or WATCH"],
+                                help="Only show stocks with a matching signal from the scanner")
+    run_vs      = c3.button("⚖️ Compare", type="primary")
+    refresh_vs  = c4.button("🔄 Refresh", help="Re-fetch live data for all tickers")
+
+    if not run_vs and not refresh_vs:
+        # Re-display cached results if available, otherwise show prompt
+        cached = st.session_state.get("_compare_results")
+        if cached is not None:
+            df_out, summary = cached
+            st.success(summary)
+            st.caption("Sorted by quality score. Click 🔬 Deep Dive on any row for detailed analysis.")
+            def _style_vs(val):
+                if val == "A":     return "color: #0d9488; font-weight: 700;"
+                if val == "B":     return "color: #0284c7; font-weight: 600;"
+                if val == "C":     return "color: #d97706;"
+                if val == "D":     return "color: #dc2626;"
+                if val == "BUY":   return "color: #0d9488; font-weight: 700;"
+                if val == "WATCH": return "color: #0284c7; font-weight: 600;"
+                if val == "SELL":  return "color: #dc2626; font-weight: 700;"
+                return ""
+            st.dataframe(
+                df_out.style.map(_style_vs, subset=["Grade","Tech"]),
+                use_container_width=True,
+                height=min(600, 40 + len(df_out)*35),
+                hide_index=True,
+            )
+            csv = df_out.to_csv(index=False).encode("utf-8")
+            st.download_button("⬇️ Download CSV", csv, "value_screen.csv", "text/csv")
+        else:
+            st.info(
+                "Enter tickers above and click **⚖️ Compare** to fetch live fundamentals.\n\n"
+                "💡 **Tip:** You can also paste tickers directly from the scanner — just copy the ticker column values."
+            )
+        return
+
+    tickers = [t.strip().upper() for t in tickers_raw.replace("\n"," ").split(",") if t.strip()]
+    tickers = list(dict.fromkeys(tickers))[:100]
+    if not tickers:
+        st.warning("No tickers entered.")
+        return
+
+    # Refresh Live: bust all cached fundamentals + tech for listed tickers
+    if refresh_vs:
+        store = _get_cache_store()
+        lock  = _get_cache_lock()
+        with lock:
+            for t in tickers:
+                for k in list(store.keys()):
+                    if k in (f"tick_{t}", f"yfund_{t}", f"conv_{t}") or \
+                       (k.startswith("fmp_") and t in k):
+                        store.pop(k, None)
+        st.toast(f"🔄 Cache busted for {len(tickers)} tickers — re-fetching…")
+
+    with st.spinner(f"Fetching live fundamentals for {len(tickers)} tickers — this may take 15–30 seconds…"):
+        fund_batch, timed_out = fetch_yf_fundamentals_batch(tickers, max_workers=8, timeout=5)
+
+    if timed_out:
+        st.caption(f"⚠️ Timed out: {', '.join(timed_out[:10])}")
+
+    # Tech signals — read from session signals_df (written by scanner/deep dive).
+    # We do NOT force-refresh here to avoid triggering reruns in other tabs.
+    tech_map = {}
+    sdf = get_signals_df()
+    if not sdf.empty and "ticker" in sdf.columns:
+        tech_map = dict(zip(sdf["ticker"].str.upper(), sdf["action"].fillna("WAIT")))
+
+    # Score + filter
+    scored = []
+    for t in tickers:
+        fund = fund_batch.get(t, {})
+        score, grade, bdown, cov = compute_value_score(fund)
+        if score < min_score:
+            continue
+        tech_sig = tech_map.get(t, "—")
+        if tech_filter == "BUY only"    and tech_sig != "BUY":               continue
+        if tech_filter == "BUY or WATCH" and tech_sig not in ("BUY","WATCH"): continue
+        scored.append((t, fund, score, grade, bdown, cov, tech_sig))
+
+    if not scored:
+        st.warning("No tickers passed the filters. Try lowering Min Value Score or relaxing the tech filter.")
+        return
+
+    # Conviction layer
+    passing = [t for t,*_ in scored]
+    with st.spinner("Fetching conviction signals…"):
+        import concurrent.futures as _cf
+        conv_batch = {}
+        with _cf.ThreadPoolExecutor(max_workers=6) as ex:
+            futs = {ex.submit(fetch_conviction_signals, t, 5): t for t in passing}
+            for fut in _cf.as_completed(futs, timeout=10):
+                t2 = futs[fut]
+                try:    conv_batch[t2] = fut.result()
+                except: conv_batch[t2] = {}
+
+    def _fmt(v, pct=False, mult=1):
+        if v is None: return "—"
+        try:
+            f = float(v) * mult
+            return f"{f:.1f}%" if pct else f"{f:.2f}"
+        except: return "—"
+
+    rows = []
+    for t, fund, score, grade, bdown, cov, tech_sig in scored:
+        conv   = conv_batch.get(t, {})
+        cgrade = conv.get("conviction_grade","—")
+        mcap   = fund.get("fmp_mcap")
+        mcap_s = (f"${mcap/1e9:.1f}B" if mcap and mcap>=1e9
+                  else f"${mcap/1e6:.0f}M" if mcap else "—")
+        rows.append({
+            "Ticker":     t,
+            "Score":      score,
+            "Grade":      grade,
+            "Coverage":   f"{cov}/7",
+            "Conviction": cgrade,
+            "Tech":       tech_sig,
+            "PE":         _fmt(fund.get("fmp_pe_ttm")),
+            "PEG":        _fmt(fund.get("fmp_peg")),
+            "P/B":        _fmt(fund.get("fmp_pb")),
+            "FCF Yield":  _fmt(fund.get("fmp_fcf_yield"), pct=True, mult=100),
+            "ROE":        _fmt(fund.get("fmp_roe"),        pct=True, mult=100),
+            "D/E":        _fmt(fund.get("fmp_debt_eq")),
+            "Rev Growth": _fmt(fund.get("fmp_rev_growth"), pct=True, mult=100),
+            "MCap":       mcap_s,
+        })
+
+    df_out = pd.DataFrame(rows).sort_values("Score", ascending=False).reset_index(drop=True)
+    df_out.insert(0, "#", range(1, len(df_out)+1))
+
+    n_a  = sum(1 for r in rows if r["Grade"]=="A")
+    n_b  = sum(1 for r in rows if r["Grade"]=="B")
+    n_hi = sum(1 for r in rows if "HIGH" in str(r.get("Conviction","")))
+    summary = f"⚖️ {len(rows)} stocks compared · Grade A: {n_a} · Grade B: {n_b} · High conviction: {n_hi}"
+
+    # Cache results so reruns (from scanner/deepdive) don't reset this tab
+    st.session_state["_compare_results"] = (df_out, summary)
+
+    st.success(summary)
+    st.caption("Sorted by quality score. Click 🔬 Deep Dive on any row for detailed analysis and buy/sell decision.")
+
+    def _style_vs(val):
+        if val == "A":   return "color: #0d9488; font-weight: 700;"
+        if val == "B":   return "color: #0284c7; font-weight: 600;"
+        if val == "C":   return "color: #d97706;"
+        if val == "D":   return "color: #dc2626;"
+        if val == "BUY": return "color: #0d9488; font-weight: 700;"
+        if val == "WATCH": return "color: #0284c7; font-weight: 600;"
+        if val == "SELL":  return "color: #dc2626; font-weight: 700;"
+        return ""
+
+    st.dataframe(
+        df_out.style.map(_style_vs, subset=["Grade","Tech"]),
+        use_container_width=True,
+        height=min(600, 40 + len(df_out)*35),
+        hide_index=True,
+    )
+
+    csv = df_out.to_csv(index=False).encode("utf-8")
+    st.download_button("⬇️ Download CSV", csv, "value_screen.csv", "text/csv")
+
+
+# ───────────────────────────────────────────────────────────────────
+# MAIN
+# ───────────────────────────────────────────────────────────────────
+
+def main():
+    preset, filters, budget, tickers, vix, fg, rm = render_sidebar()
+
+    # Determine active tab
+    tab_param = st.query_params.get("tab", "scanner")
+
+    if st.session_state.get("_active_tab") == 1:
+        st.session_state.pop("_active_tab", None)
+        st.query_params["tab"] = "deepdive"
+        tab_param = "deepdive"
+        dd_ticker_notify = st.session_state.get("_dd_last_ticker", "")
+        if dd_ticker_notify:
+            st.toast(f"🔬 Deep Dive ready: **{dd_ticker_notify}**", icon="🔬")
+
+    # Streamlit always activates the FIRST tab in the list.
+    # So we reorder based on which tab should be active.
+    # The content is always rendered in the same logical order using the returned tab objects.
+    if tab_param == "deepdive":
+        tab_deepdive, tab_scanner, tab_value = st.tabs([
+            "🔬 Deep Dive", "🔭 Market Scanner", "⚖️ Compare"
+        ])
+    elif tab_param == "compare":
+        tab_value, tab_scanner, tab_deepdive = st.tabs([
+            "⚖️ Compare", "🔭 Market Scanner", "🔬 Deep Dive"
+        ])
+    else:
+        tab_scanner, tab_deepdive, tab_value = st.tabs([
+            "🔭 Market Scanner", "🔬 Deep Dive", "⚖️ Compare"
+        ])
+
+    with tab_scanner:
+        render_scanner(tickers, budget, vix, fg, rm)
+
+    with tab_deepdive:
+        render_deepdive(budget)
+
+    with tab_value:
+        render_compare()
+
+if __name__ == "__main__":
+    main()
     # ── Charts ────────────────────────────────────────────────────────
     fig_price = go.Figure()
     fig_price.add_trace(go.Scatter(x=close.index, y=close, name="Price", line=dict(color="#00bcd4",width=2)))
@@ -2293,24 +2935,24 @@ def render_deepdive(budget):
         u1.metric(
             "To MA200",
             f"{reversion_upside:+.1f}%",
-            delta=f"Target ~€{target_ma200:.2f}",
+            delta=f"Target ~{_fmt_price(target_ma200)}",
             delta_color="normal" if reversion_upside > 0 else "inverse"
         )
         u2.metric(
             "To 52w High",
             f"+{gain_to_52w_high:.1f}%" if gain_to_52w_high > 0 else f"{gain_to_52w_high:.1f}%",
-            delta=f"High ~€{target_52w:.2f}",
+            delta=f"High ~{_fmt_price(target_52w)}",
             delta_color="normal" if gain_to_52w_high > 0 else "off"
         )
         if analyst_mean:
             u3.metric(
                 "Analyst Target",
                 f"{analyst_upside:+.1f}%" if analyst_upside is not None else "—",
-                delta=f"€{analyst_mean:.2f} mean · {analyst_count or '?'} analysts",
+                delta=f"{_fmt_price(analyst_mean)} mean · {analyst_count or '?'} analysts",
                 delta_color="normal" if (analyst_upside or 0) > 10 else "inverse"
             )
             rec_label = analyst_rec.replace("_"," ").title() if analyst_rec else "—"
-            range_label = f"€{analyst_low:.2f} – €{analyst_high:.2f}" if analyst_low and analyst_high else "—"
+            range_label = f"{_fmt_price(analyst_low)} – {_fmt_price(analyst_high)}" if analyst_low and analyst_high else "—"
             with u4:
                 st.metric("Target Range", range_label)
                 st.caption(f"Rec: **{rec_label}**")
